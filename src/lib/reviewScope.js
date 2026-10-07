@@ -47,10 +47,10 @@ import { addedDayOf, daysAgo, todayKey } from './metRange.js'
 /* **既定の10は `SESSION_SIZE` から取る。** 単語帳がずっとその数だった。
    同じ数を2か所に書かない(`wordQuiz.js` は素の node で読める) */
 import { DEFAULT_FORM, SESSION_SIZE, formOf } from './wordQuiz.js'
-import { FILTER_KEYS } from './wordbookFilter.js'
+import { FILTER_KEYS, countNarrowed } from './wordbookFilter.js'
 /* ★ **段(覚え具合)は `learnStage.js` 1か所**(第5.406節)。
      「何を出す」の「苦手」「未学習」は、あちらの段そのものである */
-import { stageOrDefaultPool, stagePool } from './learnStage.js'
+import { stageOrDefaultPool } from './learnStage.js'
 
 export { addedDayOf, daysAgo, todayKey }
 
@@ -316,6 +316,22 @@ export function shouldRecord(ok, {
  * **単語帳と Quick Response で同じものを使う。** 鍵を書き写すと、
  * レベルを足したときに片方だけ組み直さない、という形になる。
  */
+/**
+ * ★ **いくつ絞っているか**(第5.414節・段階3)。
+ *
+ *   > 何か絞り込んでいるときは、見出しの横に「◯件しぼり中」と表示し、
+ *   > 上部の絞り込みアイコンにも小さな印をつける。
+ *
+ * **絞り込みの欄(`FILTER_KEYS`)と、段階を一緒に数える。**
+ * 段階は「詳しくしぼる」の中にあるので、**あれも絞り込みである** ——
+ * 数えないと、段階だけを選んだときに「0件しぼり中」と出て**嘘になる。**
+ *
+ * **数えるものを2か所に書かない** —— `countNarrowed()` は
+ * `wordbookFilter.js` が持つ一覧から数えている。
+ */
+export const narrowedCount = ({ filter = null, stage = null } = {}) =>
+  countNarrowed(filter) + (stage ? 1 : 0)
+
 export function runKeyOf({
   scope = '', size = '', filter = {}, group = null,
   /* **並べ方も鍵に入れる**(2026-09)。入れないと、「教材ごと」に変えても
@@ -392,12 +408,81 @@ export function saveForm(where, id) {
 }
 
 /** 並べ方(ランダム / 教材ごと) */
-export function loadOrder(where) {
-  try { return orderOf(localStorage.getItem(KEY(where, 'order'))) } catch { return DEFAULT_ORDER }
+/* ══════════════════════════════════════════════════════════════════
+   ★ **シャッフルと並べ方を分けた**(第5.414節・段階3・利用者の指定)
+
+     > そのすぐ下に「シャッフル」「繰り返す」の切り替えスイッチ2つ。
+     > 並べ方(教材ごと／型でまとめる)は、シャッフルがオフのときの
+     > 並びとして残す。
+
+   もとは1つの行に **ランダム / 教材ごと / 型でまとめる** が並んでいた。
+   つまり「ランダム」は**並べ方の1つ**だったので、
+   **「教材ごとに並べたうえでシャッフル」が作れない**し、
+   いちばんよく使う入り切りが、ほかの選択肢に埋もれていた。
+
+   いまは **シャッフル(入 / 切)** と **並べ方** の2つである。
+   **一覧は呼ぶ側が持つ**(`WORD_ORDERS` / `QR_ORDERS`)—— 単語帳と
+   Quick Response で並ぶものが違う(あちらには「型でまとめる」がある)。
+   **どれが「ランダム」かは、その一覧が `random: true` で言う** ——
+   id は単語帳が `random`、Quick Response が `shuffle` と**違う**ので、
+   ここに書き写すと必ず片方だけ古くなる。
+     ══════════════════════════════════════════════════════════════════ */
+
+/** その一覧の「ランダム」。無ければ空 */
+export const randomOrderId = (orders) => (orders ?? []).find((o) => o.random)?.id ?? ''
+
+/** シャッフルが切のときにえらべる並び(ランダムを除いたもの) */
+export const plainOrders = (orders) => (orders ?? []).filter((o) => !o.random)
+
+/**
+ * 実際に使う並び。**判断は1か所** —— 画面で
+ * `shuffle ? 'random' : order` と書かない(id が画面ごとに違う)。
+ */
+export const orderToUse = (orders, { shuffle = true, order = '' } = {}) => {
+  if (shuffle) return randomOrderId(orders) || order
+  const plain = plainOrders(orders)
+  return plain.some((o) => o.id === order) ? order : (plain[0]?.id ?? '')
+}
+
+/**
+ * 並べ方(シャッフルが切のときのもの)を覚えておく。
+ *
+ * **古い値(「ランダム」)が入っていたら、並べ方の先頭に落とす** ——
+ * あれはもうシャッフルの側が持っている(**行き止まりを作らない**)。
+ */
+export function loadOrder(where, orders = null) {
+  try {
+    const saved = localStorage.getItem(KEY(where, 'order'))
+    return orderToUse(orders, { shuffle: false, order: saved ?? '' })
+  } catch { return orderToUse(orders, { shuffle: false }) }
 }
 
 export function saveOrder(where, id) {
   try { localStorage.setItem(KEY(where, 'order'), String(id)) } catch { /* 同上 */ }
+}
+
+/**
+ * シャッフルするか。★ **既定は「する」**(第5.414節)。
+ *
+ * **いまと1ミリも変わらない** —— 単語帳の既定は `random`、
+ * Quick Response の既定は `shuffle` で、**どちらもランダムだった。**
+ *
+ * **覚えていないときは、古い `order` から読み取る** ——
+ * 「ランダム」にしていた人はシャッフル入、「教材ごと」にしていた人は切。
+ * **黙って入れ替えない**(CLAUDE.md)。
+ */
+export function loadShuffle(where, orders = null) {
+  try {
+    const saved = localStorage.getItem(KEY(where, 'shuffle'))
+    if (saved === 'on') return true
+    if (saved === 'off') return false
+    const old = localStorage.getItem(KEY(where, 'order'))
+    return !old || old === randomOrderId(orders)
+  } catch { return true }
+}
+
+export function saveShuffle(where, on) {
+  try { localStorage.setItem(KEY(where, 'shuffle'), on ? 'on' : 'off') } catch { /* 同上 */ }
 }
 
 /**

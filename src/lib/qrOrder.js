@@ -31,7 +31,8 @@ import { shuffled } from './shuffle.js'
    **`id` は変えない。** 端末に覚えさせてある値(`eas.qrOrder`)なので、
    変えると**いま「混ぜる」にしている人の指定が、黙って既定に戻る。** */
 export const QR_ORDERS = [
-  { id: 'shuffle', label: 'ランダム' },
+  /* ★ **どれが「ランダム」かは、ここが言う**(第5.414節・`wordQuiz.js` と同じ) */
+  { id: 'shuffle', label: 'ランダム', random: true },
   { id: 'material', label: '教材ごと' },
   /**
    * **型でまとめる**(2026-09 利用者の指定「パタプラのようにしたい」)。

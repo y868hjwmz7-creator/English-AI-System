@@ -104,7 +104,11 @@ export const isSelfGraded = (form) =>
  * 自分では1つも持たない。
  */
 export const WORD_ORDERS = [
-  { id: 'random', label: 'ランダム' },
+  /* ★ **どれが「ランダム」かは、ここが言う**(第5.414節)。
+       シャッフルの入り切りと並べ方を分けたので、呼ぶ側が
+       「ランダムはどれか」を知る必要がある。**id を書き写さない** ——
+       単語帳は `random`、Quick Response は `shuffle` と**違う** */
+  { id: 'random', label: 'ランダム', random: true },
   { id: 'material', label: '教材ごと' },
 ]
 

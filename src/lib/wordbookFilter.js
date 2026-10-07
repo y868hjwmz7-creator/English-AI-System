@@ -23,7 +23,7 @@
 /* ★ **出会った時期は `metRange.js` 1か所**(第5.414節)。
      「日付」(カレンダーで1日)と「出会った時期」(範囲)は、
      **どちらも `added_at` を見ていた**ので、欄も値も1つにまとめた */
-import { addedDayOf, inMet, todayKey } from './metRange.js'
+import { inMet, todayKey } from './metRange.js'
 import { industryLabel } from '../data/industries.js'
 import { genreLabel, sceneLabel } from '../data/genres.js'
 import { cefrOption } from '../data/cefr.js'

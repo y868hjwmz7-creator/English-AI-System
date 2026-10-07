@@ -41,6 +41,11 @@ import {
   NO_MATERIAL, addedDayOf, countNarrowed,
   emptyFilter, fieldOf, frameOf, levelOf, posOf, topicOf,
 } from '../lib/wordbookFilter.js'
+/* ★ **「出会った時期」と「日付」を1つにまとめた**(第5.414節・段階3)。
+     どちらも `added_at` を見ているのに、**別の場所にあった** ——
+     片方を選んでも、もう片方が残っていた。
+     範囲も日も、いまは**同じ1つの値**(`filter.met`)である */
+import { MET_RANGES, isDayKey, metLabel } from '../lib/metRange.js'
 import { FRAME_FORMS } from '../lib/frameMatch.js'
 
 /**
@@ -86,7 +91,7 @@ export default function WordbookFilter({
 
   const list = rows ?? []
   const {
-    day = null, material = null, field = null,
+    met = null, material = null, field = null,
     topic = null, level = null, pos = null, frame = null,
   } = value ?? {}
 
@@ -138,7 +143,9 @@ export default function WordbookFilter({
 
   // **選べるものが何も無ければ、行ごと出さない**
   const show = {
-    day: days.length > 0,
+    /* ★ **「出会った時期」**(第5.414節)。日が1つも分からなければ、
+       範囲でも日でも絞れないので、**この行ごと出さない** */
+    met: days.length > 0,
     material: showMaterial && (titles.length > 1 || (titles.length === 1 && anyNone)),
     field: fields.length > 1,
     topic: topics.length > 1,
@@ -168,23 +175,50 @@ export default function WordbookFilter({
      **アイコンの置き場所という問題そのものが消える。** */
   return (
     <div className="wbfilter">
-      {show.day && (
+      {/* ★ **「出会った時期」 —— 範囲と日を、1つの欄にまとめた**
+          (第5.414節・段階3・利用者の指定)。
+
+            > 「出会った時期」と「日付」はどちらも単語帳に入った日で
+            > 絞っているので、1つに統合する。
+
+          **値は1つ**(`filter.met`)。入るのは範囲の id(`d7`)か、
+          その日そのもの(`2026-10-01`)である。
+          **入れ方が2つあるだけ** —— プルダウンで範囲、カレンダーで1日。
+          カレンダーは 2026-08 利用者の指定で置いたものなので**消さない**
+          (**黙って消さない**・CLAUDE.md)。
+          **言葉は `metLabel()` 1か所**が決める ——
+          ここで「すべて」や「10/01」を組み立てない */}
+      {show.met && (
         <div className="wbfilter-row">
-          <span className="wbfilter-name">日付</span>
-          {/* **選んでいなくても色を持つ**(第5.244節・`npm run test:bar` が
-              見つけた)。`day ? ' btn--quiet' : ''` と書いてあったので、
-              **日付をまだ選んでいないあいだは、地の色のまま**だった ——
-              となりの「分野」「場面」「教材」は選ぶ欄(`select`)で色があるのに、
-              **この1つだけが白い箱**に見えていた。
-              選んでいるかどうかは、**中の文字**が言う(「すべて」 → 「09/20」)。
-              **色だけに頼らない**(CLAUDE.md) */}
-          <button type="button" ref={btnRef}
-                  className="btn btn--small btn--quiet wbfilter-ctl"
-                  aria-expanded={openCal}
-                  onClick={() => setOpenCal((x) => !x)}>
-            <CalendarIcon />
-            {day ? day.replace(/^\d{4}-/, '').replace('-', '/') : 'すべて'}
-          </button>
+          <span className="wbfilter-name">出会った時期</span>
+          <div className="wbfilter-met">
+            <select className="wbfilter-ctl"
+                    aria-label="出会った時期"
+                    value={met ?? ''}
+                    onChange={(e) => set({ met: e.target.value || null })}>
+              <option value="">{metLabel('')}</option>
+              {MET_RANGES.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+              {/* **カレンダーで選んだ日も、この欄に出す。**
+                  出さないと、選んだのに欄が「すべて」のままになる */}
+              {isDayKey(met) && <option value={met}>{metLabel(met)}</option>}
+            </select>
+            {/* **選んでいなくても色を持つ**(第5.244節・`npm run test:bar` が
+                見つけた)。`day ? ' btn--quiet' : ''` と書いてあったので、
+                **まだ選んでいないあいだは地の色のまま**だった ——
+                となりの選ぶ欄(`select`)には色があるのに、
+                **この1つだけが白い箱**に見えていた。
+                **色だけに頼らない**(CLAUDE.md) */}
+            <button type="button" ref={btnRef}
+                    className="btn btn--small btn--quiet wbfilter-cal"
+                    aria-expanded={openCal}
+                    aria-label="日をえらぶ"
+                    title="日をえらぶ"
+                    onClick={() => setOpenCal((x) => !x)}>
+              <CalendarIcon />
+            </button>
+          </div>
         </div>
       )}
 
@@ -318,8 +352,8 @@ export default function WordbookFilter({
         <CalendarPopover
           anchorEl={btnRef.current}
           days={days}
-          value={day}
-          onPick={(d) => set({ day: d })}
+          value={isDayKey(met) ? met : null}
+          onPick={(d) => set({ met: d })}
           onClose={() => setOpenCal(false)}
         />
       )}
