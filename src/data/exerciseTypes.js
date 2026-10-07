@@ -1387,7 +1387,15 @@ export const WORD_AMOUNTS = [
  * @param base 既定の問数(その PART の `sections` の数)
  * @param real 本番の問数(1問 = 1項目でないときは 0)
  */
-export const EXAM_STEPS = [10, 20]
+/* ★ **30 も、いつも選べるようにする**(第5.411節・2026-10-07 利用者の指定)。
+
+     > ただし、PART２は10 / 20 /30 で選べるように
+
+   もとは 10 / 20 と**その PART の数**だけだったので、Part 2 は
+   10 / 20 / 25(本番)で、**30 が出せなかった。**
+   **本番の数は、これとは別に必ず入る**(下の `examAmounts`)ので、
+   Part 2 は 10 / 20 / **25(本番)** / 30 の4つになる。 */
+export const EXAM_STEPS = [10, 20, 30]
 export const examAmounts = (base, real = 0) => {
   const 丸 = (n) => Math.min(Math.max(Math.round(Number(n) || 0), 1), MAX_ITEMS)
   const 既定 = 丸(base)
