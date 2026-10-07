@@ -6882,7 +6882,13 @@ button.wbfilter-ctl { text-align: left; }
 
 /* 数は3枚の札。**「今日出す」だけを目立たせる**(そこが行動につながる) */
 .wb-stats {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* ★ **札の数を書かない**(第5.406節)。もとは `repeat(3, …)` と
+     **数を決め打ち**してあったので、4段階にしたとたん
+     **4枚めだけが2段めに落ちていた**(3 + 1 の形)。
+     `grid-auto-flow: column` なら、**何枚あっても同じ幅で1段に並ぶ** ——
+     「値を書き写さない。性質で見る」(CLAUDE.md)。 */
+  display: grid;
+  grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
   gap: var(--sp-10); margin-bottom: 16px;
 }
 /* **札は押せる**(2026-09 利用者の指定「タッチすればそれらを復習できる

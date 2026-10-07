@@ -64,7 +64,7 @@ import { sheetNote, sheetTitle, wordSheetPairs, wordSheetSections } from './lib/
 import { SHEET_ID } from './lib/printSheet.js'
 import { markPrint } from './lib/print.js'
 import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
-import { QR_GROUPS, groupLead, qrTally } from './lib/reviewScope.js'
+import { LEARN_STAGES, stageLead, stageTally } from './lib/learnStage.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
 import BasicsCourse from './components/BasicsCourse.jsx'
@@ -1591,8 +1591,19 @@ const RSCOPE = (() => {
   const row = (n, dueIn) => ({
     word_norm: `w${n}`,
     added_at: `${day(n)}T09:00:00`,
+    /* ★ **答えたことがあるかも、ばらす**(第5.406節)。
+         箱 0 は**2つの意味**を持つ —— 入れただけ(未学習)と、
+         答えて戻った(苦手)。見分けるのは**2つの時刻の差**なので、
+         どちらも作っておかないと**「苦手」が1枚も出ず、
+         `answeredYet()` を壊しても緑のまま**になる。
+         **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)。 */
+    updated_at: n % 2 === 1
+      // 答えたぶん。**時刻が進んでいる** = 苦手
+      ? `${day(Math.max(0, n - 1))}T10:00:00`
+      // 入れただけ。**2つの時刻が同じ** = 未学習
+      : `${day(n)}T09:00:00`,
     due_on: day(-dueIn),
-    /* **箱もばらす。** 段の札(まだ / 言えかけ / 言える)を数えるため */
+    /* **箱もばらす。** 覚え具合の4段階を数えるため(第5.406節) */
     box: n % 3 === 0 ? 0 : n % 3 === 1 ? 3 : 6,
     ...FACET[n % 2],
   })
@@ -1885,15 +1896,15 @@ function RScopeDemo({ rows }) {
   const [form, setForm] = useState('choice')
   const [order, setOrder] = useState('random')
   const [repeat, setRepeat] = useState(false)
-  const tally = qrTally(rows)
+  const tally = stageTally(rows)
   return (
     <>
     <ReviewStats
-      items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
+      items={LEARN_STAGES.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
       value={group}
       onPick={setGroup}
-      dueId="yet"
-      lead={groupLead(QR_GROUPS, group, '問')}
+      dueId="weak"
+      lead={stageLead(group)}
     />
     <ReviewScope
       rows={rows} unit="問" scope={scope} size={size}

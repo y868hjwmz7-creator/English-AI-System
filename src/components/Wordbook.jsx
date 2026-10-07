@@ -55,10 +55,15 @@ import WordRadio from './WordRadio.jsx'
 import { listTracks } from '../lib/bgm.js'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
 import {
-  SCOPES, WORD_GROUPS, groupLead, loadForm, loadOrder, loadRepeat, loadScope, loadSize,
+  SCOPES, loadForm, loadOrder, loadRepeat, loadScope, loadSize,
   runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveSize,
   scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
+/* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
+     Quick Response とまったく同じものを使う —— 分け方を2か所に書かない */
+import {
+  LEARN_STAGES, stageLead, stagePool, stageTally,
+} from '../lib/learnStage.js'
 /* **問題の箱をタップして切り替える**(第5.262節・2026-09-26 利用者の指定)。
    「英語を見る」のボタンは廃止した。**判断は `tapReveal.js` 1か所** */
 import { canTapReveal, revealKindOf, revealLabel } from '../lib/tapReveal.js'
@@ -114,34 +119,31 @@ import { frameCount } from '../data/sentenceFrames.js'
  * 「知らなかった」は外した(復習と役割が重なっていた)。
  */
 /**
- * 何を読み込むか。**id は札(`WORD_GROUPS`)の id とそろえてある。**
+ * 段(いまは**4段階**・第5.406節)は `learnStage.js` が持っている。
  *
- * `due` だけが既定で、まだ + 覚えかけ をまとめて読む(0027 の 'todo')。
- * 残りの3つは**札を押したときの段**である(2026-09 利用者の指定)。
+ * **どれでも復習できる**(2026-09 利用者の指定)。
  *
  *   > それぞれ数を示すだけではなく、
  *   > タッチすればそれらを復習できるようにしたいです。
- *
- * **どれでも復習できる。** 以前は `due` だけが出題で、
- * 覚えかけ・覚えた は**見返すだけの一覧**だった。
  */
 /* **段の名前は、ここに書かない**(2026-09 利用者の指定「統一感が欲しいのです」)。
 
    もとはここに `label: '覚えかけ'` / `label: '覚えた'` と書いてあり、
    **紙の1行(`sheetNote` の「どの段か」)だけが、そちらを読んでいた。**
-   画面の札は `WORD_GROUPS` から出ているので、名前を変えたとき
+   画面の札は `LEARN_STAGES` から出ているので、名前を変えたとき
    **画面は「できた」、紙は「覚えた」**という食い違いが起きる。
 
    **呼び名を2か所に書かない。必ず片方だけ古くなる**(CLAUDE.md)。
    このファイルが持つのは **id と、何を読み込むか**だけにした。 */
-const VIEWS = [
-  { id: 'due', status: 'todo', dueOnly: false },
-  { id: 'unknown', status: 'unknown', dueOnly: false },
-  { id: 'learning', status: 'learning', dueOnly: false },
-  { id: 'known', status: 'known', dueOnly: false },
-  // **「積み上がり」はここから外した**(2026-08 利用者の指定)。
-  //   > 積み上がりは一旦そこからは削除です。
-]
+/* ★ **`VIEWS` は廃止した**(第5.406節・2026-10-07 利用者の指定)。
+
+   覚え具合を4段階にしたところ、**段と「どの `status` を読むか」が
+   1対1でなくなった** ——「未学習」と「苦手」はどちらも `status = 'unknown'`
+   で、「覚えた」(箱6)は `learning` と `known` の**両方にまたがる。**
+
+   そこで**読むのは1回だけ**にした(`status: null` = ぜんぶ)。
+   段で絞るのは手元で行う(`stagePool()`)ので、札を押しても読み直さない。
+   **札の数と、実際に出てくるものが、同じ一覧から出る。** */
 
 /* **`todayKey` と `isDueNow` は `reviewScope.js` から来る**(2026-09)。
    ここに同じものを書いていたが、Quick Response の復習でも同じ判定が要る。
@@ -382,7 +384,10 @@ export default function Wordbook({
   /** ★ 育った語を送れなかった理由(第5.396節)。**黙って落ちない** */
   const [promoteError, setPromoteError] = useState(null)
 
-  const [view, setView] = useState('due')
+  /** ★ いま選んでいる段階。**`null` ならぜんぶ**(第5.406節) */
+  const [stage, setStage] = useState(null)
+  /** ★ 読み込んだ語ぜんぶ。**札の数も、出す語も、ここから出す**(第5.406節) */
+  const [allRows, setAllRows] = useState([])
   /**
    * **復習を、集中モードと同じ形で出しているか**(2026-09 利用者の指定
    * 「単語帳モード、集中モードにしよう」)。
@@ -681,26 +686,40 @@ export default function Wordbook({
   const canLearning = learningSupported()
   // 「覚えかけ」を見ている最中に使えないと分かったら、復習へ戻す。
   // 選択肢から消えたのに選ばれたままだと、プルダウンが空欄になる
-  const current = (!canLearning && view === 'learning')
-    ? VIEWS[0]
-    : VIEWS.find((v) => v.id === view) ?? VIEWS[0]
+  /* ★ **段は手元で絞る**(第5.406節)。読み直さないので `canLearning`
+       による読み替えも要らなくなった(0027 を貼る前は `learning` の行が
+       そもそも1つも無いだけで、札は 0 と出る) */
   /* **どの段でも出題する**(2026-09 利用者の指定)。
      以前は `current.id === 'due'` で、覚えかけ・覚えた は
      **見返すだけ**だった。押せる札にした以上、押した先で復習できないと
      意味がない。一覧のほうは `due` 以外でこれまでどおり下に出る */
   const isQuiz = true
-  /** いま押している段。`due`(既定)なら、押していない */
-  const group = current.id === 'due' ? null : current.id
+  /** いま押している段階。`null` なら押していない */
+  const group = stage
 
-  /* **その段に本当は何語あるか。** 3つの札(`counts`)は表を直に数えている。
-     `due` の段は「まだ + 覚えかけ」なので、2つを足す */
-  const expected = current.id === 'due'
-    ? (counts.unknown ?? 0) + (counts.learning ?? 0)
-    : (counts[current.id] ?? 0)
+  /* ★ **段階でしぼるのは手元**(第5.406節)。**押しても読み直さない。**
+       `poolFor` を**変わらない形**にしてあるのは、読み直す仕掛け
+       (`reload`)の見張りに入っているからである —— 中で `stage` を
+       直に読むと、札を押すたびに Supabase へ聞きに行く */
+  /** ★ 段階ごとの数。**読み込んだ行から数える**(第5.406節) */
+  const stageN = useMemo(() => stageTally(allRows), [allRows])
+  const stageRef = useRef(stage)
+  stageRef.current = stage
+  const poolFor = useCallback((list) => {
+    const id = stageRef.current
+    /* **押していないときは、覚えた語を出さない**(これまでと同じ) */
+    return id ? stagePool(list, id) : (list ?? []).filter((r) => r.status !== 'known')
+  }, [])
+
+  /* ★ **ぜんぶ読めているか**(第5.406節)。いまは1回でぜんぶ読むので、
+       突き合わせる相手も**ぜんぶの数**である。
+       **数え方の違う2つを比べる** —— あちらは表を直に数えており、
+       こちらは読み込んだ行である(同じ出どころを見ない・CLAUDE.md) */
+  const expected = (counts.unknown ?? 0) + (counts.learning ?? 0) + (counts.known ?? 0)
   /* **切られているか。** 0056 を貼る前はちょうど 200 で返る。
      貼ったあとも上限はあるので、**数字を決め打ちにしない** */
-  const capped = (rows.length >= WORDBOOK_LIMIT_OLD && expected > rows.length)
-    ? expected - rows.length
+  const capped = (allRows.length >= WORDBOOK_LIMIT_OLD && expected > allRows.length)
+    ? expected - allRows.length
     : 0
 
   /**
@@ -780,14 +799,10 @@ export default function Wordbook({
         learning: all.filter((r) => r.status === 'learning').length,
         known: all.filter((r) => r.status === 'known').length,
       })
-      /* いま見ている段だけを出す。**期限の見方は自分の単語帳と同じ** */
-      const got = all.filter((r) => {
-        if (current.id === 'due') {
-          return r.status !== 'known'
-            && (!current.dueOnly || String(r.due_on ?? '').slice(0, 10) <= day)
-        }
-        return r.status === current.id
-      })
+      /* ★ **読んだものは、ぜんぶ持っておく**(第5.406節)。
+           段で絞るのは手元(`poolFor`)—— 札を押しても読み直さない */
+      setAllRows(all)
+      const got = poolFor(all)
       setRows(got)
       rowsRef.current = got
       /* **どの冊の語を控えたか**(第5.200節)。控えないと、
@@ -804,11 +819,11 @@ export default function Wordbook({
     }
 
     const [list, tally, wk, seen, byField, aim] = await Promise.all([
-      current.status
-        ? loadMyWordbook({
-          status: current.status, dueOnly: current.dueOnly, limit: WORDBOOK_LIMIT, learnerId,
-        })
-        : Promise.resolve({ data: [] }),
+      /* ★ **1回でぜんぶ読む**(第5.406節)。`status` を渡さなければ
+           `review_words()` は**すべての段**を返す。覚え具合を4段階にした
+           ことで、段と `status` が1対1でなくなったためである
+           (「覚えた」は `learning` と `known` の両方にまたがる) */
+      loadMyWordbook({ status: null, limit: WORDBOOK_LIMIT, learnerId }),
       loadWordbookCounts(learnerId), loadVocabWeek(learnerId),
       // 「トレーナーが見ました」は**ゲスト本人にだけ**出す知らせである
       mine ? loadWordbookViewers() : Promise.resolve({ data: [] }),
@@ -862,8 +877,10 @@ export default function Wordbook({
         pos: r.pos || posLabel(posGroupOf(basicPosOf(r.word_norm))),
       }
     })
-    setRows(got)
-    rowsRef.current = got
+    setAllRows(got)
+    const shown2 = poolFor(got)
+    setRows(shown2)
+    rowsRef.current = shown2
     /* **どの冊の語を控えたか**(第5.200節・上と同じ) */
     rowsBookRef.current = book
     sendGrown(got)
@@ -878,11 +895,19 @@ export default function Wordbook({
        親から毎回 `[...]` が来るわけではないが、`setShelfPick` のたびに
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
-  }, [current.status, current.dueOnly, current.id, learnerId, mine, onlySet,
+  }, [poolFor, learnerId, mine, onlySet,
     book, shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook,
     sendGrown])
 
   useEffect(() => { reload() }, [reload])
+
+  /* ★ **段階を押したら、読まずに出し直す**(第5.406節)。
+       組み直すのは `runKeyOf`(`group` が入っている)の側が面倒を見る */
+  useEffect(() => {
+    const got = poolFor(allRows)
+    setRows(got)
+    rowsRef.current = got
+  }, [allRows, stage, poolFor])
 
   /* **トレーナーが見たことを残す**(0019)。ゲストの画面に
      「担当トレーナーが 8/29 にこの単語帳を見ました」と出る。
@@ -994,7 +1019,7 @@ export default function Wordbook({
    * いちばん分かりにくい形である。外したら、覚えている範囲へ戻す。
    */
   const pickGroup = (id) => {
-    setView(id ?? 'due')
+    setStage(id)
     setScope(id ? 'all' : loadScope('word'))
   }
 
@@ -1400,10 +1425,32 @@ export default function Wordbook({
            棚の語を `word_reviews` に書くと、それが「混ぜる」ことになる。
            どの棚の語かは行が持っている(`row.shelf`)—— 同じ語が
            2つの棚にあってもよいので、棚を画面で当て直さない */
-        ;({ error: e } = shelfBook
+        const res = shelfBook
           ? await setShelfWordStatus(row.shelf, row.word_norm, status, { learnerId })
-          : await setWordStatus(row.word_norm, status, { kind: row.kind, learnerId }))
+          : await setWordStatus(row.word_norm, status, { kind: row.kind, learnerId })
+        e = res.error
         if (e && typeof e !== 'string') e = e.message ?? String(e)
+        /* ★ **札の数を、押したとおりに動かす**(第5.406節)。
+
+             札は `allRows` から数えているので、ここを書き換えないと
+             **押しても数が動かず、記録されていないように見える。**
+
+             **新しい箱も次に出す日も、SQL が返したものをそのまま使う**
+             —— 間隔の決まりを画面に書き写さない(CLAUDE.md)。
+             **返ってこなかったら触らない**(当てずっぽうで動かさない)。 */
+        const 返り = res.data
+        if (!e && 返り && 返り.box != null) {
+          setAllRows((list) => list.map((r) => (r.word_norm === row.word_norm
+            ? {
+              ...r,
+              status: 返り.status ?? r.status,
+              box: 返り.box,
+              due_on: 返り.due_on ?? r.due_on,
+              /* **答えた印**。これで「未学習」から「苦手」へ移る */
+              answered: true,
+            }
+            : r)))
+        }
       }
     } catch (err) {
       e = String(err?.message ?? err ?? '記録できませんでした')
@@ -1417,23 +1464,11 @@ export default function Wordbook({
     setRows((list) => list.filter((r) => r.word_norm !== row.word_norm))
     setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
-    /* **3枚の札は、押したとおりに動かす。**
-       「覚えかけ」を押したのに数が動かないと、記録されていないように見える。
-       いま何だったか(`row.status`)と、何にしたか(`status`)の
-       両方を見ないと、同じ札を二度押したときに数が増えつづける */
-    setCounts((c) => {
-      // いま何だったか(`row.status`)から1つ引き、何にしたか(`status`)へ1つ足す。
-      // 同じ札を二度押しても、引いてから足すので数は動かない
-      const move = (n, key) => Math.max(0,
-        n - (row.status === key ? 1 : 0) + (status === key ? 1 : 0))
-      return {
-        ...c,
-        due: Math.max(0, c.due - 1),
-        unknown: move(c.unknown, 'unknown'),
-        learning: move(c.learning, 'learning'),
-        known: move(c.known, 'known'),
-      }
-    })
+    /* ★ **札の数の動かし方は、すぐ上(`setAllRows`)へ移した**(第5.406節)。
+       ここで別に数えると、**札の数と、実際に出てくるものが食い違う** ——
+       もとは表を直に数えた `counts` を手で足し引きしていた。
+       いまはどちらも `allRows` ひとつから出る。
+       `counts` は「ぜんぶ読めているか」を見るためだけに残してある */
     setQueue((q) => {
       const rest = q.slice(1)
       // **10語で区切る。** 終わったら結果を出す
@@ -1765,15 +1800,17 @@ export default function Wordbook({
         </p>
       )}
 
-      {/* 数は**3枚の札**にする。以前は1行に流していたので、
+      {/* 数は**札**にする。以前は1行に流していたので、
           どれが「いま何をすればよいか」なのか分からなかった。
-          **「今日出す」だけを目立たせる。** そこが行動につながる数である */}
+          **いちばん手前の段だけを目立たせる。** そこが行動につながる数である */}
       {/* **札は「状態」そのものにする**(2026-08 利用者の指定・0027)。
             > 覚えかけ、の定義をはっきりさせましょう。
           以前は「覚えかけ」と書いておきながら、中身は「まだ」の数だった。
           **言葉と中身が食い違っていた。**
-          いまはカードの3つのボタンと、この3枚の札が1対1で対応する。
-          「今日出す」の数は、復習のタブに付く */}
+          ★ **4段階にしてから、札とボタンは1対1ではない**(第5.406節)——
+          「未学習」と「苦手」は、どちらもボタンの「わからない」側である。
+          分けているのは**答えたことがあるか**だけで、
+          その判断は `learnStage.js` 1か所にある */}
       {/* **押せる**(2026-09 利用者の指定)。
 
             > 学習者の心理としては、覚えた、を押すのは少し勇気がいるものです。
@@ -1786,21 +1823,24 @@ export default function Wordbook({
           いつでも呼び出して確かめられるなら、押すのは怖くない。
 
           見た目は `ReviewStats` 1つで、Quick Response の復習とまったく同じ。
-          **書き写さない**(CLAUDE.md)。段の一覧は `WORD_GROUPS`
-          (`reviewScope.js`)が持っており、**id は `VIEWS` の id そのもの**
-          なので、押したら読み込む `status` がそのまま決まる。
+          **書き写さない**(CLAUDE.md)。段の一覧は `LEARN_STAGES`
+          (`learnStage.js`)が持っており、**単語帳も Quick Response も
+          まったく同じ4つ**である(第5.406節)。
 
           **見るものの切り替え(プルダウン)は、この札に吸収した。**
           あちらの「覚えかけ / 覚えた」と、この札の2つは
           **まったく同じもの**だった(同じものを2か所に出さない)。 */}
+      {/* ★ **4段階にした**(第5.406節・2026-10-07 利用者の指定)。
+             数は**読み込んだ行から**出す —— 札の数と、押して出てくるものが
+             同じ一覧から出るので、食い違いようがない。
+             分け方も呼び名も `learnStage.js` 1か所である */}
       <ReviewStats
-        items={WORD_GROUPS
-          .filter((g) => g.id !== 'learning' || canLearning)
-          .map((g) => ({ ...g, n: counts[g.id] ?? 0 }))}
+        items={LEARN_STAGES.map((g) => ({ ...g, n: stageN[g.id] ?? 0 }))}
         value={group}
         onPick={pickGroup}
-        dueId="unknown"
-        lead={groupLead(WORD_GROUPS, group, '語')}
+        /* **いちばん手前の段を目立たせる**(もとの「まだ」と同じ役) */
+        dueId="weak"
+        lead={stageLead(group)}
       />
 
       {/* **育った語の例文を、Quick Response 帳へ送った**
@@ -1831,9 +1871,9 @@ export default function Wordbook({
 
             > なぜ「まだ」が1900個以上あるのに出し方で選べるのが200個なのですか？
 
-          上の3つの札は**表を直に数えている**ので正しい。ところが
-          「出しかた」の札は**読み込んだ行から数えている**ので、
-          切られていると**どの範囲を選んでも同じ数**と出る。
+          ★ **いまは上の札も「出しかた」の札も、読み込んだ行から数える**
+          (第5.406節)。切られていると**どちらも同じ数**と出るので、
+          表を直に数えた `counts` と突き合わせて、この行を出す。
           数だけでなく、実際に出る語も・4択のまちがいも・聞き流しも、
           ぜんぶ同じ語の中で回っている。**そう書く。**
 
@@ -2651,11 +2691,9 @@ export default function Wordbook({
           note={sheetNote({
             count: sheetPairs.length,
             unit: '語',
-            /* **段の名前は `WORD_GROUPS` から引く**(2026-09)。
+            /* **段の名前は `LEARN_STAGES` から引く**(第5.406節)。
                ここに書き写すと、画面と紙で別の言葉になる */
-            group: current.id === 'due'
-              ? ''
-              : (WORD_GROUPS.find((g) => g.id === current.id)?.label ?? ''),
+            group: LEARN_STAGES.find((g) => g.id === stage)?.label ?? '',
             narrowed,
             date: todayKey(),
           })}

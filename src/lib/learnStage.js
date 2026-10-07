@@ -1,0 +1,124 @@
+/**
+ * 覚え具合の **4段階**(第5.406節・2026-10-07 利用者の指定)。
+ *
+ * ============================================================================
+ * 【何を変えたか】
+ *
+ *   もとは3つだった(まだ / 練習中 / できた)。
+ *   一般的な単語アプリに寄せて、**4つ**にする。
+ *
+ *   | 段階 | 意味 | 仕組みの上では |
+ *   |---|---|---|
+ *   | **未学習** | 一度も答えていない | 箱 0 で、**まだ一度も答えていない** |
+ *   | **苦手**   | 前回わからなかった | 箱 0 で、**答えた記録がある** |
+ *   | **学習中** | 覚えている途中 | 箱 1〜5 |
+ *   | **覚えた** | しばらく出さない | 箱 6(卒業) |
+ *
+ *   **仕組み(箱・間隔・記録しない決まり)は1つも変えていない。**
+ *   変えたのは**数え方と呼び名だけ**である。
+ *
+ * 【箱 4・5 も「学習中」に入れる理由】
+ *   利用者の指定は「箱1〜3」だが、**箱 4・5 の行も実際にある** ——
+ *   いまはボタンから押せない古い「覚えた」が、箱を 6 まで1つずつ上げていた。
+ *   **どこにも入らない行を作らない**(CLAUDE.md「黙って消さない」)ので、
+ *   卒業(6)の手前はすべて学習中に入れる。
+ *
+ * ============================================================================
+ * 【いちばん難しいのは「答えたことがあるか」】
+ *
+ *   箱 0 は**2つの意味**を持つ。
+ *
+ *     ・単語帳に入れただけ(読んでいて「知らなかった」を押した)
+ *     ・復習で「わからない」を押した
+ *
+ *   どちらも `status = 'unknown'` / `box = 0` / `learn_streak = 0` なので、
+ *   **行の状態だけでは見分けられない。**
+ *
+ *   【1】**時刻で見分ける。** 行ができた瞬間は `added_at` と `updated_at` が
+ *   同じ時刻である(SQL が両方 `now()` を入れる)。復習で答えると
+ *   `updated_at` だけが進む。だから **`updated_at > added_at` なら答えた**。
+ *
+ *   【2】**行そのものが「答えた印」になる冊もある。**
+ *   業種べつの単語帳(`shelf_reviews`)と基礎単語は、
+ *   **答えたときに初めて行ができる。** そこは時刻では見分けられないので、
+ *   読む側が `answered` を立てて渡す(`shelfReviews.js` / `basicsCourse.js`)。
+ *   **渡されていればそちらが勝つ。**
+ *
+ *   **SQL は1行も足していない**(移行を貼ってもらわずに済む)。
+ *
+ * ============================================================================
+ * 【ここに置く理由】
+ *   画面(`Wordbook` / `QrReview`)は Supabase を引き連れており、
+ *   **手元で一度も走らせられない。** 判断だけを何にも依存しない形へ出す
+ *   (`playMark.js` / `reviewScope.js` / `wordbookPaging.js` と同じ)。
+ *   `npm run test:play` が数字で見張る。
+ */
+
+/** 卒業の箱。**ここ1か所**(`mark_word` の `c_graduate` と対) */
+export const DONE_BOX = 6
+
+/**
+ * 4段階。**並びは「まだ分かっていない順」。**
+ * id は英語のまま変えない(覚えておく値・画面に出るのは `label` だけ)。
+ */
+export const LEARN_STAGES = [
+  { id: 'new', label: '未学習' },
+  { id: 'weak', label: '苦手' },
+  { id: 'learning', label: '学習中' },
+  { id: 'done', label: '覚えた' },
+]
+
+export const stageLabel = (id) => LEARN_STAGES.find((s) => s.id === id)?.label ?? ''
+
+/**
+ * その行に「答えた記録」があるか。
+ *
+ * **渡されていれば `answered` が勝つ**(行ができた時点で答えている冊)。
+ * 無ければ時刻で見る —— **行ができた瞬間は2つの時刻が同じ**である。
+ */
+export function answeredYet(row) {
+  if (row?.answered != null) return Boolean(row.answered)
+  const 入った = row?.added_at
+  const 動いた = row?.updated_at
+  if (!入った || !動いた) return false
+  /* **文字のまま比べない。** 返ってくる形が
+     "2026-10-07T01:23:45+00:00" と "2026-10-07T01:23:45.123456+00:00" の
+     ように揃わないことがある。時刻に直して**ミリ秒で**比べる */
+  const a = new Date(入った).getTime()
+  const b = new Date(動いた).getTime()
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false
+  /* **1秒の余裕を置く。** 同じ取引の中で入った2つの時刻は同じはずだが、
+     書き込む道が増えたときに1ミリ秒ずれるだけで「答えた」になっては困る */
+  return b - a > 1000
+}
+
+/** その行はどの段階か */
+export function stageOf(row) {
+  const box = Number(row?.box ?? 0)
+  if (box >= DONE_BOX) return 'done'
+  if (box >= 1) return 'learning'
+  return answeredYet(row) ? 'weak' : 'new'
+}
+
+/** 段階ごとの数。**読み込んだ行から数える**(札の数と、出てくるものを合わせる) */
+export function stageTally(rows) {
+  const out = {}
+  for (const s of LEARN_STAGES) out[s.id] = 0
+  for (const r of rows ?? []) out[stageOf(r)] += 1
+  return out
+}
+
+/** その段階だけを取り出す。**`null` ならぜんぶ** */
+export const stagePool = (rows, id) => (id
+  ? (rows ?? []).filter((r) => stageOf(r) === id)
+  : (rows ?? []))
+
+/**
+ * その段階を選んだら何が起きるのかを、1行の日本語で言う。
+ * **押す前に分かるようにする**(`scopeLead` と同じ作法)。
+ */
+export function stageLead(id) {
+  const s = LEARN_STAGES.find((x) => x.id === id)
+  if (!s) return '押すと、その段階だけを復習できます。'
+  return `「${s.label}」だけを復習します。もう一度押すと、ぜんぶに戻ります。`
+}

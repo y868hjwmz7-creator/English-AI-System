@@ -39,10 +39,15 @@ import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
 import {
-  QR_GROUPS, SCOPES, groupLead, loadRepeat, loadScope, loadSize, qrGroupPool, qrTally,
+  SCOPES, loadRepeat, loadScope, loadSize,
   runKeyOf, saveRepeat, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
+/* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
+     単語帳とまったく同じものを使う —— 分け方を2か所に書かない */
+import {
+  LEARN_STAGES, stageLead, stagePool, stageTally,
+} from '../lib/learnStage.js'
 import { loadNativeFlowQr } from '../lib/nativeFlowQr.js'
 import { nextFilledBook } from '../lib/bookOpen.js'
 import { nowName } from '../lib/bookNow.js'
@@ -453,7 +458,7 @@ export default function QrReview({
     const [list, wk, aim] = await Promise.all([
       /* **Native Flow は、ファイル × 覚え具合。** 行の形はそろえてあるので
          (`nativeFlowRows()`)、ここから下は1文字も書き分けていない。
-         **状態で絞らない** —— 3枚の札(まだ / 言えかけ / 言える)も
+         **状態で絞らない** —— 覚え具合の札(**4段階**・第5.406節)も
          読んだ行から数えるので、分けて読むと札と中身が食い違う */
       /* **Unit で絞るのは `nativeFlowRows()` 1か所。**
          覚え具合の側は絞らない —— あちらは英文で引くので、
@@ -503,7 +508,7 @@ export default function QrReview({
      **数え上げ(`tally`)は段で絞る前の `rows` から出す** ——
      押すたびに札の数が変わっては、何を選んでいるのか分からなくなる */
   const filtered = useMemo(
-    () => applyWordbookFilter(qrGroupPool(rows, group), filter),
+    () => applyWordbookFilter(stagePool(rows, group), filter),
     [rows, group, filter],
   )
   /** いま選んでいる範囲にあてはまるもの。**数え上げと同じ道を通す** */
@@ -513,10 +518,10 @@ export default function QrReview({
    * 3つの数(2026-09 実機・利用者の指定で「今日出す / 溜まっている」から改めた)。
    *
    * **SQL は1行も要らない。** `qr_items` は箱(`box`)を返しているので、
-   * 読み込んだ行から数えられる。数え方は **`qrTally()` 1か所**
-   * (`qrReviews.js`)—— 画面で数え直すと、単語帳とずれる。
+   * 読み込んだ行から数えられる。数え方は **`stageTally()` 1か所**
+   * (`learnStage.js`)—— 画面で数え直すと、単語帳とずれる。
    */
-  const tally = useMemo(() => qrTally(rows), [rows])
+  const tally = useMemo(() => stageTally(rows), [rows])
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
   const narrowed = countNarrowed(filter)
 
@@ -1136,7 +1141,7 @@ export default function QrReview({
           note={sheetNote({
             count: sheetPairs.length,
             unit: '問',
-            group: QR_GROUPS.find((g) => g.id === group)?.label ?? '',
+            group: LEARN_STAGES.find((g) => g.id === group)?.label ?? '',
             narrowed,
             date: today,
           })}
@@ -1433,11 +1438,12 @@ export default function QrReview({
               (第5.167節)。「どの帳面の、どこ」が**1か所で決まる** */}
 
           <ReviewStats
-            items={QR_GROUPS.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
+            items={LEARN_STAGES.map((g) => ({ ...g, n: tally[g.id] ?? 0 }))}
             value={group}
             onPick={pickGroup}
-            dueId="yet"
-            lead={groupLead(QR_GROUPS, group, '問')}
+            /* **いちばん手前の段を目立たせる**(もとの「まだ」と同じ役) */
+            dueId="weak"
+            lead={stageLead(group)}
           />
 
           {/* **いつのぶんを、何問ずつ、何で絞るか**(2026-09 利用者の指定)。

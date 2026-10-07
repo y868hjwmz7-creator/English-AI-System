@@ -215,6 +215,8 @@ export function basicRows(tier = 'core', seen = [], { today = '' } = {}) {
       due_on: s?.due_on ?? today,
       updated_at: s?.updated_at ?? null,
       added_at: s?.added_at ?? null,
+      /* ★ **答えたことがあるか**(第5.406節)。控えがあれば答えている */
+      answered: Boolean(s),
       material_id: null,
       material_title: null,
       material_industry: null,

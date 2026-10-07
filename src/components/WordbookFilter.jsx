@@ -205,7 +205,10 @@ export default function WordbookFilter({
           `cefr.js` が持っている。**対応表をここに書き写さない** */}
       {show.level && (
         <label className="wbfilter-row">
-          <span className="wbfilter-name">レベル</span>
+          {/* ★ **「教材のレベル」と書く**(第5.406節・2026-10-07 利用者の指定)。
+                 これは**語の難しさではなく、その語に出会った教材のレベル**である。
+                 覚え具合の4段階と取り違えないよう、名前で言い切る */}
+          <span className="wbfilter-name">教材のレベル</span>
           <select className="wbfilter-ctl" value={level ?? ''}
                   onChange={(e) => set({ level: e.target.value || null })}>
             <option value="">すべて</option>

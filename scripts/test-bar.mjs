@@ -78,6 +78,10 @@ import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
 import { shuffleSay } from '../src/lib/shuffleSay.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
+/* ★ **覚え具合の段は `learnStage.js` 1か所**(第5.406節)。
+     **数を書き写さない** —— 4段階にした日に、見張りが「3つ出ていない」で
+     赤くなった(仕組みは1ミリも壊れていないのに・CLAUDE.md) */
+import { LEARN_STAGES } from '../src/lib/learnStage.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -5585,8 +5589,21 @@ export default defineConfig({
         段: [...document.querySelectorAll('.wb-stats > .wb-stat')].map((b) => ({
           tag: b.tagName,
           高さ: Math.round(b.getBoundingClientRect().height),
+          /* ★ **1段に並んでいるか**(第5.406節)。札の数を CSS に
+               決め打ちしてあると、**1枚増やした日に2段へ落ちる** ——
+               実際 `repeat(3, …)` と書いてあって 3 + 1 になっていた。
+               **上端がそろっているか**で測る(数を書かない) */
+          上: Math.round(b.getBoundingClientRect().top),
           押せない: Boolean(b.disabled),
           文言: (b.querySelector('.wb-stat-label')?.textContent ?? '').trim(),
+          /* **文言が折り返していないか。** 2行になると札だけが背伸びする */
+          字の行数: (() => {
+            const el = b.querySelector('.wb-stat-label')
+            if (!el) return 0
+            const r = el.getBoundingClientRect()
+            const 行の高さ = parseFloat(window.getComputedStyle(el).lineHeight) || r.height
+            return Math.max(1, Math.round(r.height / Math.max(1, 行の高さ)))
+          })(),
         })),
         段の説明: (document.querySelector('.wb-stats-lead')?.textContent ?? '').trim(),
         /* **「出しかた」は絵だけ**(第5.184節・2026-09 利用者の指定
@@ -5794,9 +5811,14 @@ export default defineConfig({
   {
     const { 閉 } = await 測る(390, '', false)
     const 押せる段 = 閉.段.filter((g) => g.tag === 'BUTTON')
-    if (閉.段.length !== 3) {
-      ng('段を押す … 札が3つ出ていない', `${閉.段.length} 個`)
-    } else if (押せる段.length !== 3) {
+    /* ★ **数は `LEARN_STAGES` から読む**(第5.406節)。
+         ここに `3` と書いてあったので、段階を4つにしたとたん
+         **仕組みは正しいのに見張りだけが赤くなった**(CLAUDE.md
+         「式も、関数の名前も書き写さない」の、数の側である) */
+    const 要る = LEARN_STAGES.length
+    if (閉.段.length !== 要る) {
+      ng(`段を押す … 札が ${要る} つ出ていない`, `${閉.段.length} 個`)
+    } else if (押せる段.length !== 要る) {
       ng('段を押す … 札が `<button>` になっていない',
         閉.段.map((g) => g.tag).join('/'))
     } else if (Math.min(...閉.段.map((g) => g.高さ)) < 40) {
@@ -5805,8 +5827,28 @@ export default defineConfig({
     } else if (!閉.段の説明.includes('押すと')) {
       ng('段を押す … 押したら何が起きるかを言っていない', 閉.段の説明)
     } else {
-      ok(`段を押す … 3つとも押せる(${閉.段.map((g) => g.文言).join(' / ')}`
+      ok(`段を押す … ${要る} つとも押せる(${閉.段.map((g) => g.文言).join(' / ')}`
         + `・${閉.段[0].高さ}px)`)
+    }
+
+    /* ★ ══ **札は、狭い画面でも1段に並ぶ**(第5.406節)═══════════════
+         `.wb-stats` に `repeat(3, …)` と**数を決め打ち**してあったので、
+         4段階にしたとたん **4枚めだけが2段めへ落ちていた**(3 + 1)。
+         **数を書かずに測る** —— 上端がそろっているか、字が折り返して
+         いないかの2つだけ見る(CLAUDE.md「値を書き写さない。性質で見る」)。
+         狭い画面(390px)で測るのは、**折り返しが起きるのはそちら**だから。 */
+    if (閉.段.length) {
+      const 上 = [...new Set(閉.段.map((g) => g.上))]
+      const 折り返した = 閉.段.filter((g) => g.字の行数 > 1)
+      if (上.length !== 1) {
+        ng(`段の札 390px … ${上.length} 段になっている`
+          + `(札 ${閉.段.length} 枚)`, 閉.段.map((g) => `${g.文言}:${g.上}`).join(' / '))
+      } else if (折り返した.length) {
+        ng('段の札 390px … 文言が2行に折り返している',
+          折り返した.map((g) => `${g.文言}(${g.字の行数}行)`).join(' / '))
+      } else {
+        ok(`段の札 390px … ${閉.段.length} 枚が1段に並ぶ(折り返しなし)`)
+      }
     }
 
     /* **押した印が出るか。** 色だけに頼らない印(`is-on` + `aria-pressed`)を、

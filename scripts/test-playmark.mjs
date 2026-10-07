@@ -134,9 +134,13 @@ import {
 } from '../src/data/genres.js'
 import {
   DEFAULT_SIZE, SCOPES, SIZES,
-  QR_GROUPS, WORD_GROUPS, groupLead, isDueOn, qrGroupPool, qrTally, runKeyOf,
+  isDueOn, runKeyOf,
   scopeCounts, scopeLead, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
+/* ★ 覚え具合の4段階(第5.406節)。**素の node で測れる形**に出してある */
+import {
+  DONE_BOX, LEARN_STAGES, stageLead, stageOf, stagePool, stageTally,
+} from '../src/lib/learnStage.js'
 import {
   lastLearner, openLearner, rememberLearner, watchLearner,
 } from '../src/lib/lastLearner.js'
@@ -2845,111 +2849,112 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
 // ここで数字として見張る。
 // ══════════════════════════════════════════════════════════════════════
 {
-  /* ── Quick Response の3つの数(2026-09 実機・利用者の指定)──────────
-     > 「今日出す」「溜まっている」の意味が私にも分からないので、
-     > そもそも文言を変えたいですね。
+  /* ── 覚え具合の4段階(第5.406節・2026-10-07 利用者の指定)──────────
 
-     調べたところ「帳面ぜんぶの数」を大きく出すアプリはほとんど無く、
-     しかも**この単語帳にはすでに「まだ / 覚えかけ / 覚えた」**があった。
-     利用者がそちらにそろえることを選んだ。
+       > 未学習 / 苦手 / 学習中 / 覚えた の4段階にする
 
-     **SQL は1行も要らない** —— `qr_items` が返す箱から数える。
-     **箱の番号そのものは画面に出さない**(仕組みの内側の数字)。 */
+     もとは3つだった(まだ / 練習中 / できた)。
+     **仕組み(箱・間隔)は1つも変えていない** —— 数え方と呼び名だけである。
+
+     **いちばん難しいのは「答えたことがあるか」。** 箱0は
+     「単語帳に入れただけ」と「復習でわからなかった」の2つの意味を持つ。
+     行ができた瞬間は `added_at` と `updated_at` が同じ時刻なので、
+     **`updated_at` が後なら答えている。**
+     棚と基礎単語は**答えたときに初めて行ができる**ので、
+     読む側が `answered` を立てて渡す。 */
   {
-    const t = qrTally([
-      { box: 0 }, { box: 0 },              // まだ 2
-      { box: 1 }, { box: 3 }, { box: 5 },  // 言えかけ 3
-      { box: 6 },                          // 言える 1
+    const 時 = (h) => `2026-10-07T0${h}:00:00+00:00`
+    const t = stageTally([
+      /* 未学習 … 入れただけ(2つの時刻が同じ) */
+      { box: 0, added_at: 時(1), updated_at: 時(1) },
+      { box: 0, added_at: 時(1), updated_at: 時(1) },
+      /* 苦手 … 答えて「わからない」(あとで更新されている) */
+      { box: 0, added_at: 時(1), updated_at: 時(5) },
+      /* 学習中 … 箱 1〜5 */
+      { box: 1 }, { box: 3 }, { box: 5 },
+      /* 覚えた … 箱 6 */
+      { box: 6 },
     ])
-    ok(t.yet === 2 && t.mid === 3 && t.done === 1,
-      '復習の数 … 箱から3つに束ねる', `まだ ${t.yet} / 言えかけ ${t.mid} / 言える ${t.done}`)
-    ok(qrTally([]).yet === 0 && qrTally(null).done === 0,
-      '復習の数 … 空のときは 0')
-    /* **箱が無い行も「まだ」に数える。** 0040 を貼る前や古い行で
-       `box` が来なくても、**数え落とさない** */
-    ok(qrTally([{}]).yet === 1, '復習の数 … 箱の無い行も数える')
+    ok(t.new === 2 && t.weak === 1 && t.learning === 3 && t.done === 1,
+      '覚え具合 … 4段階に分かれる',
+      `未学習 ${t.new} / 苦手 ${t.weak} / 学習中 ${t.learning} / 覚えた ${t.done}`)
+    ok(stageTally([]).new === 0 && stageTally(null).done === 0,
+      '覚え具合 … 空のときは 0')
+    /* **箱が無い行も数え落とさない**(古い行・貼る前の DB) */
+    ok(stageTally([{}]).new === 1, '覚え具合 … 箱の無い行も数える')
 
-    /* **文言は `QR_GROUPS` 1か所**(2026-09)。画面は札を並べるだけなので、
-       言葉はここにしか無い。**数える段と、押して出てくる段が同じ**である */
-    /* **段の名前は、単語帳も Quick Response も同じ**(2026-09 利用者の指定
-       「統一感が欲しいのです」「使い方や数の概念がよく分からないようです」)。
+    /* ★ **「答えた」の見分け方**。ここが4段階のかなめである */
+    ok(stageOf({ box: 0, added_at: 時(1), updated_at: 時(1) }) === 'new',
+      '覚え具合 … 入れただけの語は「未学習」')
+    ok(stageOf({ box: 0, added_at: 時(1), updated_at: 時(5) }) === 'weak',
+      '覚え具合 … 答えて箱0に戻った語は「苦手」')
+    /* **渡されていれば、そちらが勝つ**(棚・基礎単語は行そのものが答えた印) */
+    ok(stageOf({ box: 0, answered: true, added_at: 時(1), updated_at: 時(1) }) === 'weak',
+      '覚え具合 … `answered` が渡されていれば、時刻より優先する')
+    ok(stageOf({ box: 0, answered: false, added_at: 時(1), updated_at: 時(5) }) === 'new',
+      '覚え具合 … `answered: false` なら、時刻が動いていても「未学習」')
+    /* **時刻が無くても落ちない**(0024 を貼る前の行) */
+    ok(stageOf({ box: 0 }) === 'new', '覚え具合 … 時刻が無ければ「未学習」')
+    /* **卒業の箱は書き写さない。** 値を変えた日も付いてくる */
+    ok(stageOf({ box: DONE_BOX }) === 'done' && stageOf({ box: DONE_BOX - 1 }) === 'learning',
+      '覚え具合 … 卒業の箱は `DONE_BOX` 1か所から決まる', `箱 ${DONE_BOX}`)
 
-       **前の決定を上書きしている** —— もとは「単語帳は語、Quick Response は
-       文だから言葉を分ける」として「覚えた」/「言える」にしていた。
-       **ゲストには伝わっていなかった。**
+    /* **呼び名は `learnStage.js` 1か所。** 単語帳も Quick Response も同じ */
+    ok(LEARN_STAGES.map((g) => g.label).join('/') === '未学習/苦手/学習中/覚えた',
+      '覚え具合 … 呼び名は「未学習 / 苦手 / 学習中 / 覚えた」',
+      LEARN_STAGES.map((g) => g.label).join('/'))
+    ok(LEARN_STAGES.length === 4, '覚え具合 … 4段階である')
 
-       **値を書き写さず、2つがそろっているかを見る。**
-       片方だけ書き換えても赤くなる —— そこが、この見張りの仕事である */
-    ok(QR_GROUPS.map((g) => g.label).join('/')
-       === WORD_GROUPS.map((g) => g.label).join('/'),
-      '復習の数 … 段の名前が、単語帳と Quick Response で同じ',
-      `${WORD_GROUPS.map((g) => g.label).join('/')} / ${QR_GROUPS.map((g) => g.label).join('/')}`)
-    ok(WORD_GROUPS.map((g) => g.label).join('/') === 'まだ/練習中/できた',
-      '復習の数 … 段の名前は「まだ / 練習中 / できた」',
-      WORD_GROUPS.map((g) => g.label).join('/'))
-    /* **「できた」は語でも文でも型でも真になる。**
-       66 の型の画面も、同じ言葉を使っている */
-    {
-      /* **この節には `readD` が無い**(下のほうの節だけが持っていた)。
-         借りずに、その場で読む —— **無い名前を呼ぶと、そこで落ちて
-         残りの検証がまるごと走らなくなる**(実際にそうなった) */
-      /* **66 の型は、Quick Response の冊になった**(2026-09 利用者の指定
-         「型のトレーニングの UI は廃止して、quick response の UI に
-         そのままコンテンツを移してください」)。
-         専用の画面が無くなったので、段の札も答えのボタンも
-         **ふだんの Quick Response とまったく同じもの**である。
-         残った欄(`FrameParts`)の言葉だけを、ここで見る */
-      const fparts = readFileSync(new URL('../src/components/FrameParts.jsx',
-        import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-      ok(/できた/.test(fparts) && !/言えた/.test(fparts),
-        '復習の数 … 66 の型の欄も、同じ言葉を使っている(「言えた」は残っていない)')
-
-      /* **紙にも、同じ言葉が出るか**(2026-09)。
-         `Wordbook.jsx` の `VIEWS` が段の名前を**書き写していた**ので、
-         **画面は「できた」・紙は「覚えた」**になっていた。
-         **呼び名を2か所に書かない**(CLAUDE.md)。
-
-         **「無い」と「有る」の両方を見る** —— 書き写しが消えただけでは、
-         紙にどこからも名前が出ない形に落ちても緑になる */
-      const wbSrc = readFileSync(new URL('../src/components/Wordbook.jsx',
-        import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-      ok(!/label: '覚え/.test(wbSrc),
-        '復習の数 … 段の名前を `VIEWS` に書き写していない(紙だけ古くならない)')
-      ok(/WORD_GROUPS\.find\(\(g\) => g\.id === current\.id\)/.test(wbSrc),
-        '復習の数 … 紙の「どの段か」も `WORD_GROUPS` から引く')
-    }
-    /* **単語帳の段の id は `word_reviews.status` そのもの。**
-       対応表を持たないので、ここがずれると読み込む段が変わる */
-    ok(WORD_GROUPS.map((g) => g.id).join('/') === 'unknown/learning/known',
-      '復習の数 … 単語帳の段の id は status そのもの')
-
-    /* ── その段だけを取り出す(Quick Response)──────────────── */
+    /* ── その段階だけを取り出す ─────────────────────────────── */
     const G = [{ box: 0 }, { box: 2 }, { box: 6 }, { box: 6 }]
-    ok(qrGroupPool(G, 'done').length === 2 && qrGroupPool(G, 'yet').length === 1,
-      '段を押す … その段だけを取り出す')
-    ok(qrGroupPool(G, null).length === 4, '段を押す … 押していなければ、ぜんぶ')
-    ok(groupLead(QR_GROUPS, null).includes('押すと'),
-      '段を押す … 押していないときは、押せることを言う')
-    ok(groupLead(QR_GROUPS, 'done').includes('「できた」')
-      && groupLead(QR_GROUPS, 'done').includes('もう一度押す'),
-      '段を押す … 押しているときは、戻り方まで言う', groupLead(QR_GROUPS, 'done'))
+    ok(stagePool(G, 'done').length === 2 && stagePool(G, 'new').length === 1,
+      '段階を押す … その段階だけを取り出す')
+    ok(stagePool(G, null).length === 4, '段階を押す … 押していなければ、ぜんぶ')
+    ok(stageLead(null).includes('押すと'),
+      '段階を押す … 押していないときは、押せることを言う')
+    ok(stageLead('done').includes('「覚えた」') && stageLead('done').includes('もう一度押す'),
+      '段階を押す … 押しているときは、戻り方まで言う', stageLead('done'))
 
     /* **画面が本当に使っているか。** 定義だけあって誰も呼ばなければ、
        札は押せないままになる(「名前が出てくるか」で見ない・CLAUDE.md) */
     const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    ok(/qrTally\(rows\)/.test(qr), '復習の数 … QrReview が `qrTally()` を呼んでいる')
-    ok(/<ReviewStats/.test(qr) && /qrGroupPool\(rows, group\)/.test(qr),
-      '段を押す … QrReview が押せる札を出し、その段で絞っている')
+    ok(/stageTally\(rows\)/.test(qr), '覚え具合 … QrReview が `stageTally()` を呼んでいる')
+    ok(/<ReviewStats/.test(qr) && /stagePool\(rows, group\)/.test(qr),
+      '段階を押す … QrReview が押せる札を出し、その段階で絞っている')
     const wb = readFileSync(new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     ok(/<ReviewStats/.test(wb) && /onPick=\{pickGroup\}/.test(wb),
-      '段を押す … 単語帳が押せる札を出している')
+      '段階を押す … 単語帳が押せる札を出している')
+    ok(/stageTally\(allRows\)/.test(wb),
+      '覚え具合 … 単語帳の札も、読み込んだ行から数えている')
+    /* ★ **1回でぜんぶ読む**(第5.406節)。段階と `status` が1対1でないので、
+         段で読み分けると「覚えた」が2つの `status` にまたがって落ちる */
+    ok(/status: null/.test(wb), '単語帳 … 1回でぜんぶ読んでいる(段で読み分けない)')
+    ok(!/VIEWS/.test(wb), '単語帳 … 段ごとに読み分ける `VIEWS` は残っていない')
     /* **押したら、範囲を「ぜんぶ」へ移す。** そうしないと「覚えた」語は
        次に出る日が先なので、押した瞬間に0件になる */
     ok(/setScope\(id \? 'all' : loadScope\('word'\)\)/.test(wb)
       && /setScope\(id \? 'all' : loadScope\('qr'\)\)/.test(qr),
-      '段を押す … 押したら範囲を「ぜんぶ」に移す(押した瞬間に0件にしない)')
+      '段階を押す … 押したら範囲を「ぜんぶ」に移す(押した瞬間に0件にしない)')
+    /* ★ **押しても読み直さない**(第5.406節)。札は手元で絞る */
+    ok(/stagePool\(list, id\)/.test(wb),
+      '段階を押す … 単語帳も手元で絞っている(押すたびに読みに行かない)')
+
+    /* ★ **絞り込みの「レベル」は「教材のレベル」**(第5.406節・利用者の指定)。
+         語の難しさではなく、**出会った教材のレベル**だからである */
+    const wf = readFileSync(new URL('../src/components/WordbookFilter.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    ok(/>教材のレベル</.test(wf), '絞り込み … 「教材のレベル」と書いてある')
+    ok(!/>レベル</.test(wf), '絞り込み … ただの「レベル」は残っていない')
+
+    /* ★ **棚と基礎単語は、行そのものが「答えた印」**(第5.406節) */
+    const sh = readFileSync(new URL('../src/lib/shelfReviews.js', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    const bc = readFileSync(new URL('../src/lib/basicsCourse.js', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    ok(/answered: Boolean\(seen\)/.test(sh), '覚え具合 … 棚は `answered` を立てて渡す')
+    ok(/answered: Boolean\(s\)/.test(bc), '覚え具合 … 基礎単語も `answered` を立てて渡す')
 
     /* ── 中に入ってからも絞り込める(2026-09 利用者の指定)──────── */
     ok(runKeyOf({ scope: 'due', size: 10, filter: { level: 'B1' } })
