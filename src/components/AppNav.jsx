@@ -66,6 +66,21 @@ export default function AppNav({
    * (**同じことをするものを2つ持たない**・CLAUDE.md)。
    */
   overFocus = false,
+  /**
+   * ★ **いまの画面の道具**(第5.414節・段階3・利用者の指定)。
+   *
+   *   > 「印刷 / PDFで保存」「例文をつける」「巻末に型のレクチャー」は
+   *   > ☰メニューへ移す(機能は残す)。
+   *
+   * 「出しかた」のシートが**32 個**になっていたので、
+   * **めったに押さないもの**をここへ出した。
+   *
+   * **メニューを2つ作らない**(CLAUDE.md)。渡されたぶんを、
+   * 行き先の一覧の**上**に1段置くだけである ——
+   * 下に置くと、**行き先が増えるほど流れて見つからない**(共通ルール)。
+   * **渡されなければ、この段ごと出ない**(効かない場所を作らない)。
+   */
+  tools = null,
 }) {
   const panelRef = useRef(null)
   const list = (items ?? []).filter(Boolean)
@@ -130,6 +145,16 @@ export default function AppNav({
             </button>
           )}
         </div>
+
+        {/* ★ **いまの画面の道具**(第5.414節)。行き先の**上**に置く ——
+            下に置くと、行き先が増えるほど流れて見つからない(共通ルール)。
+            **見出しと並びで示す**ので、説明の文は足さない */}
+        {tools && (
+          <div className="app-nav-tools">
+            <p className="app-nav-toolhead">いまの画面の道具</p>
+            {tools}
+          </div>
+        )}
 
         <ul className="app-nav-list">
           {list.map((item) => {

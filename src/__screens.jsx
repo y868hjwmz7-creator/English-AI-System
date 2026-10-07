@@ -63,7 +63,10 @@ import ReviewSheet from './components/ReviewSheet.jsx'
 import { sheetNote, sheetTitle, wordSheetPairs, wordSheetSections } from './lib/reviewSheet.js'
 import { SHEET_ID } from './lib/printSheet.js'
 import { markPrint } from './lib/print.js'
-import WordbookFilter, { countNarrowed, emptyFilter } from './components/WordbookFilter.jsx'
+import WordbookFilter, { emptyFilter } from './components/WordbookFilter.jsx'
+/* ★ **本物と同じ判断を呼ぶ**(第5.414節)。札の光り方も、絞り込みの数も、
+   **書き写さずに `reviewScope.js` から引く** */
+import { narrowedCount, pickIdOf, pickOf } from './lib/reviewScope.js'
 import { LEARN_STAGES, stageLead, stageTally } from './lib/learnStage.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
@@ -1519,9 +1522,9 @@ const qrScreen = (plain) => (
                   compact
                   rows={[]}
                   unit="問"
-                  scope="due"
+                  pick="due"
                   size={10}
-                  onScope={() => {}}
+                  onPick={() => {}}
                   onSize={() => {}}
                   onStart={() => {}}
                 />
@@ -1894,9 +1897,12 @@ function RScopeDemo({ rows }) {
   /* **出題の形・並べ方・繰り返す**(2026-09 実機・利用者の指定)。
      渡さなければ、その行ごと出ない —— **渡した形で測る** */
   const [form, setForm] = useState('choice')
-  const [order, setOrder] = useState('random')
+  const [order, setOrder] = useState('')
+  const [shuffle, setShuffle] = useState(true)
   const [repeat, setRepeat] = useState(false)
   const tally = stageTally(rows)
+  /** ★ いま光っている札。**本物と同じ `pickIdOf()` から**(第5.414節) */
+  const pick = pickIdOf(scope, group)
   return (
     <>
     <ReviewStats
@@ -1907,11 +1913,18 @@ function RScopeDemo({ rows }) {
       lead={stageLead(group)}
     />
     <ReviewScope
-      rows={rows} unit="問" scope={scope} size={size}
-      narrowed={countNarrowed(filter)}
-      onScope={setScope} onSize={setSize} onStart={() => {}}
+      /* ★ **本物と1文字も違えない**(第5.414節・段階3)。
+         「何を出す」は `pick`、段階は `stage`、
+         シャッフルは `shuffle` である */
+      rows={rows} unit="問" pick={pick} size={size}
+      narrowed={narrowedCount({ filter, stage: group })}
+      onPick={(id) => { const p = pickOf(id); setGroup(p.stage); setScope(p.scope) }}
+      onSize={setSize} onStart={() => {}}
+      stage={group} onStage={setGroup}
+      onClearAll={() => { setFilter(emptyFilter()); setGroup(null) }}
       forms={QUIZ_FORMS} form={form} onForm={setForm}
       orders={WORD_ORDERS} order={order} onOrder={setOrder}
+      shuffle={shuffle} onShuffle={setShuffle}
       repeat={repeat} onRepeat={setRepeat}
     >
       {/* **絞り込みも「出しかた」の中**(2026-09 利用者の指定)。

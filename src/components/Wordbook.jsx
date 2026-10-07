@@ -54,15 +54,18 @@ import ReviewStats from './ReviewStats.jsx'
 import WordRadio from './WordRadio.jsx'
 import { listTracks } from '../lib/bgm.js'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
+/* ★ **出しかたは「何を出す」4つ + 問数3つ + スイッチ2つ**(第5.414節・段階3)。
+     範囲(`scope`)と段階(`stage`)を1つの操作にまとめたのが `pick` である */
 import {
-  SCOPES, loadForm, loadOrder, loadRepeat, loadScope, loadSize,
-  runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveSize,
-  scopeCounts, scopePool, shouldRecord, takeCount, todayKey,
+  loadForm, loadOrder, loadRepeat, loadScope, loadShuffle, loadSize,
+  PICKS, narrowedCount, orderToUse, pickCounts, pickIdOf, pickOf,
+  runKeyOf, saveForm, saveOrder, saveRepeat, saveScope, saveShuffle, saveSize,
+  scopePool, shouldRecord, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 /* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
      Quick Response とまったく同じものを使う —— 分け方を2か所に書かない */
 import {
-  LEARN_STAGES, stageLead, stagePool, stageTally,
+  LEARN_STAGES, stageLead, stageOrDefaultPool, stageTally,
 } from '../lib/learnStage.js'
 /* **問題の箱をタップして切り替える**(第5.262節・2026-09-26 利用者の指定)。
    「英語を見る」のボタンは廃止した。**判断は `tapReveal.js` 1か所** */
@@ -74,7 +77,9 @@ import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
 import { usePracticeLog } from '../lib/practice.js'
-import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
+/* ★ **いくつ絞っているかは `narrowedCount()`**(第5.414節)——
+   段階も一緒に数えるので、`countNarrowed()` を直に呼ばない */
+import WordbookFilter, { applyWordbookFilter, emptyFilter } from './WordbookFilter.jsx'
 import { answerFeedback } from '../lib/haptics.js'
 import WordbookAdd from './WordbookAdd.jsx'
 import BasicWordsPick from './BasicWordsPick.jsx'
@@ -436,7 +441,11 @@ export default function Wordbook({
      名前が嘘になっていた(経緯は `wordQuiz.js` の頭) */
   const [want, setWant] = useState(() => loadForm('word'))
   /** 並べ方(ランダム / 教材ごと)。Quick Response にはもともとある */
-  const [order, setOrder] = useState(() => loadOrder('word'))
+  /* ★ **並べ方は「シャッフルを切ったときの並び」**(第5.414節)。
+       「ランダム」はここから出て、下のスイッチが持つ。
+       **どれがランダムかは `WORD_ORDERS` が言う** —— id を書き写さない */
+  const [order, setOrder] = useState(() => loadOrder('word', WORD_ORDERS))
+  const [shuffle, setShuffle] = useState(() => loadShuffle('word', WORD_ORDERS))
   /** 出し切っても止まらないか(2026-09 利用者の指定) */
   const [repeat, setRepeat] = useState(() => loadRepeat('word'))
   const [rows, setRows] = useState([])          // その一覧ぜんぶ
@@ -707,8 +716,10 @@ export default function Wordbook({
   stageRef.current = stage
   const poolFor = useCallback((list) => {
     const id = stageRef.current
-    /* **押していないときは、覚えた語を出さない**(これまでと同じ) */
-    return id ? stagePool(list, id) : (list ?? []).filter((r) => r.status !== 'known')
+    /* **押していないときは、覚えた語を出さない**(これまでと同じ)。
+       ★ **判断は `learnStage.js` 1か所**(第5.414節)—— ここと
+       Quick Response に**同じ1行が2つ**書いてあった */
+    return stageOrDefaultPool(list, id)
   }, [])
 
   /* ★ **ぜんぶ読めているか**(第5.406節)。いまは1回でぜんぶ読むので、
@@ -987,8 +998,9 @@ export default function Wordbook({
 
   /** 絞り込みを当てたあとの一覧。**範囲の数え上げも出題も、ここから** */
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
-  const narrowed = countNarrowed(filter)
-  const forScope = shownRows
+  /* ★ **段階も「絞っている」に数える**(第5.414節)。数えないと、
+       段階だけをえらんだときに「0件しぼり中」と出て**嘘になる** */
+  const narrowed = narrowedCount({ filter, stage })
 
   /**
    * **紙に出す対**(2026-09 利用者の指定「単語帳…の内容を印刷する機能」)。
@@ -1023,18 +1035,47 @@ export default function Wordbook({
     setScope(id ? 'all' : loadScope('word'))
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     ★ **「何を出す」の4つ**(第5.414節・段階3)
+
+     **札の数は、段階を当てる*前*の一覧から数える**(`forPick`)。
+     `forScope`(段階を当てたあと)で数えると、「苦手」をえらんだ
+     とたんに**ほかの3つが 0 になって押せなくなる。**
+     ══════════════════════════════════════════════════════════════ */
+  const forPick = applyWordbookFilter(
+    chunkBook ? chunkPool(allRows, chunkPart, chunkGroup) : allRows,
+    filter,
+  )
+  /** いま光っている札。**決めるのは `pickIdOf()` 1か所** */
+  const pick = pickIdOf(scope, stage)
+  const pickN = pickCounts(forPick, todayKey())
+  /** いま選んでいる範囲の残り。**札の数え上げと同じ道を通す**(2通り持たない) */
+  const restInScope = pickN[pick] ?? 0
+
+  /**
+   * 札を押したとき。**範囲と段階を、いっぺんに動かす。**
+   *
+   * 「覚えた」語は次に出る日が先なので、範囲が「今日の復習」のままだと
+   * **押した瞬間に0件**になる。だから段階の札は「ぜんぶ」へ移す
+   * (2026-09 利用者の指定・`pickGroup` と同じ考え方)。
+   * **対応は `PICKS` 表1か所**(ここで `id === 'weak'` と書かない)。
+   */
+  const pickWhat = (id) => {
+    const p = pickOf(id)
+    setStage(p.stage)
+    setScope(p.scope)
+    if (!p.stage) saveScope('word', p.scope)
+  }
+
   /* **選んでいた札が0件になったら、押せる札へ移す。**
      黙って空のまま置くと「出すものがありません」だけが残る
      (`pickScene` と同じ作法・CLAUDE.md) */
-  const scopeN = scopeCounts(forScope, todayKey())
-  /** いま選んでいる範囲の残り。**札の数え上げと同じ道を通す**(2通り持たない) */
-  const restInScope = scopeN[scope] ?? 0
   useEffect(() => {
-    if (!isQuiz || loading || forScope.length === 0) return
-    if ((scopeN[scope] ?? 0) > 0) return
-    const next = SCOPES.find((s) => (scopeN[s.id] ?? 0) > 0)
-    if (next) setScope(next.id)
-  }, [isQuiz, loading, forScope.length, scopeN[scope], scope])
+    if (!isQuiz || loading || forPick.length === 0) return
+    if ((pickN[pick] ?? 0) > 0) return
+    const next = PICKS.find((p) => (pickN[p.id] ?? 0) > 0)
+    if (next) pickWhat(next.id)
+  }, [isQuiz, loading, forPick.length, pickN[pick], pick])
 
   /**
    * **選んだ範囲から、選んだ語数だけ組む**(2026-09 利用者の指定)。
@@ -1069,15 +1110,20 @@ export default function Wordbook({
 
   const start = useCallback(() => {
     const pool = poolNow()
+    /* ★ **シャッフルはスイッチが決める**(第5.414節)。
+         もとは `scope !== 'due'` で、**「今日の復習」だけ勝手に
+         シャッフルしない**形だった —— 切り替えが見えないので、
+         入れたのに効いていないように見える(**効かない操作を見せない**)。
+         **並びは `orderToUse()` 1か所**が決める */
     setQueue(buildSession(pool, takeCount(size, pool.length),
-      { shuffleAll: scope !== 'due', order }))
+      { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) }))
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
     setPickedChoice(null)
     setStarted(true)
     setRunning(true)
-  }, [poolNow, scope, size, order])
+  }, [poolNow, size, order, shuffle])
 
   /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
@@ -1711,13 +1757,25 @@ export default function Wordbook({
    *
    * **範囲の札と絞り込みは、そのまま効く**(`poolNow()` 1か所)。
    */
-  const toolsBox = (
+  /* ★ **聞き流しは1つのボタン**(第5.414節・段階3・利用者の指定
+       「聞き流すは上部バーのボタンに一本化する」)。
+       **中身はここ1か所** —— 一覧の下にも、練習中の上の帯にも、
+       これを置く(**書き写さない**) */
+  const listenBtn = (
+    <button type="button" className="btn btn--quiet wb-listen"
+            disabled={restInScope === 0}
+            onClick={listen}>
+      <MusicIcon />聞き流す({restInScope} 語)
+    </button>
+  )
+
+  /* ★ **紙に出すものは ☰ の中へ**(第5.414節・段階3・利用者の指定
+       「印刷 / PDFで保存」「例文をつける」「巻末に型のレクチャー」は
+       ☰メニューへ移す)。**機能は1つも消していない** ——
+       「出しかた」のシートが 32 個になっていたので、
+       **めったに押さないものを外へ出した**だけである */
+  const paperBox = (
     <div className="wb-tools">
-      <button type="button" className="btn btn--quiet wb-listen"
-              disabled={restInScope === 0}
-              onClick={listen}>
-        <MusicIcon />聞き流す({restInScope} 語)
-      </button>
       {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
       <button type="button" className="btn btn--quiet wb-listen"
               disabled={sheetPairs.length === 0 || printing}
@@ -1744,6 +1802,14 @@ export default function Wordbook({
                }} />
         巻末に型のレクチャー({frameCount()} 型)
       </label>
+    </div>
+  )
+
+  /** 一覧の下に置くぶん。**聞き流すと紙を、1つの行で `gap` で離す** */
+  const toolsBox = (
+    <div className="wb-tools">
+      {listenBtn}
+      {paperBox}
     </div>
   )
 
@@ -2065,13 +2131,21 @@ export default function Wordbook({
                しかも**0件になるまで見えなかった**ので、
                ここに常に出るほうが届きやすい(行き止まりも作らない)。 */
             <ReviewScope
-              rows={forScope}
+              /* ★ **段階を当てる前の一覧を渡す**(第5.414節)。
+                 札の数は「押したら何件出るか」なので、
+                 いま選んでいる段階で絞ったものを渡してはいけない */
+              rows={forPick}
               unit="語"
-              scope={scope}
+              pick={pick}
+              onPick={pickWhat}
               size={size}
               narrowed={narrowed}
-              onScope={(id) => { setScope(id); saveScope('word', id) }}
               onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+              /* ★ **段階は「詳しくしぼる」の中**(第5.414節)。
+                 押す先は、札とまったく同じ `pickGroup` である */
+              stage={stage}
+              onStage={pickGroup}
+              onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
               forms={QUIZ_FORMS}
               form={want}
               onForm={(id) => {
@@ -2081,6 +2155,8 @@ export default function Wordbook({
               orders={WORD_ORDERS}
               order={order}
               onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+              shuffle={shuffle}
+              onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
               repeat={repeat}
               onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
               onStart={start}
@@ -2181,7 +2257,9 @@ export default function Wordbook({
                       **渡されなければ、これまでどおり「とじる」** */}
                   {onMenu ? (
                     <button type="button" className="nav-icon-btn focus-burger"
-                            aria-label="メニューを開く" onClick={onMenu}>
+                            aria-label="メニューを開く"
+                            /* ★ **紙の道具を、☰ の中へ渡す**(第5.414節) */
+                            onClick={() => onMenu(paperBox)}>
                       <MenuIcon />
                     </button>
                   ) : (
@@ -2195,6 +2273,11 @@ export default function Wordbook({
                       **冊を間違えたまま進むこと**である。
                       **中身は `bookPick` 1か所**(書き写さない) */}
                   {bookPick}
+                  {/* ★ **聞き流しは上の帯に一本化**(第5.414節・段階3・
+                      利用者の指定)。もとは「出しかた」のシートの中に
+                      あったので、**練習中に聴きたくなったら2手**かかった。
+                      **中身は `listenBtn` 1か所**(書き写さない) */}
+                  {listenBtn}
                   {/* **「◯ / ◯ 語」は出さない**(2026-09 利用者の指定)。
                       どこまで来たかは、すぐ下の点(`.wb-run-bar`)が
                       同じことを言っている。**同じことを2つ見せない** */}
@@ -2206,13 +2289,16 @@ export default function Wordbook({
                       **中身は書き写さない** —— `ReviewScope` の畳んだ形 */}
                   <ReviewScope
                     compact
-                    rows={forScope}
+                    rows={forPick}
                     unit="語"
-                    scope={scope}
+                    pick={pick}
+                    onPick={pickWhat}
                     size={size}
                     narrowed={narrowed}
-                    onScope={(id) => { setScope(id); saveScope('word', id) }}
                     onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+                    stage={stage}
+                    onStage={pickGroup}
+                    onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
                     forms={QUIZ_FORMS}
                     form={want}
                     onForm={(id) => {
@@ -2222,12 +2308,11 @@ export default function Wordbook({
                     orders={WORD_ORDERS}
                     order={order}
                     onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+                    shuffle={shuffle}
+                    onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
                     repeat={repeat}
                     onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
                     onStart={start}
-                    /* **聞き流す・紙に出すも、この中**(第5.167節)。
-                       トップ画面が無くなったので、置き場所がここだけになった */
-                    tools={toolsBox}
                   >
                     <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
                   </ReviewScope>

@@ -440,8 +440,10 @@ export const plainOrders = (orders) => (orders ?? []).filter((o) => !o.random)
  */
 export const orderToUse = (orders, { shuffle = true, order = '' } = {}) => {
   if (shuffle) return randomOrderId(orders) || order
-  const plain = plainOrders(orders)
-  return plain.some((o) => o.id === order) ? order : (plain[0]?.id ?? '')
+  /* **えらんでいなければ、空のまま返す。** 並べ方の先頭を勝手に当てない ——
+     空のときは `buildSession()` が**これまでの並び**(まだ → 期限の古い順 →
+     箱の小さい順)で出す。**勝手に狭めない**(CLAUDE.md) */
+  return plainOrders(orders).some((o) => o.id === order) ? order : ''
 }
 
 /**
@@ -454,7 +456,7 @@ export function loadOrder(where, orders = null) {
   try {
     const saved = localStorage.getItem(KEY(where, 'order'))
     return orderToUse(orders, { shuffle: false, order: saved ?? '' })
-  } catch { return orderToUse(orders, { shuffle: false }) }
+  } catch { return '' }
 }
 
 export function saveOrder(where, id) {

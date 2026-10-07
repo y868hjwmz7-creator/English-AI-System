@@ -251,8 +251,10 @@ export default function ReviewScope({
           )}
 
           {/* **並べ方** —— シャッフルが切のときの並び。
-              **2つ以上なければ、選ぶ意味がない**(効かない操作を見せない) */}
-          {並べ方.length > 1 && (
+              **1つでも出す** —— あれは「入れる / 入れない」の切り替えでもある
+              (単語帳は「教材ごと」1つきりで、外せば**これまでの並び**
+              = まだ → 期限の古い順 → 箱の小さい順 になる) */}
+          {並べ方.length > 0 && (
             <>
               {見出し('order', 'シャッフルを切ったときの並び')}
               <div className="chiprow" role="group" aria-labelledby="rscope-order">
@@ -261,7 +263,9 @@ export default function ReviewScope({
                   on: o.id === order,
                   disabled: shuffle,
                   label: o.label,
-                  onClick: () => onOrder(o.id),
+                  /* **もう一度押すと外れる**(段階の札と同じ作法)。
+                     外すと、これまでの並びに戻る */
+                  onClick: () => onOrder(o.id === order ? '' : o.id),
                 }))}
               </div>
             </>

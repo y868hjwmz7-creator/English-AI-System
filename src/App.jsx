@@ -336,7 +336,15 @@ export default function App() {
    * だから別の印(`focusMenu`)を持ち、閉じるときはそれだけを倒す。
    */
   const [focusMenu, setFocusMenu] = useState(false)
-  const openFocusMenu = () => setFocusMenu(true)
+  /* ★ **集中している画面の道具を預かる**(第5.414節・段階3)。
+       「出しかた」のシートから外した「印刷 / PDF」「例文をつける」
+       「巻末に型のレクチャー」を、☰ の中へ出すためである。
+       **画面の側が渡してくる** —— 何を出すかは、その画面しか知らない */
+  const [focusTools, setFocusTools] = useState(null)
+  const openFocusMenu = (tools = null) => {
+    setFocusTools(tools ?? null)
+    setFocusMenu(true)
+  }
 
   // 選んだ配色を画面に反映する。最初の1回も含めてここで行う
   // 触る端末で、押したときに短い手応えを返す(2026-08 の要望)。
@@ -949,7 +957,13 @@ export default function App() {
            (第5.172節)。`wide` を偽にすると `AppNav` が引き出しになる */
         open={navOpen || focusMenu} wide={navPush && !focusMenu} compact={!wide}
         overFocus={focusMenu}
-        onClose={() => (focusMenu ? setFocusMenu(false) : setNavOpen(false))}
+        /* ★ **道具は、集中している画面から開いたときだけ**(第5.414節)。
+             ふだんのメニューに残すと、**関係ない画面で押せてしまう** */
+        tools={focusMenu ? focusTools : null}
+        onClose={() => {
+          if (focusMenu) { setFocusMenu(false); setFocusTools(null); return }
+          setNavOpen(false)
+        }}
         /* ★ **左上の名前**(第5.394節・2026-10-06 利用者の指定
              「左上のタイトルを『RIZAP ENGLISH』に変更してくれ」)。
              **そのあと「全部そろえて」と言われた**(第5.396節)ので、

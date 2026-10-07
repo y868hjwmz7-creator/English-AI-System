@@ -32,15 +32,20 @@ import {
   qrSourceSupported,
 } from '../lib/qrReviews.js'
 import Loading from './Loading.jsx'
-import WordbookFilter, { applyWordbookFilter, countNarrowed, emptyFilter } from './WordbookFilter.jsx'
+/* ★ **いくつ絞っているかは `narrowedCount()`**(第5.414節)——
+   段階も一緒に数えるので、`countNarrowed()` を直に呼ばない */
+import WordbookFilter, { applyWordbookFilter, emptyFilter } from './WordbookFilter.jsx'
 import BookPick from './BookPick.jsx'
 import DrillHead from './DrillHead.jsx'
 import ReviewScope from './ReviewScope.jsx'
 import FrameParts from './FrameParts.jsx'
 import ReviewStats from './ReviewStats.jsx'
+/* ★ **出しかたは「何を出す」4つ + 問数3つ + スイッチ2つ**(第5.414節・段階3)。
+     単語帳とまったく同じものを使う —— 書き写さない */
 import {
-  SCOPES, loadRepeat, loadScope, loadSize,
-  runKeyOf, saveRepeat, saveScope, saveSize, scopeCounts, scopePool, shouldRecord,
+  PICKS, loadRepeat, loadScope, loadShuffle, loadSize,
+  narrowedCount, orderToUse, pickCounts, pickIdOf, pickOf,
+  runKeyOf, saveRepeat, saveScope, saveShuffle, saveSize, scopePool, shouldRecord,
   takeCount, todayKey,
 } from '../lib/reviewScope.js'
 /* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
@@ -304,6 +309,10 @@ export default function QrReview({
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState(emptyFilter)
   const [order, setOrder] = useState(loadOrder)
+  /* ★ **シャッフルは別のスイッチ**(第5.414節)。「ランダム」は
+       並べ方の一覧から出て、こちらが持つ。**どれがランダムかは
+       `QR_ORDERS` が言う** —— id(`shuffle`)を書き写さない */
+  const [shuffle, setShuffle] = useState(() => loadShuffle('qr', QR_ORDERS))
   /* **繰り返すか**(第5.244節・2026-09-23 利用者の指摘
      「個数を指定して繰り返す指定もなくなってしまっていませんか?」)。
 
@@ -523,7 +532,8 @@ export default function QrReview({
    */
   const tally = useMemo(() => stageTally(rows), [rows])
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
-  const narrowed = countNarrowed(filter)
+  /* ★ **段階も「絞っている」に数える**(第5.414節) */
+  const narrowed = narrowedCount({ filter, stage: group })
 
   /**
    * **紙に出す対**(2026-09 利用者の指定「クイックレスポン帖の内容を印刷」)。
@@ -552,17 +562,40 @@ export default function QrReview({
   /* **選んでいた札が0件になったら、押せる札へ移す**(絞り込みを変えたとき)。
      黙って空のまま置くと、「出すものがありません」だけが残って
      何を押せばよいのか分からない(`pickScene` と同じ作法・CLAUDE.md) */
-  const counts = scopeCounts(filtered, today)
+  /* ══════════════════════════════════════════════════════════════
+     ★ **「何を出す」の4つ**(第5.414節・段階3)。単語帳と同じ。
+
+     **札の数は、段を当てる*前*の一覧から数える**(`forPick`)——
+     段を当てたあと(`filtered`)で数えると、「苦手」をえらんだ
+     とたんに**ほかの3つが 0 になって押せなくなる** */
+  const forPick = useMemo(
+    () => applyWordbookFilter(rows, filter),
+    [rows, filter],
+  )
+  /** いま光っている札。**決めるのは `pickIdOf()` 1か所** */
+  const pick = pickIdOf(scope, group)
+  const counts = pickCounts(forPick, today)
+
+  /** 札を押したとき。**範囲と段階を、いっぺんに動かす**(`PICKS` 表1か所) */
+  const pickWhat = (id) => {
+    const p = pickOf(id)
+    setGroup(p.stage)
+    setScope(p.scope)
+    if (!p.stage) saveScope('qr', p.scope)
+  }
+
   useEffect(() => {
-    if (busy || filtered.length === 0) return
-    if ((counts[scope] ?? 0) > 0) return
-    const next = SCOPES.find((s) => (counts[s.id] ?? 0) > 0)
-    if (next) setScope(next.id)
-  }, [busy, filtered.length, counts[scope], scope])
+    if (busy || forPick.length === 0) return
+    if ((counts[pick] ?? 0) > 0) return
+    const next = PICKS.find((p) => (counts[p.id] ?? 0) > 0)
+    if (next) pickWhat(next.id)
+  }, [busy, forPick.length, counts[pick], pick])
 
   const start = () => {
     setLive(true)
-    const list = orderQrPairs(shown.map(qrPairOf), order)
+    /* ★ **並びは `orderToUse()` 1か所**(第5.414節)。
+         シャッフルはスイッチが持ち、並べ方は切のときだけ効く */
+    const list = orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order }))
     const take = takeCount(size, list.length)
     setRun(list.slice(0, take))
     /* **残りは捨てない。**「つづける」で次の区切りへ進む。
@@ -996,6 +1029,22 @@ export default function QrReview({
    * 「出しかた」の中へ入れる。**中身は書き写さない** ——
    * 始める前の `.wb-tools` とまったく同じものを、ここ1か所から渡す。
    */
+  /* ★ **紙に出すものは ☰ の中へ**(第5.414節・段階3・利用者の指定
+       「印刷 / PDFで保存 … は☰メニューへ移す」)。
+       **機能は1つも消していない** —— 「出しかた」のシートから
+       **めったに押さないものを外へ出した**だけである。
+       **中身はここ1か所**(一覧の下にも、☰ の中にも、これを置く) */
+  const paperBox = (
+    <>
+      {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
+      <button type="button" className="btn btn--quiet wb-listen"
+              disabled={sheetPairs.length === 0 || printing}
+              onClick={() => setPrinting(true)}>
+        <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
+      </button>
+    </>
+  )
+
   const toolsBox = (
     <div className="wb-tools">
       <button type="button" className="btn btn--quiet wb-listen"
@@ -1007,12 +1056,7 @@ export default function QrReview({
             **「チャンクで積む」は無くなった**(第5.251節) */}
         <MusicIcon />言う練習・聞き流し({shown.length} 問)
       </button>
-      {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-      <button type="button" className="btn btn--quiet wb-listen"
-              disabled={sheetPairs.length === 0 || printing}
-              onClick={() => setPrinting(true)}>
-        <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
-      </button>
+      {paperBox}
     </div>
   )
 
@@ -1299,8 +1343,9 @@ export default function QrReview({
         page={`qrrev:${at}`}
         scrollKey={`qrrev:${at}`}
         onClose={stop}
-        /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま */
-        onMenu={onMenu}
+        /* **左上は ☰**(第5.172節)。渡されなければ ✕ 閉じるのまま。
+           ★ **紙の道具を、☰ の中へ渡す**(第5.414節) */
+        onMenu={onMenu ? () => onMenu(paperBox) : null}
         /**
          * **冊名 ▾ は帯に置く。単語帳とまったく同じ並び**
          * (第5.176節・2026-09 実機・利用者の指定)。
@@ -1326,24 +1371,30 @@ export default function QrReview({
         topEnd={(
           <ReviewScope
             compact
-            rows={filtered}
+            /* ★ **段を当てる前の一覧を渡す**(第5.414節)。札の数は
+               「押したら何件出るか」なので、いま選んでいる段で
+               絞ったものを渡してはいけない */
+            rows={forPick}
             unit="問"
-            scope={scope}
+            pick={pick}
+            onPick={pickWhat}
             size={size}
             narrowed={narrowed}
-            onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
-            /* **単語帳とまったく同じ札を出す**(第5.244節)。
-               並べ方も繰り返すも、ここには1つも無かった */
+            /* ★ **段階は「詳しくしぼる」の中**(第5.414節)。
+               押す先は札とまったく同じ `pickGroup` である */
+            stage={group}
+            onStage={pickGroup}
+            onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
+            /* **単語帳とまったく同じ札を出す**(第5.244節) */
             orders={QR_ORDERS}
             order={order}
             onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            shuffle={shuffle}
+            onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
             onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             onStart={start}
-            /* **言う練習・聞き流し・紙に出すも、この中**(第5.167節)。
-               トップ画面が無くなったので、置き場所がここだけになった */
-            tools={toolsBox}
           >
             <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
           </ReviewScope>
@@ -1451,20 +1502,24 @@ export default function QrReview({
               絞り込みと並べ方も、**この中(「出しかた」)に入れる** ——
               設定が画面の3か所に散っていたのを1か所にまとめた */}
           <ReviewScope
-            rows={filtered}
+            rows={forPick}
             unit="問"
-            scope={scope}
+            pick={pick}
+            onPick={pickWhat}
             size={size}
             narrowed={narrowed}
-            onScope={(id) => { setScope(id); saveScope('qr', id) }}
             onSize={(s) => { setSize(s); saveSize('qr', s) }}
+            stage={group}
+            onStage={pickGroup}
+            onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
             /* **並べ方は札にする**(第5.244節・2026-09-23 利用者の指摘)。
                「しぼる」の中の小さなプルダウンだったので、
-               **単語帳と同じ札を探した人には見つからなかった。**
-               **同じことをするものを2つ見せない**ので、あちらは消した */
+               **単語帳と同じ札を探した人には見つからなかった** */
             orders={QR_ORDERS}
             order={order}
             onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            shuffle={shuffle}
+            onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
             onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             onStart={start}

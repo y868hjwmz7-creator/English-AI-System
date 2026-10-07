@@ -232,7 +232,11 @@ console.log('\n▶ 画面と窓口まで、本当に通っているか')
     '画面が、えらんだ表現と形を「作り方」に渡している')
   is(/loadResponseRows\(/.test(form), '画面が、出どころから引く関数を呼んでいる')
   /* **作り方を1か所に寄せたか。** 4か所に書き写すと、必ず片方が古くなる */
-  const 寄せた = (form.match(/examPart: makeBrief\(\)/g) ?? []).length
+  /* ★ **引数があっても数える**(第5.410節)。通しでは演習ごとに
+       その PART の作り方を渡すので `makeBrief(plan[i])` になった ——
+       **見ているのは「同じ1つの関数を通っているか」**であって、
+       引数の有無ではない(**式を書き写さない**・CLAUDE.md) */
+  const 寄せた = (form.match(/examPart: makeBrief\(/g) ?? []).length
   is(寄せた >= 4 && !/examPart: isExamKind/.test(form),
     '「作り方」を1か所に寄せている(4か所の書き写しが残っていない)',
     `${寄せた} か所が同じ関数を通る`)
@@ -252,11 +256,16 @@ console.log('\n▶ 画面と窓口まで、本当に通っているか')
      「標準 0 / 倍 0 / 3倍 0」と出ていた。
      **出る側と出ない側の両方を見る**(CLAUDE.md)——
      ほかの種類では、いままでどおり出ること */
-  const 倍率 = form.match(/\{\s*(!?[^\n]*?)\s*\n?\s*&&\s*defaultSectionsFor\(kind\)\.some/)
+  /* ★ **テスト対策は PART ごとに引く**(第5.409節)ので、
+       `defaultSectionsFor(kind, …)` に鍵が増えた。
+       **関数の名前で探す** —— 引数を書き写すと、
+       仕組みを1ミリも壊していないのに見張りだけが赤くなる */
+  const 倍率 = form.match(/\{\s*(!?[^\n]*?)\s*\n?\s*&&\s*defaultSectionsFor\(kind,/)
   is(/!isResponseKind\(kind\)/.test(倍率?.[0] ?? ''),
-    '応答問題には、問数の倍率の欄を出さない', 倍率?.[1] ?? '(見つからない)')
-  is(/defaultSectionsFor\(kind\)\.some\(\(s2\) => SCALABLE_SECTIONS/.test(form),
-    'ほかの種類には、いままでどおり倍率の欄を出す')
+    '応答問題には、問数の欄を出さない', 倍率?.[1] ?? '(見つからない)')
+  /* ★ **数を変えられるかの判断は `isScalable()` 1か所**(第5.409節) */
+  is(/defaultSectionsFor\(kind,[^\n]*\)\s*\n?\s*\.some\(\(s2\) => isScalable\(kind,/.test(form),
+    'ほかの種類には、いままでどおり問数の欄を出す')
 
   /* **SQL も見る。** 制約に `response` が無いと、発行した瞬間に止まる */
   const sql = R('supabase/apply/pending_matome.sql')
