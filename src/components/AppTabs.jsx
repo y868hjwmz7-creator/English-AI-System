@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 /**
  * 画面の下に貼り付く、行き先の帯(2026-09 利用者の指定)。
  *
@@ -56,10 +57,34 @@ export default function AppTabs({ pages = [], view, onChange }) {
             onClick={() => onChange(p.id)}
           >
             <span className="app-tab-icon">{Icon ? <Icon /> : null}</span>
-            {/* **名前は切らない。**「Quick…」では何のボタンか分からない
+            {/* ★ **語ごとに1行**(第5.407節・2026-10-07 利用者の指定)。
+
+                  > 「Quick」と「Response」の2行に折り返し、中央揃えで表示する
+                  > (以前の表示が気に入っていたため)
+
+                **名前は切らない。**「Quick…」では何のボタンか分からない
                 (Quick Response の札で一度学んだこと・CLAUDE.md)。
-                入らないぶんは2行に折り返させる */}
-            <span className="app-tab-label">{p.label}</span>
+
+                **折り返しを CSS まかせにすると、画面の幅で変わる** ——
+                390px では札が 98px あって「Quick Response」が1行で収まり、
+                320px でだけ2行になっていた(実測)。
+                **幅を決め打ちして狭める**のは、字の大きさを変えた日に
+                効かなくなる(CLAUDE.md「値を書き写さない。性質で見る」)。
+
+                そこで**空白で区切って、語ごとに1行**にする。
+                ・空白を含まない名前(教材 / 今週の宿題 / 単語帳 /
+                  スピーチ練習)は**1語なので、これまでどおり1行**
+                ・語の途中では決して切れない(「Quick Respo / nse」にならない)
+                **読み上げには、語のあいだの空白をそのまま残す** ——
+                `Quick Response` と1つの名前として読まれる */}
+            <span className="app-tab-label">
+              {String(p.label ?? '').split(/\s+/).filter(Boolean).map((w, i) => (
+                <Fragment key={`${w}-${i}`}>
+                  {i > 0 ? ' ' : null}
+                  <span className="app-tab-word">{w}</span>
+                </Fragment>
+              ))}
+            </span>
           </button>
         )
       })}
