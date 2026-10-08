@@ -77,7 +77,6 @@ export default function QrCard({
    * **既定は出さない。** 教材の中の Quick Response には渡さない ——
    * あちらに「もう出さない」は無い(**言われていない場所を変えない**)。
    */
-  corner = null,
   /**
    * **英文の「型」を、答えの下に出すか**(2026-09 利用者の指定)。
    *
@@ -227,9 +226,6 @@ export default function QrCard({
 
   return (
     <div className="qr-card">
-      {/* ★ **右上の隅**(第5.417節・段階4の案B-2)。
-            渡されたときだけ描く —— 空の入れ物で場所を取らない */}
-      {corner && <div className="qr-card-corner">{corner}</div>}
       {/* 出題と答えは**まん中**に、ボタンは**いつも同じ場所**に置く。
           以前は答えがボタンの下に出ていたので、画面のいちばん下へ
           押し出され、そのつど送らないと読めなかった(2026-08 の指摘)。

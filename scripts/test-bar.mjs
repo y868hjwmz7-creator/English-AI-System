@@ -14625,11 +14625,30 @@ for (const [q2, 期待, 何] of [
         const { x, y, width, height } = el.getBoundingClientRect()
         return { x, y, w: width, h: height, 見える: el.checkVisibility() }
       }
+      /* 行の帯(左右の端)と、中のボタンの並び */
+      const 行 = (s2) => {
+        const el = document.querySelector(s2)
+        if (!el) return null
+        const b = el.getBoundingClientRect()
+        const 子 = [...el.children].map((c) => {
+          const r = c.getBoundingClientRect()
+          return {
+            字: (c.textContent || '').replace(/\s+/g, ' ').trim(),
+            x: Math.round(r.left), 右: Math.round(r.right),
+            w: Math.round(r.width), 上: Math.round(r.top), h: Math.round(r.height),
+          }
+        })
+        return {
+          x: Math.round(b.left), 右: Math.round(b.right), w: Math.round(b.width),
+          段: new Set(子.map((c) => c.上)).size, 子,
+        }
+      }
       return {
         入れ物: 箱('.cardmove'), カード: 箱('.qr-card'),
         左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
-        隅: 箱('.qr-card-corner'),
-        隅の字: document.querySelector('.qr-card-corner button')?.textContent?.trim() ?? '',
+        隅が残っている: !!document.querySelector('.qr-card-corner'),
+        /* ★ **上の行(聴く・リピート・もう出さない)と、下の答えの行** */
+        上: 行('.qr-peek'), 下: 行('.qr-answers'),
         ボタン: [...document.querySelectorAll('.qr-card button')].map((b2) => b2.textContent.trim()),
       }
     })
@@ -14647,17 +14666,61 @@ for (const [q2, 期待, 何] of [
           `入れ物 ${Math.round(m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
       }
     }
-    /* ★ **B-2 「もう出さない」はカードの右上**(2026-10-07 利用者の指定) */
-    if (m.隅?.見える && m.隅の字.includes('もう出さない')) {
-      const 右上 = m.隅.x + m.隅.w <= m.カード.x + m.カード.w + 0.5
-        && m.隅.y >= m.カード.y - 0.5 && m.隅.y < m.カード.y + m.カード.h / 2
-      if (右上) ok('Quick Response … 「もう出さない」はカードの右上にある', m.隅の字)
-      else ng('Quick Response … 「もう出さない」が右上にない', JSON.stringify(m.隅))
-      /* **判定のボタンと同じ行に戻っていないか**(B-2 は離すのが目的) */
-      const 並び = m.ボタン.indexOf('もう出さない')
-      if (並び === 0) ok('Quick Response … 「もう出さない」は答えの行より先にある')
-      else ng('Quick Response … 「もう出さない」が答えの行に混ざっている', m.ボタン.join(' / '))
-    } else ng('Quick Response … 「もう出さない」がカードの隅に出ていない', JSON.stringify(m))
+    /* ★ **「もう出さない」は「聴く」「リピート」と同じ行の右端**
+         (2026-10-08 利用者の指定)。
+
+         > もう出さないのボタンは「聴く」「リピート」の右に収まるように
+         > 置いてください。下の「まだ」「言えた」の合計の幅とバランスよく
+         > なるように調整して、間も適切にバランスよく空けてください
+
+       カードの右上へ浮かせていたが、**話し手の名前に重なった** ——
+       名前の長さが問ごとに違うので、**重なるかどうかが問ごとに変わる**
+       (浮かせたものは、下に何が来ても避けない)。 */
+    if (m.隅が残っている) {
+      ng('Quick Response … やめたはずの「右上の隅」が残っている',
+        '`.qr-card-corner` は廃止した')
+    } else ok('Quick Response … やめた「右上の隅」は残っていない')
+    if (!m.上 || !m.下) {
+      ng('Quick Response … 上の行か、答えの行が描かれていない')
+    } else {
+      const 字 = m.上.子.map((c) => c.字)
+      const どこ = 字.findIndex((t) => t.includes('もう出さない'))
+      if (どこ < 0) {
+        ng('Quick Response … 「もう出さない」が上の行にいない', 字.join(' / '))
+      } else if (どこ !== 字.length - 1) {
+        ng('Quick Response … 「もう出さない」が、上の行のいちばん右にいない', 字.join(' / '))
+      } else {
+        ok('Quick Response … 「もう出さない」は「聴く」「リピート」の右にある',
+          字.join(' / '))
+      }
+      /* ★ **上下の行が、同じ帯にそろっているか**(「バランスよく」の中身) */
+      if (Math.abs(m.上.x - m.下.x) <= 1 && Math.abs(m.上.右 - m.下.右) <= 1) {
+        ok('Quick Response … 上の行と答えの行が、同じ幅にそろっている',
+          `${m.上.x}→${m.上.右}(${m.上.w}px)`)
+      } else {
+        ng('Quick Response … 上の行と答えの行で、幅がそろっていない',
+          `上 ${m.上.x}→${m.上.右} / 下 ${m.下.x}→${m.下.右}`)
+      }
+      /* ★ **すき間も同じか**(となりどうしの間を、両方の行で測る) */
+      const すき間 = (r) => r.子.slice(1).map((c, i) => c.x - r.子[i].右)
+      const 上す = すき間(m.上)
+      const 下す = すき間(m.下)
+      const そろい = 上す.every((g) => 下す.every((h) => Math.abs(g - h) <= 1))
+      if (上す.length && 下す.length && そろい) {
+        ok('Quick Response … となりどうしのすき間も、上下で同じ',
+          `上 ${上す.join(' / ')} / 下 ${下す.join(' / ')}`)
+      } else {
+        ng('Quick Response … 上下ですき間が違う',
+          `上 ${上す.join(' / ')} / 下 ${下す.join(' / ')}`)
+      }
+      /* ★ **折り返していないか**(3つとも1行に収まる) */
+      if (m.上.段 === 1) ok('Quick Response … 上の行は1行に収まっている', `${m.上.子.length} つ`)
+      else ng(`Quick Response … 上の行が ${m.上.段} 段になっている`, 字.join(' / '))
+      /* **高さもそろっているか**(字が折り返す狭い画面で、ぎざぎざにならない) */
+      const 高さ = new Set(m.上.子.map((c) => c.h))
+      if (高さ.size === 1) ok('Quick Response … 上の行は、高さもそろっている', `${[...高さ][0]}px`)
+      else ng('Quick Response … 上の行の高さがばらばら', [...高さ].join(' / '))
+    }
     /* ★ **矢印キーは、こちらでも効く** */
     const 頭 = await 文()
     await page.keyboard.press('ArrowRight')
@@ -14675,6 +14738,72 @@ for (const [q2, 期待, 何] of [
     if (印.length === 2) ok('Quick Response … 答えの2つにキーの印が付く', 印.join(' / '))
     else ng('Quick Response … キーの印が付いていない', m.ボタン.join(' / ') || '(ボタンが無い)')
     await page.close()
+  }
+
+  console.log('\n▶ 上の行と答えの行を、狭い画面でもそろえる(第5.417節・2026-10-08)')
+  {
+    /* ★ **広い画面だけで測ると、何も守らない**(2026-10-08 に踏んだ)。
+
+         折り返しの起点を中身に戻しても、高さをそろえるのをやめても、
+         **1200px では3つとも 100px / 34px に収まるので緑のまま**だった。
+         **いちばん危ない形(320px)を、検証の中に必ず1つ置く**
+         (CLAUDE.md)—— あそこは帯が 266px しかなく、
+         3つの中身(286px)が入りきらない。 */
+    for (const w of [390, 320]) {
+      const pg = await browser.newPage({ viewport: { width: w, height: 844 } })
+      await pg.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+        { waitUntil: 'domcontentloaded' })
+      try {
+        await pg.waitForSelector('.qr-peek', { timeout: 10000 })
+      } catch {
+        ng(`行のそろい ${w}px … Quick Response が開かない`)
+        await pg.close()
+        continue
+      }
+      await pg.waitForTimeout(600)
+      const m = await pg.evaluate(() => {
+        const 行 = (q) => {
+          const el = document.querySelector(q)
+          if (!el) return null
+          const b = el.getBoundingClientRect()
+          const 子 = [...el.children].map((c) => {
+            const r = c.getBoundingClientRect()
+            return {
+              字: (c.textContent || '').replace(/\s+/g, ' ').trim(),
+              x: Math.round(r.left), 右: Math.round(r.right),
+              w: Math.round(r.width), 上: Math.round(r.top), h: Math.round(r.height),
+              はみ出し: Math.round(c.scrollWidth - c.clientWidth),
+            }
+          })
+          return {
+            x: Math.round(b.left), 右: Math.round(b.right),
+            段: new Set(子.map((c) => c.上)).size, 子,
+          }
+        }
+        return { 上: 行('.qr-peek'), 下: 行('.qr-answers') }
+      })
+      const どこ = `行のそろい ${w}px`
+      if (!m.上 || !m.下) { ng(`${どこ} … 行が描かれていない`); await pg.close(); continue }
+      /* **3つとも1行に収まるか**(狭い画面では、ここが落ちていた) */
+      if (m.上.段 === 1) ok(`${どこ} … 上の行は1行`, m.上.子.map((c) => c.w).join(' / ') + 'px')
+      else ng(`${どこ} … 上の行が ${m.上.段} 段になっている`, m.上.子.map((c) => c.字).join(' / '))
+      /* **高さがそろっているか**(字が折り返すと、ここがばらつく) */
+      const 高さ = new Set(m.上.子.map((c) => c.h))
+      if (高さ.size === 1) ok(`${どこ} … 上の行は、高さもそろっている`, `${[...高さ][0]}px`)
+      else ng(`${どこ} … 上の行の高さがばらばら`, [...高さ].join(' / '))
+      /* **同じ帯か** */
+      if (Math.abs(m.上.x - m.下.x) <= 1 && Math.abs(m.上.右 - m.下.右) <= 1) {
+        ok(`${どこ} … 上下の行が、同じ幅にそろっている`, `${m.上.x}→${m.上.右}`)
+      } else {
+        ng(`${どこ} … 上下で幅がそろっていない`,
+          `上 ${m.上.x}→${m.上.右} / 下 ${m.下.x}→${m.下.右}`)
+      }
+      /* **字が、ボタンからはみ出していないか** */
+      const はみ = m.上.子.filter((c) => c.はみ出し > 1)
+      if (はみ.length) ng(`${どこ} … 字がボタンからはみ出している`, はみ.map((c) => c.字).join(' / '))
+      else ok(`${どこ} … 字は、どのボタンにも収まっている`)
+      await pg.close()
+    }
   }
 
   console.log('\n▶ 文の長さが変わっても、箱の大きさは変わらない(第5.417節)')
