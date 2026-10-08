@@ -11739,9 +11739,14 @@ button.wbfilter-ctl { text-align: left; }
   position: absolute; top: 0; bottom: 0; z-index: 1;
   padding: 0; border: 0; background: none;
   /* **押している最中だけ、うっすら光る。** ふだんは何も描かない ——
-     「余計な説明書きを置かない」と同じ考え方で、**押せば分かる** */
+     「余計な説明書きを置かない」と同じ考え方で、**押せば分かる**。
+
+     ★ **長さは `--motion-tap` から取る**(第5.371節)。
+     生のミリ秒を書くと `motion.js` と二重になり、片方だけ古くなる
+     (`npm run test:feel` が見張っている・CLAUDE.md
+     「呼び名・色・幅を2か所に書かない」) */
   border-radius: var(--r-12);
-  transition: background-color .12s ease;
+  transition: background-color var(--motion-tap) var(--ease-out);
 }
 .cardmove-edge--l { left: 0; }
 .cardmove-edge--r { right: 0; }

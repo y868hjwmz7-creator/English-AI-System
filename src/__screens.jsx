@@ -2611,8 +2611,13 @@ createRoot(document.getElementById('root')).render(
     ? GNOTE
     : q.get('screen') === 'radio'
     ? RADIO
+    /* ★ `&tabs=1` … **聞き流しの最中も、下のメニューと一緒に**描く
+         (第5.417節・段階4の案C-1「聞き流し中もタブバーを出す」)。
+         **ここが無いと、聞き流しの画面だけ1度も測れない** ——
+         `.focus.radio` を短くする決まりは CSS にあるが、
+         「決まりがある」では見張ったことにならない(CLAUDE.md `test:feel`) */
     : q.get('screen') === 'qrradio'
-    ? QRRADIO
+    ? (q.get('tabs') ? 帯つき(QRRADIO) : QRRADIO)
     : q.get('screen') === 'notes'
     ? NOTES
     : q.get('screen') === 'notesdigest'

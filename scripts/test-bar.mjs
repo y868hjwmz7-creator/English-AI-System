@@ -80,14 +80,20 @@ import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
    文字を書き写すと、言い方を変えた日に**見張りだけが古くなる** */
 import { shuffleSay } from '../src/lib/shuffleSay.js'
 /* ★ **札の数は、一覧から出す。書き写さない**(第5.414節・段階3) */
-import { PICKS, SIZES, plainOrders, sizePickLabel } from '../src/lib/reviewScope.js'
+import {
+  PICKS, SIZES, pickName, plainOrders, sizePickLabel,
+} from '../src/lib/reviewScope.js'
+/* ★ **カードを送る・判定する操作の境目は `cardMove.js` 1か所**(第5.417節)。
+     **数を書き写さない** —— 44px / 56px を見張りに書くと、
+     値を変えた日に期待値も一緒に動いて、仕組みを壊しても素通りする */
+import { KEY_MARK, SWIPE_MIN, TAP_MIN, keyMove } from '../src/lib/cardMove.js'
 import { QUIZ_FORMS, WORD_ORDERS } from '../src/lib/wordQuiz.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
 /* ★ **覚え具合の段は `learnStage.js` 1か所**(第5.406節)。
      **数を書き写さない** —— 4段階にした日に、見張りが「3つ出ていない」で
      赤くなった(仕組みは1ミリも壊れていないのに・CLAUDE.md) */
-import { LEARN_STAGES } from '../src/lib/learnStage.js'
+import { LEARN_STAGES, stageLabel } from '../src/lib/learnStage.js'
 
 const PORT = 5198
 const ROOT = new URL('..', import.meta.url).pathname
@@ -4751,6 +4757,12 @@ export default defineConfig({
   for (const [名, q] of [
     ['単語帳', 'screen=mybook&tabs=1'],
     ['Quick Response', 'screen=qrrev&tabs=1'],
+    /* ★ **聞き流しの最中も出す**(第5.417節・段階4の案C-1・利用者の指定)。
+         あちらは `.focus.radio` で、**上の2つとは別の決まり**で短くしている
+         —— 書き忘れると、聞きながら単語帳へ移れない
+         (**行き止まりを作らない**・CLAUDE.md)。
+         音を鳴らし続ける画面なので、この輪は `domcontentloaded` で待っている */
+    ['聞き流し', 'screen=qrradio&tabs=1'],
   ]) {
     for (const w of [390, 320]) {
       await page.setViewportSize({ width: w, height: 760 })
@@ -4758,8 +4770,20 @@ export default defineConfig({
          いつまでも「通信中」に見える。出るはずのものを待つ */
       await page.goto(`http://localhost:${PORT}/__bar.html?${q}`,
         { waitUntil: 'domcontentloaded' })
-      await page.waitForSelector('.app-tabs')
-      await page.waitForSelector('.focus')
+      /* ★ **描けなかったことも、赤として数える**(第5.405節で踏んだ)。
+           包まないと `waitForSelector` が投げて**検証そのものが止まり、
+           このあとの「出ない側」を1本も測らない。**
+           骨組みが帯を描き忘れたときに、ここが赤くなる */
+      try {
+        await page.waitForSelector('.app-tabs', { timeout: 8000 })
+        await page.waitForSelector('.focus', { timeout: 8000 })
+      } catch {
+        /* **`page` はこの輪で使い回している。閉じない** ——
+           閉じると、このあとの回が1本も測れなくなる */
+        ng(`練習中のメニュー ${名} ${w}px … 帯か練習の画面が描かれない`,
+          '骨組みが `&tabs=1` を受け取っていないか、画面が開いていない')
+        continue
+      }
       await page.waitForTimeout(250)
       const m = await page.evaluate(() => {
         const 丸 = (n) => Math.round(n * 10) / 10
@@ -14106,6 +14130,416 @@ for (const [q2, 期待, 何] of [
   } else {
     ok(`つまみ … ${見つけた.length} 本とも、横に引いても画面が滑らない`
       + `(${[...new Set(見つけた)].slice(0, 4).join(' / ')})`)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   第5.417節 —— カードを送る・判定する操作(2026-10-07 利用者の指定・段階4)
+
+     | 操作 | 前へ | 次へ | 覚えた(言える) | まだ |
+     |---|---|---|---|---|
+     | 矢印キー | ← | → | ↑ | ↓ |
+     | 紙の余白をクリック | 左 | 右 | — | — |
+     | スワイプ(指の端末だけ) | — | — | 右へ | 左へ |
+
+   **算段は `npm run test:play` が素の node で見張る。**
+   ここは**実際に描いて、押して測る** —— 「CSS に決まりがある」では
+   見張ったことにならないのと同じ(CLAUDE.md `test:feel`)。
+
+   **広い画面と狭い画面の両方で測る。** 押せる帯は余白が 44px 取れた
+   ときだけ出すので、**スマホだけ見ていると「出さない」しか測れない。**
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  /* **名前は、この箱の中だけで通じるようにする**(ほかの見張りとぶつけない) */
+  const IN_SENTENCE = ['answer', 'engineer', 'stayed', 'quiet', 'during', 'whole',
+    'review', 'meeting', 'later', 'admitted', 'nervous', 'anything']
+  const WORDS = Array.from({ length: 12 }, (_, i) => ({
+    word_norm: IN_SENTENCE[i], display: IN_SENTENCE[i], kind: 'phrase', pos: '熟語',
+    status: 'learning', box: 2, learn_streak: 4,
+    due_on: '2020-01-01', added_at: '2026-09-01',
+    meaning_ja: `意味${i}`,
+    seen_in: 'Not knowing the answer, the new engineer stayed quiet during the whole review meeting.',
+    seen_in_ja: '答えを知らなかったので、黙っていた。',
+    material_id: null, material_title: null, industry: 'it', topic: null,
+  }))
+  const 単語帳を開く = async (opts, form = 'recall') => {
+    const page = await browser.newPage(opts)
+    await page.route('**/rest/v1/**', (route) => {
+      const u = route.request().url()
+      let body = []
+      if (u.includes('review_words')) body = WORDS
+      if (u.includes('vocab_week')) body = [{ days: 3, answered: 20, correct: 15, weeks: 5 }]
+      if (u.includes('weekly_goal')) body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    })
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+    }))
+    await page.addInitScript((f) => {
+      try { localStorage.setItem('eas.review.word.form', f) } catch { /* 使えなくても困らない */ }
+    }, form)
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=wordbook`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.wbfocus .wordcard', { timeout: 10000 })
+    return page
+  }
+  /** いま出ている語(これが変わったら、カードが送られたということ) */
+  const いまの語 = (page) => page.evaluate(() => (
+    document.querySelector('.wordcard-face')?.textContent?.trim()?.slice(0, 40) ?? ''))
+
+  console.log('\n▶ 紙の左右の余白を押せる(第5.417節・段階4)')
+  {
+    /* ★ **広い画面と狭い画面の両方で測る**(CLAUDE.md)。
+         **「出る」と「出ない」の両方を見る** —— 片方だけだと、
+         **どの幅でも出す形・どの幅でも出さない形**に書き換えても緑になる */
+    for (const [名, 幅, 出るか] of [['広い画面', 1200, true], ['スマホ', 390, false]]) {
+      const page = await 単語帳を開く({ viewport: { width: 幅, height: 900 } })
+      const m = await page.evaluate(() => {
+        const 箱 = (s) => {
+          const el = document.querySelector(s)
+          if (!el) return null
+          const { x, y, width, height } = el.getBoundingClientRect()
+          return { x, y, w: width, h: height, 見える: el.checkVisibility() }
+        }
+        return {
+          入れ物: 箱('.cardmove'), カード: 箱('.wordcard'),
+          左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
+          上の帯: 箱('.focus-top'), タブ: 箱('.app-tabs'),
+        }
+      })
+      if (出るか) {
+        if (m.左?.見える && m.右?.見える) {
+          ok(`${名} … 紙の左右に、押せる帯が出る`,
+            `左 ${Math.round(m.左.w)}px / 右 ${Math.round(m.右.w)}px`)
+          /* **44px 取れているか**(出すなら押せる大きさで出す) */
+          const 狭い = Math.min(m.左.w, m.右.w)
+          if (狭い >= TAP_MIN) ok(`${名} … 押せる大きさで出ている`, `${Math.round(狭い)}px`)
+          else ng(`${名} … 帯が ${Math.round(狭い)}px しかない`, `${TAP_MIN}px 以上が要る`)
+          /* ★ **紙の入れ物の中にいるか**(利用者の指定
+               「上部バーの部分は余白としてとらえない」) */
+          const 外 = [['左', m.左], ['右', m.右]].filter(([, b]) => (
+            b.y < m.入れ物.y - 0.5 || b.y + b.h > m.入れ物.y + m.入れ物.h + 0.5
+            || b.x < m.入れ物.x - 0.5 || b.x + b.w > m.入れ物.x + m.入れ物.w + 0.5))
+          if (外.length) ng(`${名} … 押せる帯が、紙の入れ物からはみ出している`, JSON.stringify(外))
+          else ok(`${名} … 押せる帯は、紙の入れ物の中にある(上の帯にかからない)`)
+          /* ★ **カードの上に乗っていないか** —— 乗ると、
+               語をなぞる操作も、答えのボタンも押せなくなる */
+          const かぶり = [['左', m.左], ['右', m.右]].filter(([, b]) => (
+            b.x + b.w > m.カード.x + 0.5 && b.x < m.カード.x + m.カード.w - 0.5))
+          if (かぶり.length) ng(`${名} … 押せる帯がカードに重なっている`, JSON.stringify(かぶり))
+          else ok(`${名} … 押せる帯は、カードに重なっていない`)
+          /* ★ **上の帯にかかっていないか**(実際の相手で測る) */
+          const 帯かぶり = m.上の帯 && [m.左, m.右].some((b) => (
+            b.y < m.上の帯.y + m.上の帯.h - 0.5))
+          if (帯かぶり) ng(`${名} … 押せる帯が、上の帯にかかっている`)
+          else ok(`${名} … 上の帯にはかかっていない`)
+        } else ng(`${名} … 紙の左右に押せる帯が出ない`, JSON.stringify(m))
+      } else if (m.左 || m.右) {
+        ng(`${名} … 余白が無いのに、押せる帯を出している`,
+          `${Math.round(m.左?.w ?? 0)}px / ${Math.round(m.右?.w ?? 0)}px`)
+      } else {
+        ok(`${名} … 余白が取れないので、押せる帯を出さない`,
+          `紙と入れ物が同じ幅 ${Math.round(m.カード?.w ?? 0)}px`)
+      }
+      await page.close()
+    }
+  }
+
+  console.log('\n▶ 押すと、本当に送られる(第5.417節)')
+  {
+    const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
+    const ひとつめ = await いまの語(page)
+    await page.click('.cardmove-edge--r')
+    await page.waitForTimeout(250)
+    const ふたつめ = await いまの語(page)
+    if (ふたつめ && ふたつめ !== ひとつめ) ok('右の余白を押すと、次の語になる', `${ひとつめ} → ${ふたつめ}`)
+    else ng('右の余白を押しても、語が変わらない', `${ひとつめ} / ${ふたつめ}`)
+    await page.click('.cardmove-edge--l')
+    await page.waitForTimeout(250)
+    const 戻り = await いまの語(page)
+    if (戻り === ひとつめ) ok('左の余白を押すと、前の語に戻る', 戻り)
+    else ng('左の余白を押しても、前に戻らない', `${ひとつめ} → ${ふたつめ} → ${戻り}`)
+    await page.close()
+  }
+
+  console.log('\n▶ 矢印キーで送る・判定する(第5.417節)')
+  {
+    const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
+    const 頭 = await いまの語(page)
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(250)
+    const 次 = await いまの語(page)
+    if (次 && 次 !== 頭) ok('→ で次の語になる', `${頭} → ${次}`)
+    else ng('→ を押しても、語が変わらない', `${頭} / ${次}`)
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(250)
+    const 前 = await いまの語(page)
+    if (前 === 頭) ok('← で前の語に戻る', 前)
+    else ng('← を押しても、前に戻らない', `${頭} → ${次} → ${前}`)
+
+    /* ★ **判定のキー。** 答えの記録まで通るので、**何問目かが進む** */
+    const 何問目 = () => page.evaluate(() => (
+      document.querySelector('.drill-count, .drillhead-count')?.textContent?.trim() ?? ''))
+    const 前の数 = await 何問目()
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(400)
+    const 後の数 = await 何問目()
+    const 後の語 = await いまの語(page)
+    if (後の語 !== 前) ok('↓(まだ)で判定され、次の語になる', `${前} → ${後の語}`)
+    else ng('↓ を押しても、判定されない', `${前} / ${後の語} / 数 ${前の数} → ${後の数}`)
+    await page.keyboard.press('ArrowUp')
+    await page.waitForTimeout(400)
+    const 上の語 = await いまの語(page)
+    if (上の語 !== 後の語) ok('↑(覚えかけ)でも判定され、次の語になる', `${後の語} → ${上の語}`)
+    else ng('↑ を押しても、判定されない', `${後の語} / ${上の語}`)
+    await page.close()
+  }
+
+  console.log('\n▶ 字を打っているあいだは、矢印が効かない(第5.417節)')
+  {
+    /* ★ **いま、カードの中に字を打つ場所は1つも無い**(「つづり」の訊き方は
+         廃止された・`QUIZ_FORMS`)。だから**字が入る場所を、こちらで置いて測る** ——
+         守りは `document.activeElement` を見ているので、
+         **どこの入力欄でも、同じ道を通る。**
+         測っているのは「窓に来た矢印を、字を打っているあいだ捨てるか」である。
+
+       ここを外すと、**あとで入力欄を1つ足した日に、黙って壊れる** ——
+       つづりの訊き方が戻ってきたときが、まさにそれである */
+    const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
+    const 頭 = await いまの語(page)
+    await page.evaluate(() => {
+      const el = document.createElement('input')
+      el.type = 'text'; el.id = '__typing'
+      document.querySelector('.wordcard')?.append(el)
+      el.focus()
+    })
+    await page.keyboard.type('ans')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(400)
+    const 後 = await いまの語(page)
+    const 中身 = await page.inputValue('#__typing')
+    if (後 === 頭) ok('字を打っているあいだは、矢印でカードが動かない', 頭)
+    else ng('字を打っているのに、カードが動いた', `${頭} → ${後}`)
+    if (中身 === 'ans') ok('打った字も消えていない', 中身)
+    else ng('打った字が変わった', 中身)
+    /* ★ **外したら動く**ことも、同じ画面で確かめる ——
+         でないと「そもそも矢印が効いていない」を見逃す(CLAUDE.md
+         「『無ければ素通り』する形の検証を書かない」) */
+    await page.evaluate(() => { document.querySelector('#__typing')?.remove() })
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(300)
+    const 打ち終わり = await いまの語(page)
+    if (打ち終わり !== 頭) ok('打つのをやめれば、矢印はまた効く', `${頭} → ${打ち終わり}`)
+    else ng('打つのをやめても、矢印が効かない', '守りが外れていても同じ結果になる')
+    await page.close()
+  }
+
+  console.log('\n▶ スワイプは、指の端末だけ(第5.417節)')
+  {
+    for (const [名, opts, 効くか] of [
+      ['指の端末', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, true],
+      ['マウスの端末', { viewport: { width: 1200, height: 900 } }, false],
+    ]) {
+      const page = await 単語帳を開く(opts)
+      const 頭 = await いまの語(page)
+      const 箱 = await page.evaluate(() => {
+        const el = document.querySelector('.wordcard-answers') ?? document.querySelector('.wordcard')
+        const { x, y, width, height } = el.getBoundingClientRect()
+        return { x: x + width / 2, y: y + height / 2 }
+      })
+      /* **右へはらう**(`SWIPE_MIN` より大きく。**数は1か所から取る**) */
+      await page.mouse.move(箱.x - SWIPE_MIN, 箱.y)
+      await page.mouse.down()
+      await page.mouse.move(箱.x + SWIPE_MIN, 箱.y, { steps: 6 })
+      await page.mouse.up()
+      /* **流れる時間ぶん待つ**(流してから送るので、すぐには変わらない) */
+      await page.waitForTimeout(700)
+      const 後 = await いまの語(page)
+      if (効くか) {
+        if (後 !== 頭) ok(`${名} … 右へはらうと、判定されて次へ進む`, `${頭} → ${後}`)
+        else ng(`${名} … 右へはらっても、何も起きない`, `${頭} / ${後}`)
+      } else if (後 === 頭) {
+        ok(`${名} … 引きずっても、判定されない(なぞる操作とぶつけない)`, 頭)
+      } else {
+        ng(`${名} … マウスで引きずったら、判定されてしまった`, `${頭} → ${後}`)
+      }
+      await page.close()
+    }
+  }
+
+  console.log('\n▶ キーの印は、キーの使える端末だけ(第5.417節)')
+  {
+    for (const [名, opts, 出るか] of [
+      ['マウスの端末', { viewport: { width: 1200, height: 900 } }, true],
+      ['指の端末', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, false],
+    ]) {
+      const page = await 単語帳を開く(opts)
+      const 字 = await page.evaluate(() => [...document.querySelectorAll('.wordcard-answers button')]
+        .map((b) => b.textContent.trim()))
+      if (字.length < 2) { ng(`${名} … 答えのボタンが2つ出ていない`, JSON.stringify(字)); await page.close(); continue }
+      /* **印は `KEY_MARK` から読み取って突き合わせる**(書き写さない) */
+      const 印 = 字.filter((t) => Object.values(KEY_MARK).some((m) => t.includes(m)))
+      if (出るか) {
+        if (印.length === 字.length) ok(`${名} … どのボタンにもキーの印が付く`, 字.join(' / '))
+        else ng(`${名} … 印の付いていないボタンがある`, 字.join(' / '))
+        /* ★ **上下の印が、上下のボタンに付いているか**(裏返っていたら赤)。
+
+             **`KEY_MARK` と突き合わせてはいけない** —— 見比べる両方が
+             同じ表から来るので、`ok` と `yet` を入れ替えても緑のままになる
+             (赤チェックで見つけた・CLAUDE.md「見張りが、自分と
+             同じ出どころを見ていないか」)。
+
+             **突き合わせる相手は、キーの名前そのもの。**
+             `ArrowDown` の印が「↓」であることは世界共通の事実で、
+             このプロジェクトの値ではない。こちらは `keyMove()`
+             (**別の表**)から引くので、**どちらか片方を書き換えれば
+             必ず赤くなる。** */
+        const 矢印 = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' }
+        const 印of = (move) => {
+          const k = Object.keys(矢印).find((x) => keyMove({ key: x }) === move)
+          return k ? 矢印[k] : ''
+        }
+        const まだ = 字.find((t) => t.startsWith('まだ')) ?? ''
+        const 覚え = 字.find((t) => t.startsWith('覚え')) ?? ''
+        if (印of('yet') && 印of('ok')
+          && まだ.includes(印of('yet')) && 覚え.includes(印of('ok'))) {
+          ok(`${名} … 「まだ」が ${印of('yet')} 、「覚え…」が ${印of('ok')}`
+            + '(キーの名前と突き合わせた)')
+        } else {
+          ng(`${名} … 印とボタンの組が入れ替わっている`,
+            `${まだ} / ${覚え}(まだ = ${印of('yet')} / 覚え = ${印of('ok')} のはず)`)
+        }
+      } else if (印.length === 0) {
+        ok(`${名} … キーの印を出さない(押しようがないものを見せない)`, 字.join(' / '))
+      } else {
+        ng(`${名} … 指の端末にキーの印が出ている`, 印.join(' / '))
+      }
+      await page.close()
+    }
+  }
+
+  console.log('\n▶ 覚え具合の点と、題の先頭(第5.417節・案A-3)')
+  {
+    const page = await 単語帳を開く({ viewport: { width: 390, height: 844 } })
+    const m = await page.evaluate(() => {
+      const dots = [...document.querySelectorAll('.learn-dot')]
+      const 紙 = document.querySelector('.wordcard')?.getBoundingClientRect()
+      const 点箱 = document.querySelector('.learn-dots')?.getBoundingClientRect()
+      return {
+        数: dots.length,
+        点いている: dots.filter((d) => d.classList.contains('is-on')).length,
+        ラベル: document.querySelector('.learn-dots')?.getAttribute('aria-label') ?? '',
+        紙の中: !!(紙 && 点箱 && 点箱.top >= 紙.top - 0.5 && 点箱.bottom <= 紙.bottom + 0.5),
+        題: document.querySelector('.drill-title')?.textContent?.trim() ?? '',
+        題の行: (() => {
+          const el = document.querySelector('.drill-title')
+          if (!el) return 0
+          const h = el.getBoundingClientRect().height
+          const ひと行 = parseFloat(window.getComputedStyle(el).lineHeight)
+          return Number.isFinite(ひと行) && ひと行 > 0 ? Math.round(h / ひと行) : 0
+        })(),
+        札: [...document.querySelectorAll('.wordcard .badge, .wordcard .chip')].length,
+      }
+    })
+    /* **数を書き写さない。`LEARN_STAGES` の長さそのもの**(第5.406節) */
+    if (m.数 === LEARN_STAGES.length) ok('点の数は、段の数そのもの', `${m.数} 個`)
+    else ng(`点が ${m.数} 個しかない`, `${LEARN_STAGES.length} 段あるので同じ数が要る`)
+    /* **箱 2 の語は「学習中」** —— その段まで点が灯る */
+    const 学習中 = LEARN_STAGES.findIndex((s) => s.id === 'learning') + 1
+    if (m.点いている === 学習中) ok(`「${stageLabel('learning')}」の語は、${学習中} 個灯る`, `${m.点いている} 個`)
+    else ng(`灯っている点が ${m.点いている} 個`, `${学習中} 個のはず`)
+    /* **色だけに頼らない** —— 読み上げに言葉で届く */
+    if (m.ラベル.includes(stageLabel('learning'))) ok('読み上げに、段の名前が言葉で届く', m.ラベル)
+    else ng('読み上げに、段の名前が届いていない', m.ラベル)
+    if (m.紙の中) ok('点は、カードの中にある(札を別に足していない)')
+    else ng('点がカードの外にいる')
+    /* ★ **A-3 は「1行にまとめる」**(2026-10-07 利用者の指定)。
+         札も帯も足さず、**題の先頭に範囲を出すだけ**である */
+    const 範囲 = pickName('due')
+    if (m.題.startsWith(範囲)) ok('題の先頭に、いま出している範囲が出る', m.題)
+    else ng('題の先頭に範囲が出ていない', `${m.題}(「${範囲}」で始まるはず)`)
+    if (m.題の行 === 1) ok('題は1行にまとまっている', `${m.題の行} 行`)
+    else ng(`題が ${m.題の行} 行になっている`, m.題)
+    await page.close()
+  }
+
+  console.log('\n▶ Quick Response も、同じ操作(第5.417節)')
+  {
+    /* ★ **ここには「紙の余白」が無い。** `.qr-card` には幅の上限が無く、
+         広い画面でもカードが列いっぱいに広がる(実測 782px / 782px)。
+         **上限を足せば余白は生まれる**が、利用者の指定
+         「Quick Response の幅は変えないでくださいよ」があるので触らない
+         (`FocusFrame.jsx` に経緯がある)。
+
+       **だから「出ない」を測る。** 44px 取れないときは帯を出さない ——
+       出しても押せないものは、効かない操作である(CLAUDE.md)。
+       **矢印キーとスワイプは、こちらでも効く。** */
+    const page = await browser.newPage({ viewport: { width: 1200, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.qr-card', { timeout: 10000 })
+    const 文 = () => page.evaluate(() => (
+      document.querySelector('.qr-card')?.textContent?.trim()?.slice(0, 40) ?? ''))
+    const m = await page.evaluate(() => {
+      const 箱 = (s2) => {
+        const el = document.querySelector(s2)
+        if (!el) return null
+        const { x, y, width, height } = el.getBoundingClientRect()
+        return { x, y, w: width, h: height, 見える: el.checkVisibility() }
+      }
+      return {
+        入れ物: 箱('.cardmove'), カード: 箱('.qr-card'),
+        左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
+        隅: 箱('.qr-card-corner'),
+        隅の字: document.querySelector('.qr-card-corner button')?.textContent?.trim() ?? '',
+        ボタン: [...document.querySelectorAll('.qr-card button')].map((b2) => b2.textContent.trim()),
+      }
+    })
+    if (!m.入れ物) ng('Quick Response … カードが `CardMove` に包まれていない')
+    else {
+      const 余白 = Math.floor((m.入れ物.w - m.カード.w) / 2)
+      if (余白 >= TAP_MIN) {
+        /* **幅を絞る日が来たら、こちらが働く**(そのときは出ていないと赤) */
+        if (m.左?.見える && m.右?.見える) ok('Quick Response … 余白が取れたので、押せる帯が出る', `${余白}px`)
+        else ng('Quick Response … 余白が取れているのに、押せる帯が出ない', `${余白}px`)
+      } else if (m.左 || m.右) {
+        ng('Quick Response … 余白が無いのに、押せる帯を出している', `${余白}px`)
+      } else {
+        ok('Quick Response … 余白が取れないので、押せる帯を出さない',
+          `入れ物 ${Math.round(m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
+      }
+    }
+    /* ★ **B-2 「もう出さない」はカードの右上**(2026-10-07 利用者の指定) */
+    if (m.隅?.見える && m.隅の字.includes('もう出さない')) {
+      const 右上 = m.隅.x + m.隅.w <= m.カード.x + m.カード.w + 0.5
+        && m.隅.y >= m.カード.y - 0.5 && m.隅.y < m.カード.y + m.カード.h / 2
+      if (右上) ok('Quick Response … 「もう出さない」はカードの右上にある', m.隅の字)
+      else ng('Quick Response … 「もう出さない」が右上にない', JSON.stringify(m.隅))
+      /* **判定のボタンと同じ行に戻っていないか**(B-2 は離すのが目的) */
+      const 並び = m.ボタン.indexOf('もう出さない')
+      if (並び === 0) ok('Quick Response … 「もう出さない」は答えの行より先にある')
+      else ng('Quick Response … 「もう出さない」が答えの行に混ざっている', m.ボタン.join(' / '))
+    } else ng('Quick Response … 「もう出さない」がカードの隅に出ていない', JSON.stringify(m))
+    /* ★ **矢印キーは、こちらでも効く** */
+    const 頭 = await 文()
+    await page.keyboard.press('ArrowRight')
+    await page.waitForTimeout(300)
+    const 次 = await 文()
+    if (次 !== 頭) ok('Quick Response … → で次の文になる')
+    else ng('Quick Response … → を押しても、文が変わらない', 頭.slice(0, 30))
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(300)
+    const 戻り = await 文()
+    if (戻り === 頭) ok('Quick Response … ← で前の文に戻る')
+    else ng('Quick Response … ← で前に戻らない')
+    /* ★ **キーの印**(マウスの端末なので付く) */
+    const 印 = m.ボタン.filter((t) => Object.values(KEY_MARK).some((k) => t.includes(k)))
+    if (印.length === 2) ok('Quick Response … 答えの2つにキーの印が付く', 印.join(' / '))
+    else ng('Quick Response … キーの印が付いていない', m.ボタン.join(' / ') || '(ボタンが無い)')
+    await page.close()
   }
 }
 

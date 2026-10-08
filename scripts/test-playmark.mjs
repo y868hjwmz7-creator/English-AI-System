@@ -135,9 +135,15 @@ import {
 } from '../src/data/genres.js'
 import {
   DEFAULT_SIZE, PICKS, SIZES,
-  isDueOn, pickCounts, pickIdOf, pickLead, pickPool,
+  isDueOn, pickCounts, pickIdOf, pickLead, pickName, pickPool,
   runKeyOf, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
+/* ★ カードを送る・判定する操作(第5.417節・段階4)。
+     **何にも依存しない形**に出してあるので、素の node で数字を見張れる */
+import {
+  COARSE_Q, FLY_MS, KEY_MARK, SWIPE_MIN, SWIPE_MS, SWIPE_SLOPE, TAP_MIN,
+  edgeFits, edgeSpace, flyX, isCoarse, keyLabel, keyMove, swipeMove,
+} from '../src/lib/cardMove.js'
 /* ★ 出会った時期(第5.414節)。**素の node で測れる形**に出してある */
 import { MET_RANGES, inMet, metLabel } from '../src/lib/metRange.js'
 import { FILTER_KEYS } from '../src/lib/wordbookFilter.js'
@@ -15383,6 +15389,346 @@ console.log('\n▶ 単語帳の読み方と、古い案内(第5.404節)')
      黙って絞ったことにしないための最後の砦である */
   ok(/いまこの画面に読めているのは/.test(w),
     '読めていないときの知らせは残っている(黙って絞らない)')
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   第5.417節 —— カードを送る・判定する操作(2026-10-07 利用者の指定・段階4)
+
+     | 操作 | 前へ | 次へ | 覚えた(言える) | まだ |
+     |---|---|---|---|---|
+     | 矢印キー | ← | → | ↑ | ↓ |
+     | 紙の余白をクリック | 左 | 右 | — | — |
+     | スワイプ(指の端末だけ) | — | — | 右へ | 左へ |
+
+   **当てはまるかどうかは `cardMove.js` 1か所**で、画面は何をするかを
+   渡すだけである。だから**ここで算段を全部測れる。**
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   当てはまる形だけを測ると、**どんな動きでも判定する形**に
+   書き換えても緑になる。
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 矢印キーで送る・判定する(第5.417節)')
+{
+  const 押す = (key, o = {}) => keyMove({ key, ...o })
+  /* **4つぜんぶが、ちがう操作に当たる**(1つに寄っていたら赤) */
+  const 当たり = { ArrowLeft: 'prev', ArrowRight: 'next', ArrowUp: 'ok', ArrowDown: 'yet' }
+  for (const [key, move] of Object.entries(当たり)) {
+    ok(押す(key) === move, `${key} → ${move}`, String(押す(key)))
+  }
+  ok(new Set(Object.values(当たり).map((m) => 押す(
+    Object.keys(当たり).find((k) => 当たり[k] === m),
+  ))).size === 4, '4つの矢印が、4つの別々の操作になる')
+
+  /* ★ **出ない側。** ここを測らないと、**どのキーでも判定する形**に
+       書き換えても緑のままになる */
+  ok(押す('a') === null, '知らないキーは、何もしない')
+  ok(押す('Enter') === null, 'Enter も、何もしない')
+  ok(押す(' ') === null, 'スペースも、何もしない(ページ送りのキーである)')
+  ok(keyMove(null) === null, 'キーが来ていなければ、何もしない')
+
+  /* ★ **字を打っているあいだは、1つも効かせない**(第5.417節)——
+       つづりの訊き方では ← → は**字を直しているだけ**である。
+       カードが飛んだら、書き直せない */
+  const 打っている = Object.keys(当たり)
+    .filter((k) => keyMove({ key: k }, { typing: true }) !== null)
+  ok(打っている.length === 0,
+    '字を打っているあいだは、矢印キーを1つも効かせない',
+    打っている.join(' ') || 'なし')
+
+  /* ★ **飾りのキーが押されていたら効かせない** ——
+       ⌘ ← はブラウザの「戻る」、Alt ↑ はページの先頭である */
+  for (const 飾り of ['ctrlKey', 'metaKey', 'altKey']) {
+    ok(押す('ArrowLeft', { [飾り]: true }) === null,
+      `${飾り} が押されていたら、何もしない`)
+  }
+  /* **Shift は飾りに入れない**(字を選ぶときのキーで、ぶつからない) */
+  ok(押す('ArrowLeft', { shiftKey: true }) === 'prev',
+    'Shift は邪魔しない(押せば前へ行く)')
+}
+
+console.log('\n▶ キーの印は、キーの使える端末だけに出す(第5.417節)')
+{
+  /* **印を書き写さない。`KEY_MARK` から読み取って突き合わせる**(CLAUDE.md
+     「値を書き写さない。性質で見る」)—— 印を変えた日に、ここだけ古くなる */
+  ok(keyLabel('まだ', 'yet') === `まだ ${KEY_MARK.yet}`,
+    'キーのある端末では、ボタンに印が付く', keyLabel('まだ', 'yet'))
+  ok(keyLabel('覚えた', 'ok') === `覚えた ${KEY_MARK.ok}`,
+    '「覚えた」にも印が付く', keyLabel('覚えた', 'ok'))
+  /* ★ **出ない側。** 指しかない端末に「↑」と書いても押しようがない
+       (CLAUDE.md「効かない操作を見せない」) */
+  ok(keyLabel('まだ', 'yet', { keys: false }) === 'まだ',
+    '指の端末では、印を出さない', keyLabel('まだ', 'yet', { keys: false }))
+  const 印あり = Object.values(KEY_MARK)
+    .some((m) => keyLabel('まだ', 'yet', { keys: false }).includes(m))
+  ok(!印あり, '指の端末のボタンに、矢印の印が1つも混ざらない')
+  /* **知らない操作には、印を付けない**(当てずっぽうで書かない) */
+  ok(keyLabel('見る', 'open') === '見る', '知らない操作には、印を付けない')
+
+  /* ★ **印と、本当に効くキーがそろっているか**(第5.417節)。
+       ここが裏返ると、**「覚えた ↓」と書いてあるのに ↑ で覚えたになる。**
+
+     **`KEY_MARK` と突き合わせてはいけない** —— はじめそう書いたが、
+     **見比べる両方が同じ表から来る**ので、`ok` と `yet` を
+     入れ替えても緑のままだった(赤チェックで見つけた・CLAUDE.md
+     「見張りが、自分と同じ出どころを見ていないか」)。
+
+     **突き合わせる相手は、キーの名前そのもの。** `ArrowDown` の印が
+     「↓」であることは世界共通の事実で、このプロジェクトの値ではない。
+     こちらは `keyMove()`(別の表)から引くので、
+     **どちらか片方を書き換えれば必ず赤くなる。** */
+  const 矢印 = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' }
+  const 効くキー = (move) => Object.keys(矢印).find((k) => keyMove({ key: k }) === move)
+  for (const move of ['prev', 'next', 'ok', 'yet']) {
+    const k = 効くキー(move)
+    ok(k && KEY_MARK[move] === 矢印[k],
+      `${move} の印は、本当に効くキー(${k ?? '無し'})の矢印である`,
+      `印 ${KEY_MARK[move]} / キー ${矢印[k] ?? '無し'}`)
+  }
+}
+
+console.log('\n▶ スワイプの向きと、見分ける境目(第5.417節)')
+{
+  /* **境目の数を書き写さない。** `SWIPE_MIN` などから組む ——
+     値を変えた日に期待値も一緒に動く形にすると、仕組みを壊しても素通りする */
+  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 }) === 'ok',
+    '右へはらうと「覚えた(言える)」')
+  ok(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 }) === 'yet',
+    '左へはらうと「まだ」')
+  /* ★ **出ない側を3つとも測る。** 1つでも抜けると、
+       **ただのタップや、画面を上下に送る動きまで判定になる** */
+  ok(swipeMove({ dx: SWIPE_MIN - 1, dy: 0, ms: 100 }) === null,
+    '短すぎる動きは、スワイプではない', `${SWIPE_MIN - 1}px`)
+  ok(swipeMove({ dx: 0, dy: 0, ms: 100 }) === null,
+    'ただのタップ(動いていない)は、何もしない')
+  ok(swipeMove({ dx: SWIPE_MIN, dy: SWIPE_MIN * SWIPE_SLOPE, ms: 100 }) === null,
+    '横より縦に動いていたら、画面を送っているだけ')
+  ok(swipeMove({ dx: SWIPE_MIN * 4, dy: 1, ms: SWIPE_MS + 1 }) === null,
+    'ゆっくりすぎる動きは、スワイプではない', `${SWIPE_MS + 1}ms`)
+  ok(swipeMove() === null, '何も渡されなければ、何もしない')
+  /* **縦に少し動いていても、横に大きく動いていれば効く**(指は斜めに動く) */
+  ok(swipeMove({ dx: SWIPE_MIN * 2, dy: SWIPE_MIN, ms: 200 }) === 'ok',
+    '斜めでも、横が大きければ効く')
+
+  /* ★ **流れる向きと、判定の向きがそろっているか**(第5.417節)。
+       ここが裏返ると、**右へはらったのに左へ飛ぶ** ——
+       どちらも1か所にあるので、**この2つを突き合わせて測る** */
+  const 右 = swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 })
+  const 左 = swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 })
+  ok(!flyX(右).startsWith('-'), 'はらった向き(右)へ流れる', `${右} → ${flyX(右)}`)
+  ok(flyX(左).startsWith('-'), 'はらった向き(左)へ流れる', `${左} → ${flyX(左)}`)
+  ok(flyX(右) !== flyX(左), '右と左で、流れる向きが違う')
+  /* **画面の外まで流す**(途中で止まると、消えずに残って見える) */
+  ok(/^-?1\d\d%$/.test(flyX('ok')) && /^-?1\d\d%$/.test(flyX('yet')),
+    'カードの幅より大きく流す(画面の外へ出る)', `${flyX('ok')} / ${flyX('yet')}`)
+  ok(FLY_MS > 0 && FLY_MS < 1000,
+    '流れるのは、待たされない短さである', `${FLY_MS}ms`)
+}
+
+console.log('\n▶ 紙の余白を押せるのは、44px 取れたときだけ(第5.417節)')
+{
+  /* ★ **幅を実測して決める。決め打ちにしない**(第5.417節)。
+       広い画面では左右が大きく空くが、**狭い画面ではほとんど無い** */
+  ok(edgeFits(TAP_MIN), '44px あれば、押せる帯を出す')
+  ok(!edgeFits(TAP_MIN - 1), '44px に足りなければ、帯を出さない',
+    `${TAP_MIN - 1}px`)
+  ok(!edgeFits(0), '余白ゼロなら、出さない')
+  ok(!edgeFits(null) && !edgeFits(undefined) && !edgeFits(NaN),
+    '測れていなければ、出さない(既定は「見せない」側)')
+
+  /* **片側の余白** = (入れ物 − カード) ÷ 2 */
+  ok(edgeSpace(1000, 600) === 200, '広い画面では、片側 200px 空く',
+    `${edgeSpace(1000, 600)}px`)
+  ok(edgeFits(edgeSpace(1000, 600)), '広い画面では、帯が出る')
+  ok(!edgeFits(edgeSpace(390, 358)), 'スマホの幅では、帯が出ない',
+    `${edgeSpace(390, 358)}px`)
+  /* ★ **はみ出していても、負にならない**(負の幅を `style` に渡すと
+       ブラウザが丸ごと無視し、**帯が画面いっぱいに広がる**) */
+  ok(edgeSpace(300, 400) === 0, 'カードが入れ物より広くても、0 で止まる',
+    `${edgeSpace(300, 400)}px`)
+  ok(edgeSpace(null, null) === 0, '測れていなければ 0')
+  /* **ちょうど境目を測る**(いちばん危ない形を検証の中に置く・CLAUDE.md) */
+  const 境 = TAP_MIN * 2
+  ok(edgeFits(edgeSpace(600 + 境, 600)) && !edgeFits(edgeSpace(600 + 境 - 2, 600)),
+    'ちょうど 44px のところで、出る / 出ないが切り替わる',
+    `${edgeSpace(600 + 境, 600)}px / ${edgeSpace(600 + 境 - 2, 600)}px`)
+}
+
+console.log('\n▶ 指で使う端末かは、幅で見分けない(第5.236節・第5.417節)')
+{
+  /* **`window` が無ければ `false`** —— 素の node で読み込めることと、
+     **既定が「スワイプを効かせない」側**であることを、同時に測る */
+  ok(isCoarse() === false, '端末が分からなければ、スワイプを効かせない')
+  ok(COARSE_Q === '(pointer: coarse)',
+    '見分けるのは指の太さ(`pointer: coarse`)である', COARSE_Q)
+  /* ★ **幅で見分けていないこと。** iPad Pro は 1366px で
+       ノートパソコンより広い(第5.236節) */
+  ok(!/width/.test(COARSE_Q), '画面の幅で見分けていない')
+}
+
+console.log('\n▶ 画面が、操作の算段を書き写していない(第5.417節)')
+{
+  /** コメントを落としてから数える(CLAUDE.md「コメントにも同じ語が出る」) */
+  const 素 = (f) => readFileSync(f, 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+
+  const c = 素('src/components/CardMove.jsx')
+  /* **使っている形で数える**(「名前が出てくるか」で見ない・CLAUDE.md) */
+  for (const 呼ぶ of ['keyMove(', 'swipeMove(', 'edgeFits(', 'edgeSpace(', 'flyX(', 'isCoarse(']) {
+    ok(c.includes(呼ぶ), `判定は \`${呼ぶ})\` に任せている`)
+  }
+  /* ★ **境目の数を、画面に書き写していない。**
+       書き写すと、`cardMove.js` を直した日に片方だけ古くなる */
+  for (const 数 of [String(TAP_MIN), String(SWIPE_MIN), String(SWIPE_MS), String(FLY_MS)]) {
+    const 回 = (c.match(new RegExp(`(^|[^\\w.])${数}([^\\w]|$)`, 'g')) ?? []).length
+    ok(回 === 0, `境目の数(${数})を画面に書き写していない`, `${回} か所`)
+  }
+  ok(!c.includes('ArrowLeft') && !c.includes('ArrowRight'),
+    'キーの名前を画面に書き写していない')
+  ok(!c.includes('pointer: coarse'),
+    '指の端末の見分け方を画面に書き写していない')
+  /* ★ **なぞる操作とぶつけない**(第5.17節)。
+       英文の上から始まった指の動きは、スワイプと見ない */
+  ok(/closest\??\.?\(\s*'\.etext'\s*\)/.test(c),
+    '英文の上から始まった指の動きは、スワイプと見ない')
+  /* ★ **字を打っているかを、本当に見ているか。**
+       `typing:` を渡していなければ、`keyMove` のあの守りは1度も働かない */
+  ok(/typing:\s*typingNow\(\)/.test(c), '字を打っているかを渡している')
+  ok(/activeElement/.test(c), '打っているかは、いま字が入る場所で見ている')
+  /* ★ **押せる帯は「紙の入れ物」の中**(利用者の指定
+       「上部バーの部分は余白としてとらえない」)。
+       `fixed` だと窓に対して置かれ、**上の帯にも下のタブバーにもかかる。**
+       **入れ物が `relative` で、帯が `absolute`** という組でだけ、
+       構造として外に出られない —— **どちらか片方では足りない**ので、
+       2つとも見る(見た目は `test:bar` が実際に描いて測る) */
+  const css = readFileSync('src/styles.css', 'utf8')
+  const 決まり = (名) => {
+    const at = css.indexOf(`${名} {`)
+    return at < 0 ? '' : css.slice(at, css.indexOf('}', at))
+  }
+  ok(/position:\s*relative/.test(決まり('.cardmove')),
+    '紙の入れ物が、置き場所の基準になっている(`relative`)')
+  ok(/position:\s*absolute/.test(決まり('.cardmove-edge')),
+    '押せる帯は、その入れ物に対して置いている(`absolute`)')
+  ok(!/position:\s*fixed/.test(決まり('.cardmove-edge')),
+    '押せる帯を、窓に対して置いていない(`fixed` ではない)')
+
+  /* ── 2つの画面が、同じ道を通っているか ───────────────── */
+  for (const f of ['src/components/Wordbook.jsx', 'src/components/QrReview.jsx']) {
+    const 名 = f.includes('Wordbook') ? '単語帳' : 'Quick Response'
+    const w = 素(f)
+    ok(/<CardMove/.test(w), `${名} … カードを \`CardMove\` で包んでいる`)
+    ok(/keyLabel\(/.test(w), `${名} … ボタンの印は \`keyLabel()\` が付ける`)
+    ok(/isCoarse\(\)/.test(w), `${名} … 指の端末かを見ている`)
+    /* ★ **印を書き写していない。** 書き写すと、
+         **指の端末でも矢印が出たまま**になる(消す道が1つ増える) */
+    const 書き写し = Object.values(KEY_MARK).filter((m) => w.includes(m))
+    ok(書き写し.length === 0,
+      `${名} … 矢印の印を画面に書き写していない`, 書き写し.join(' ') || 'なし')
+    /* ★ **聞き流しが開いているあいだは効かせない。**
+         キーを聞いているのは窓なので、**裏のカードが飛ぶ** */
+    ok(/on=\{!radio\}/.test(w), `${名} … 聞き流し中は、矢印キーを効かせない`)
+    /* ★ **判定は、押すボタンとまったく同じ道を通る**(第5.417節)。
+         別の道を作ると、**復習の記録の決まりが2通りになる**
+         (CLAUDE.md「数え方を2通り持たない」)。
+         `onOk` / `onYet` に渡しているものを読み取って確かめる */
+    const 渡し = [...w.matchAll(/on(?:Ok|Yet)=\{([^}]*)\}/g)].map((m) => m[1].trim())
+    ok(渡し.length === 2, `${名} … 「覚えた」と「まだ」を1組ずつ渡している`,
+      `${渡し.length} 本`)
+    const 外れ = 渡し.filter((t) => !/\banswer\(/.test(t))
+    ok(外れ.length === 0,
+      `${名} … 判定は、押すボタンと同じ \`answer()\` を通る`,
+      外れ.join(' / ') || 'なし')
+  }
+}
+
+console.log('\n▶ いま出している範囲を、題の先頭に出す(第5.417節・案A-3)')
+{
+  /* **札の言葉を書き写さない。`PICKS` から読み取って突き合わせる** */
+  for (const p of PICKS.filter((x) => x.id !== 'all')) {
+    ok(pickName(p.id) === p.label, `「${p.label}」は、題の先頭に出る`, pickName(p.id))
+  }
+  /* ★ **「ぜんぶ」のときは出さない** —— 足すと
+       **選んだときと見た目が変わらなくなる**(見分けが付かない) */
+  ok(pickName('all') === '', '「ぜんぶ」のときは、何も足さない',
+    `"${pickName('all')}"`)
+  ok(pickName('') === '' && pickName(null) === '' && pickName('xxx') === '',
+    '知らない範囲も、当てずっぽうで書かない')
+  /* **4つのうち、3つだけが出る**(全部出る形・1つも出ない形を塞ぐ) */
+  const 出る = PICKS.filter((p) => pickName(p.id)).length
+  ok(出る === PICKS.length - 1, '「ぜんぶ」以外の札だけが出る',
+    `${出る} / ${PICKS.length}`)
+
+  /* ── 画面が、この1か所を呼んでいるか ───────────────── */
+  const 素 = (f) => readFileSync(f, 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+  for (const f of ['src/components/Wordbook.jsx', 'src/components/QrReview.jsx']) {
+    const 名 = f.includes('Wordbook') ? '単語帳' : 'Quick Response'
+    const w = 素(f)
+    ok(/pickName\(pick\)/.test(w), `${名} … 範囲の言葉は \`pickName()\` 1か所`)
+    /* ★ **見比べる相手は、できるだけ近いものにする**(CLAUDE.md・第5.337節)。
+         ファイル全体で札の言葉を探すと、**前からある画面の名前**
+         (`aria-label="今日の復習"`)に当たって、いつも赤くなる ——
+         測りたいのは**題を組んでいる行**だけである */
+    const 題 = w.slice(w.indexOf('const drillLabel'))
+      .slice(0, w.slice(w.indexOf('const drillLabel')).indexOf('\n  const ') + 1)
+    ok(題.includes('pickName(pick)'),
+      `${名} … 題の先頭は \`pickName()\` が組んでいる`, 題.split('\n')[0].trim())
+    const 書き写し = PICKS.filter((p) => p.id !== 'all')
+      .filter((p) => 題.includes(p.label))
+    ok(書き写し.length === 0, `${名} … 題に、札の言葉を書き写していない`,
+      書き写し.map((p) => p.label).join(' ') || 'なし')
+  }
+}
+
+console.log('\n▶ 覚え具合の点は、段の数そのもの(第5.417節・案A-3)')
+{
+  const 素 = readFileSync('src/components/LearnDots.jsx', 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+
+  /* ★ **数を書き写していない**(第5.406節で CSS に `repeat(3, …)` と
+       決め打ちして、**4枚めが2段めに落ちた**)。
+       点の数は `LEARN_STAGES` の長さそのものである */
+  ok(/LEARN_STAGES\.map\(/.test(素), '点の数は `LEARN_STAGES` の長さそのもの')
+  const 回 = (素.match(new RegExp(`(^|[^\\w.])${LEARN_STAGES.length}([^\\w]|$)`, 'g')) ?? []).length
+  ok(回 === 0, `段の数(${LEARN_STAGES.length})を書き写していない`, `${回} か所`)
+  /* ★ **段の決め方は `learnStage.js` 1か所。**
+       ここで `box` や `status` を読むと、見る場所の数だけ食い違う */
+  ok(/stageOf\(/.test(素), '段は `stageOf()` が決めている')
+  ok(!/\.box\b/.test(素) && !/\.status\b/.test(素),
+    '箱も状態も、ここでは読んでいない')
+  /* ★ **色だけに頼らない**(CLAUDE.md)。点は濃さでしか違わないので、
+       読み上げを使う人には言葉で届ける */
+  ok(/aria-label=/.test(素), '読み上げに、言葉で届けている')
+  ok(/stageLabel\(/.test(素), '言葉も `learnStage.js` から取っている')
+  /* **段が決まらない行には、何も出さない**(当てずっぽうで「未学習」を
+     描くと、まだ読めていないだけの語が苦手に見える) */
+  ok(/if \(at < 0\) return null/.test(素), '段が決まらなければ、何も描かない')
+
+  /* ── 4段ぜんぶが、ちがう濃さの点になるか ───────────── */
+  const 行 = (o) => ({
+    added_at: '2026-01-01T00:00:00+00:00',
+    updated_at: '2026-01-01T00:00:00+00:00', box: 0, ...o,
+  })
+  const 見本 = {
+    new: 行({}),
+    weak: 行({ updated_at: '2026-02-01T00:00:00+00:00' }),
+    learning: 行({ box: 2 }),
+    done: 行({ box: DONE_BOX }),
+  }
+  for (const s of LEARN_STAGES) {
+    ok(stageOf(見本[s.id]) === s.id, `「${s.label}」の行が、その段になる`,
+      stageOf(見本[s.id]))
+  }
+  /* **点の数 =(その段までの数)。** 4段なら 1 / 2 / 3 / 4 になる */
+  const 点 = LEARN_STAGES.map((s) => LEARN_STAGES.findIndex((x) => x.id === s.id) + 1)
+  ok(点.join(',') === LEARN_STAGES.map((_, i) => i + 1).join(','),
+    '段が進むほど、点が増える', 点.join(' '))
 }
 
 console.log(ng
