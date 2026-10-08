@@ -87,7 +87,7 @@ import {
      **数を書き写さない** —— 44px / 56px を見張りに書くと、
      値を変えた日に期待値も一緒に動いて、仕組みを壊しても素通りする */
 import {
-  KEY_MARK, SWIPE_MIN, TAP_MIN, keyLabel, keyMove,
+  FLY_MS, KEY_MARK, TAP_MIN, keyLabel, keyMove,
 } from '../src/lib/cardMove.js'
 import { QUIZ_FORMS, WORD_ORDERS } from '../src/lib/wordQuiz.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
@@ -14154,7 +14154,7 @@ for (const [q2, 期待, 何] of [
      |---|---|---|---|---|
      | 矢印キー | ← | → | ↑ | ↓ |
      | 紙の余白をクリック | 左 | 右 | — | — |
-     | スワイプ(指の端末だけ) | — | — | 右へ | 左へ |
+     | ◀▶ のボタン(指の端末だけ) | ◀ | ▶ | — | — |
 
    **算段は `npm run test:play` が素の node で見張る。**
    ここは**実際に描いて、押して測る** —— 「CSS に決まりがある」では
@@ -14351,59 +14351,134 @@ for (const [q2, 期待, 何] of [
     await page.close()
   }
 
-  console.log('\n▶ スワイプは「送る」だけ。記録は動かさない(第5.417節・2026-10-08)')
+  console.log('\n▶ ◀▶ のボタンで送る。スワイプは廃止(第5.417節・2026-10-08)')
   {
     /* ★ **仕様変更**(2026-10-08 利用者の指定)。
 
-         > 左スワイプは「ひとつ前に戻る」右スワイプは「ひとつ先に進む」
-         > …「まだ」「言えた」ボタンはそのまま残します。
+         > スワイプが使いにくすぎるのでやめにしょう。スマホ、タブレットのみ
+         > 仕様を変えましょう。◀▶で戻ったり進めるボタンを追加して
+         > スワイプは廃止します。
+         > 三角だけ、小さい方 /「まだ」「言えた」の左右に置く
 
-       **はらっただけで記録が変わってはいけない。**
-       ソースを読むだけでは足りない —— **本当に押して、記録を数える。**
+       **ソースに `MoveArrow` と書いてあるかでは見張れない** ——
+       本当に描いて、**押して、記録を数える**(`test:feel` と同じ考え方)。
        数えるのは**進み具合の帯の、済んだ段の数**である
        (判定するとここが1つ進む)。 */
     const 済み = (page) => page.evaluate(() => (
       document.querySelectorAll('.drill-bar > span.is-done').length))
-    const はらう = async (page, 向き) => {
+    /** 答えの行に並んでいるものを、**描かれたまま**読み取る */
+    const 答えの行 = (page) => page.evaluate(() => {
+      const row = document.querySelector('.wordcard-answers')
+      if (!row) return []
+      return [...row.children].map((el) => {
+        const r = el.getBoundingClientRect()
+        return {
+          矢印: el.classList.contains('move-arrow'),
+          名: el.getAttribute('aria-label') || el.textContent.trim(),
+          w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+        }
+      })
+    })
+    /** カードが、いま横にどれだけずれているか(飛んでいる最中を測る) */
+    const ずれ = (page) => page.evaluate(() => {
+      const el = document.querySelector('.cardmove')
+      if (!el) return 0
+      const t = window.getComputedStyle(el).transform
+      return t === 'none' ? 0 : Math.round(parseFloat(t.split(',')[4] || '0'))
+    })
+    /** 指で引きずる(**もう何も起きないはず**) */
+    const 引きずる = async (page, 向き) => {
       const 箱 = await page.evaluate(() => {
         const el = document.querySelector('.wordcard-answers') ?? document.querySelector('.wordcard')
         const { x, y, width, height } = el.getBoundingClientRect()
         return { x: x + width / 2, y: y + height / 2 }
       })
-      /* **`SWIPE_MIN` より大きく動かす。数は1か所から取る** */
-      await page.mouse.move(箱.x - SWIPE_MIN * 向き, 箱.y)
+      /* **押せる的の2倍**(もとのスワイプなら、確実に届いた長さ) */
+      await page.mouse.move(箱.x - TAP_MIN * 向き, 箱.y)
       await page.mouse.down()
-      await page.mouse.move(箱.x + SWIPE_MIN * 向き, 箱.y, { steps: 6 })
+      await page.mouse.move(箱.x + TAP_MIN * 向き, 箱.y, { steps: 6 })
       await page.mouse.up()
-      /* **流れる時間ぶん待つ**(流してから送るので、すぐには変わらない) */
-      await page.waitForTimeout(700)
+      await page.waitForTimeout(FLY_MS + 400)
     }
 
-    /* ── 指の端末 … 右へはらうと次、左へはらうと前 ───────── */
+    /* ── 指の端末 … ◀▶ が出て、押せば送れる ───────────── */
     {
       const page = await 単語帳を開く({
         viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
       })
+      const 行 = await 答えの行(page)
+      const 矢 = 行.filter((x) => x.矢印)
+      if (矢.length === 2) ok('指の端末 … ◀▶ が2つ出ている', 矢.map((x) => x.名).join(' / '))
+      else ng('指の端末 … ◀▶ が2つ出ていない', `${矢.length} 個 / 行は ${行.length} 個`)
+
+      /* ★ **三角だけでも、押せる的は小さくしない**(利用者の指定「小さい方」は
+           見た目の話である)。**数は `TAP_MIN` 1か所から取る** */
+      const 小さい = 矢.filter((x) => x.w < TAP_MIN || x.h < TAP_MIN)
+      if (矢.length && !小さい.length) {
+        ok('指の端末 … ◀▶ は、押せる大きさで出ている',
+          矢.map((x) => `${x.w}×${x.h}`).join(' / '))
+      } else if (矢.length) {
+        ng('指の端末 … ◀▶ が小さすぎる',
+          `${小さい.map((x) => `${x.w}×${x.h}`).join(' / ')} —— ${TAP_MIN}px 以上が要る`)
+      }
+
+      /* ★ **置き場所は「まだ・言えた」の左右**(利用者の指定)。
+           いちばん左といちばん右が矢印で、**あいだに判定が入っている** */
+      if (行.length >= 4 && 行[0].矢印 && 行[行.length - 1].矢印
+          && !行.slice(1, -1).some((x) => x.矢印)) {
+        ok('指の端末 … ◀▶ は、判定の左右にある',
+          行.map((x) => x.名).join(' | '))
+      } else {
+        ng('指の端末 … ◀▶ が、判定の左右に並んでいない', 行.map((x) => x.名).join(' | '))
+      }
+
+      /* ★ **行は増えていない**(カードの高さを1pxも変えない)。
+           **上端がぜんぶ同じ**なら1段である */
+      const 段 = new Set(行.map((x) => x.top)).size
+      if (行.length && 段 === 1) ok('指の端末 … 答えの行は、1段のまま', `上端 ${行[0].top}px`)
+      else ng('指の端末 … 答えの行が2段になっている', `上端 ${行.map((x) => x.top).join(' / ')}`)
+
+      /* ── ▶ を押すと、飛んでから次へ ───────────────── */
       const 頭 = await いまの語(page)
       const 記録 = await 済み(page)
-      await はらう(page, 1)
+      try {
+        await page.locator('.wordcard-answers .move-arrow').last().tap({ timeout: 4000 })
+      } catch (e) {
+        ng('指の端末 … ▶ を指で押せない', String(e.message).split('\n')[0].slice(0, 60))
+      }
+      /* ★ **本当に飛んでいるか**(利用者の指定「飛ばす 600ms」)。
+           **長さの半分のところ**を覗く —— CSS に決まりがあるかではなく、
+           **動いている最中のずれ**を測る(CLAUDE.md `test:feel`) */
+      await page.waitForTimeout(Math.round(FLY_MS / 2))
+      const 飛び = await ずれ(page)
+      if (Math.abs(飛び) > 1) ok('指の端末 … 押したカードが、横へ飛んでいく', `${飛び}px`)
+      else ng('指の端末 … カードが飛ばずに、ただ入れ替わっている', `ずれ ${飛び}px`)
+
+      await page.waitForTimeout(FLY_MS)
       const 次 = await いまの語(page)
       const 記録2 = await 済み(page)
-      if (次 !== 頭) ok('指の端末 … 右へはらうと、ひとつ先へ進む', `${頭} → ${次}`)
-      else ng('指の端末 … 右へはらっても、何も起きない', `${頭} / ${次}`)
-      /* ★★ **いちばん守りたいところ。** はらって記録が動いたら赤 */
-      if (記録2 === 記録) {
-        ok('指の端末 … はらっても、記録は1つも動かない', `済み ${記録} のまま`)
-      } else {
-        ng('指の端末 … はらっただけで、記録が動いた',
-          `済み ${記録} → ${記録2} —— スワイプは判定しない決まりである`)
+      if (次 !== 頭) ok('指の端末 … ▶ を押すと、ひとつ先へ進む', `${頭} → ${次}`)
+      else ng('指の端末 … ▶ を押しても、何も起きない', `${頭} / ${次}`)
+      /* ★ **飛び終わったら、ずれは残らない**(次の語が傾いたまま出ない) */
+      const 残り = await ずれ(page)
+      if (Math.abs(残り) <= 1) ok('指の端末 … 飛び終わったら、ずれは残らない')
+      else ng('指の端末 … 飛んだあと、カードがずれたまま', `${残り}px`)
+      /* ★★ **いちばん守りたいところ。** 送っただけで記録が動いたら赤 */
+      if (記録2 === 記録) ok('指の端末 … ▶ で送っても、記録は1つも動かない', `済み ${記録} のまま`)
+      else ng('指の端末 … ▶ で送っただけで、記録が動いた', `済み ${記録} → ${記録2}`)
+
+      /* ── ◀ で、ひとつ前へ戻る ───────────────────── */
+      try {
+        await page.locator('.wordcard-answers .move-arrow').first().tap({ timeout: 4000 })
+      } catch (e) {
+        ng('指の端末 … ◀ を指で押せない', String(e.message).split('\n')[0].slice(0, 60))
       }
-      await はらう(page, -1)
+      await page.waitForTimeout(FLY_MS + 400)
       const 戻り = await いまの語(page)
-      if (戻り === 頭) ok('指の端末 … 左へはらうと、ひとつ前へ戻る', 戻り)
-      else ng('指の端末 … 左へはらっても、前に戻らない', `${頭} → ${次} → ${戻り}`)
+      if (戻り === 頭) ok('指の端末 … ◀ を押すと、ひとつ前へ戻る', 戻り)
+      else ng('指の端末 … ◀ を押しても、前に戻らない', `${頭} → ${次} → ${戻り}`)
       const 記録3 = await 済み(page)
-      if (記録3 === 記録) ok('指の端末 … 戻っても、記録は動かない', `済み ${記録3}`)
+      if (記録3 === 記録) ok('指の端末 … ◀ で戻っても、記録は動かない', `済み ${記録3}`)
       else ng('指の端末 … 戻ったときに記録が動いた', `済み ${記録} → ${記録3}`)
 
       /* ★ **出る側。** ボタンを押したときは、ちゃんと記録が動く ——
@@ -14411,120 +14486,70 @@ for (const [q2, 期待, 何] of [
 
            ★★ **本物のタップで押す。** `el.click()` を呼ぶと
            **指の動き(pointer)をまたいで届いてしまう**ので、
-           **実機で1つも押せなくなっていても緑のまま**だった ——
-           実際、`setPointerCapture` を入れた日に
-           **指の端末でカードの中のボタンが全部死んでいた**のに、
-           この見張りは気づかなかった(2026-10-08)。 */
+           **実機で1つも押せなくなっていても緑のまま**だった(2026-10-08)。 */
       try {
-        await page.locator('.wordcard-answers button').first().tap({ timeout: 4000 })
+        await page.locator('.wordcard-answers button:not(.move-arrow)').first().tap({ timeout: 4000 })
       } catch (e) {
         ng('指の端末 … カードの中のボタンを、指で押せない',
           String(e.message).split('\n')[0].slice(0, 60))
       }
       await page.waitForTimeout(600)
       const 記録4 = await 済み(page)
-      if (記録4 > 記録3) ok('指の端末 … ボタンを押したときは、記録が動く', `済み ${記録3} → ${記録4}`)
-      else ng('指の端末 … ボタンを押しても記録が動かない', `済み ${記録3} → ${記録4}`)
+      if (記録4 > 記録3) ok('指の端末 … 「まだ」を押したときは、記録が動く', `済み ${記録3} → ${記録4}`)
+      else ng('指の端末 … 「まだ」を押しても記録が動かない', `済み ${記録3} → ${記録4}`)
       await page.close()
     }
 
-    /* ★ ── **引いている最中、カードが指についてくるか**(2026-10-08)──
-
-         > なんかスワイプの反応が良くないです
-
-       **実測したら、引いている最中のズレは 0px だった** ——
-       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
-       **動かしているあいだ何も起きないものは、効いていないのと同じ**である。
-
-       ソースに `dragShift(` と書いてあるかでは見張れない ——
-       **本当に引いて、`transform` を測る**(`test:feel` と同じ考え方)。 */
+    /* ── 指の端末 … 引きずっても、もう何も起きない ──────── */
     {
+      /* ★ **スワイプを本当にやめたか**(2026-10-08)。
+           **出ない側も測る** —— 「◀▶ が効く」だけを見ていると、
+           **スワイプが生きたまま**でも緑になる(CLAUDE.md
+           「『出る』と『出ない』の両方を見る」)。
+           語をなぞって単語帳に入れる操作と、もうぶつからない。 */
       const page = await 単語帳を開く({
         viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
       })
-      /* ★ **押したボタンに、本当に当たっているか**(2026-10-08)。
-
-           `setPointerCapture` を使うと、**そのあとの `pointerup` まで
-           入れ物へ付け替えられる**ので、ブラウザは「ボタンを押した」と
-           見なさない —— **`click` が `.cardmove` に当たり、
-           カードの中のボタンが1つも効かなくなる。**
-           **当たり先そのものを見る。** */
-      {
-        const 当たり = await page.evaluate(() => {
-          window.__hit = []
-          document.addEventListener('click', (e) => {
-            window.__hit.push(e.target.className || e.target.tagName)
-          }, true)
-          return true
-        })
-        if (当たり) {
-          /* ★ **`tap()` では再現しない**(2026-10-08 実測)。
-               あちらは touch から click を作るので、**指の付け替えの
-               影響を受けない。** 付け替えが出るのは pointer を通る押し方
-               (`click()`)である —— **捕まえられた形で測る。** */
-          try { await page.locator('.wordcard-actions button').first().click({ timeout: 4000 }) }
-          catch { /* 下で「当たっていない」として出る */ }
-          await page.waitForTimeout(200)
-          const 先 = await page.evaluate(() => window.__hit[0] ?? '(押せていない)')
-          if (/cardmove/.test(先) || 先 === '(押せていない)') {
-            ng('指の端末 … 押したボタンではなく、入れ物に当たっている',
-              `当たり先「${先}」—— カードの中のボタンが1つも効かない`)
-          } else {
-            ok('指の端末 … 押したボタンに、ちゃんと当たっている', `当たり先「${先}」`)
-          }
-        }
-      }
-      /* **横の動きを、ブラウザに取られない形になっているか** */
-      const 指の決まり = await page.evaluate(() => (
-        window.getComputedStyle(document.querySelector('.cardmove')).touchAction))
-      if (/pan-y|none/.test(指の決まり)) {
-        ok('引いている最中 … 横の動きは、こちらが受け取る', `touch-action: ${指の決まり}`)
+      const 頭 = await いまの語(page)
+      const 記録 = await 済み(page)
+      await 引きずる(page, 1)
+      const 後 = await いまの語(page)
+      const 記録2 = await 済み(page)
+      if (後 === 頭 && 記録2 === 記録) {
+        ok('指の端末 … 引きずっても、送りも記録も動かない(スワイプは廃止)', 頭)
       } else {
-        ng('引いている最中 … 横の動きを、ブラウザに取られる形のまま',
-          `touch-action: ${指の決まり} —— 指が \`pointercancel\` で黙って消える`)
+        ng('指の端末 … 引きずったら、カードか記録が動いた',
+          `${頭} → ${後} / 済み ${記録} → ${記録2} —— スワイプは廃止した決まりである`)
       }
-      const 箱 = await page.evaluate(() => {
-        const el = document.querySelector('.wordcard-answers') ?? document.querySelector('.wordcard')
-        const { x, y, width, height } = el.getBoundingClientRect()
-        return { x: x + width / 2, y: y + height / 2 }
+      /* ★ **横の動きは、ブラウザに返した**(`touch-action` を縛っていない)。
+           スワイプのために置いた2行は、要らなくなった */
+      const 指の決まり = await page.evaluate(() => {
+        const st = window.getComputedStyle(document.querySelector('.cardmove'))
+        return { 指: st.touchAction, 選: st.userSelect }
       })
-      const ずれ = () => page.evaluate(() => {
-        const t = window.getComputedStyle(document.querySelector('.cardmove')).transform
-        return t === 'none' ? 0 : Math.round(parseFloat(t.split(',')[4] || '0'))
-      })
-      await page.mouse.move(箱.x - SWIPE_MIN, 箱.y)
-      await page.mouse.down()
-      const 道のり = []
-      for (let i = 1; i <= 4; i += 1) {
-        await page.mouse.move(箱.x - SWIPE_MIN + (SWIPE_MIN * 2 * i) / 4, 箱.y)
-        await page.waitForTimeout(40)
-        道のり.push(await ずれ())
-      }
-      await page.mouse.up()
-      await page.waitForTimeout(700)
-      const 動いた = 道のり.filter((d) => d !== 0).length
-      const 増える = 道のり.every((d, i) => i === 0 || d >= 道のり[i - 1])
-      if (動いた === 0) {
-        ng('引いている最中 … カードが指に1pxもついてこない',
-          `ずれ ${道のり.join(',')}px —— 何も起きないものは、効いていないのと同じ`)
-      } else if (!増える) {
-        ng('引いている最中 … 指と同じ向きに動いていない', `ずれ ${道のり.join(',')}px`)
+      if (/auto|manipulation/.test(指の決まり.指) && 指の決まり.選 !== 'none') {
+        ok('指の端末 … 横の動きも、字を選ぶのも、ブラウザに返している',
+          `touch-action: ${指の決まり.指} / user-select: ${指の決まり.選}`)
       } else {
-        ok('引いている最中 … カードが指についてくる', `ずれ ${道のり.join(',')}px`)
+        ng('指の端末 … スワイプのための縛りが残っている',
+          `touch-action: ${指の決まり.指} / user-select: ${指の決まり.選}`)
       }
-      /* **離したら、ずれは残らない**(次のカードが傾いたまま出ない) */
-      const 残り = await ずれ()
-      if (Math.abs(残り) <= 1) ok('引いている最中 … 離したら、ずれは残らない')
-      else ng('引いている最中 … 離してもカードがずれたまま', `${残り}px`)
       await page.close()
     }
 
-    /* ── マウスの端末 … 引きずっても何も起きない ───────── */
+    /* ── マウスの端末 … ◀▶ は出さない ─────────────── */
     {
+      /* ★ **パソコンには出さない**(利用者の指定「スマホ、タブレットのみ」)。
+           あちらには**紙の左右の余白**と**矢印キー**がある ——
+           **同じことをするものを2つ見せない**(CLAUDE.md) */
       const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
+      const 行 = await 答えの行(page)
+      const 矢 = 行.filter((x) => x.矢印)
+      if (矢.length === 0) ok('マウスの端末 … ◀▶ は出さない(余白とキーがある)')
+      else ng('マウスの端末 … ◀▶ が出ている', `${矢.length} 個`)
       const 頭 = await いまの語(page)
       const 記録 = await 済み(page)
-      await はらう(page, 1)
+      await 引きずる(page, 1)
       const 後 = await いまの語(page)
       const 記録2 = await 済み(page)
       if (後 === 頭 && 記録2 === 記録) {
@@ -14532,6 +14557,72 @@ for (const [q2, 期待, 何] of [
       } else {
         ng('マウスで引きずったら、カードか記録が動いた',
           `${頭} → ${後} / 済み ${記録} → ${記録2}`)
+      }
+      await page.close()
+    }
+  }
+
+  console.log('\n▶ Quick Response にも、同じ ◀▶ が出る(第5.417節・2026-10-08)')
+  {
+    /* ★ **2つの画面が、同じ操作を受け取る**(CLAUDE.md「判断は1か所に持つ」)。
+         単語帳だけ測っていると、**Quick Response に渡し忘れていても緑**になる。
+         ここは幅も中身も違うので、**同じ形で出るか**を描いて確かめる。 */
+    for (const [名, opts, 出るか] of [
+      ['指の端末', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, true],
+      ['マウスの端末', { viewport: { width: 1200, height: 900 } }, false],
+    ]) {
+      const page = await browser.newPage(opts)
+      await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+        { waitUntil: 'networkidle' })
+      await page.waitForSelector('.qr-card', { timeout: 10000 })
+      const 行 = await page.evaluate(() => {
+        const row = document.querySelector('.qr-answers')
+        if (!row) return []
+        return [...row.children].map((el) => {
+          const r = el.getBoundingClientRect()
+          return {
+            矢印: el.classList.contains('move-arrow'),
+            名: el.getAttribute('aria-label') || el.textContent.trim(),
+            w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+          }
+        })
+      })
+      const 矢 = 行.filter((x) => x.矢印)
+      if (!行.length) { ng(`Quick Response ${名} … 答えの行が描かれていない`); await page.close(); continue }
+      if (出るか) {
+        if (矢.length === 2) ok(`Quick Response ${名} … ◀▶ が2つ出ている`, 矢.map((x) => x.名).join(' / '))
+        else ng(`Quick Response ${名} … ◀▶ が2つ出ていない`, `${矢.length} 個`)
+        const 小さい = 矢.filter((x) => x.w < TAP_MIN || x.h < TAP_MIN)
+        if (矢.length && !小さい.length) {
+          ok(`Quick Response ${名} … ◀▶ は、押せる大きさで出ている`,
+            矢.map((x) => `${x.w}×${x.h}`).join(' / '))
+        } else if (矢.length) {
+          ng(`Quick Response ${名} … ◀▶ が小さすぎる`, `${TAP_MIN}px 以上が要る`)
+        }
+        /* **判定の左右にあり、行は1段のまま** */
+        if (行.length >= 4 && 行[0].矢印 && 行[行.length - 1].矢印
+            && !行.slice(1, -1).some((x) => x.矢印)) {
+          ok(`Quick Response ${名} … ◀▶ は、判定の左右にある`, 行.map((x) => x.名).join(' | '))
+        } else {
+          ng(`Quick Response ${名} … ◀▶ が、判定の左右に並んでいない`, 行.map((x) => x.名).join(' | '))
+        }
+        const 段 = new Set(行.map((x) => x.top)).size
+        if (段 === 1) ok(`Quick Response ${名} … 答えの行は、1段のまま`)
+        else ng(`Quick Response ${名} … 答えの行が2段になっている`, `上端 ${行.map((x) => x.top).join(' / ')}`)
+        /* ★ **押して、本当に文が変わるか**(出すだけで効かない形を弾く) */
+        const 文 = () => page.evaluate(() => (
+          document.querySelector('.qr-body')?.textContent?.trim()?.slice(0, 40) ?? ''))
+        const 頭 = await 文()
+        try { await page.locator('.qr-answers .move-arrow').last().tap({ timeout: 4000 }) }
+        catch (e) { ng(`Quick Response ${名} … ▶ を指で押せない`, String(e.message).split('\n')[0].slice(0, 60)) }
+        await page.waitForTimeout(FLY_MS + 400)
+        const 次 = await 文()
+        if (次 && 次 !== 頭) ok(`Quick Response ${名} … ▶ を押すと、次の文になる`, `${頭.slice(0, 14)} → ${次.slice(0, 14)}`)
+        else ng(`Quick Response ${名} … ▶ を押しても、文が変わらない`, 頭.slice(0, 20))
+      } else if (矢.length === 0) {
+        ok(`Quick Response ${名} … ◀▶ は出さない(余白とキーがある)`)
+      } else {
+        ng(`Quick Response ${名} … ◀▶ が出ている`, `${矢.length} 個`)
       }
       await page.close()
     }
@@ -14711,7 +14802,7 @@ for (const [q2, 期待, 何] of [
 
        **だから「出ない」を測る。** 44px 取れないときは帯を出さない ——
        出しても押せないものは、効かない操作である(CLAUDE.md)。
-       **矢印キーとスワイプは、こちらでも効く。** */
+       **矢印キーは、こちらでも効く。◀▶ は指の端末だけに出る。** */
     const page = await browser.newPage({ viewport: { width: 1200, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
       { waitUntil: 'networkidle' })

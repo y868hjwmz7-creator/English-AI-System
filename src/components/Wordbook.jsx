@@ -53,7 +53,7 @@ import DrillHead from './DrillHead.jsx'
 import LearnTag from './LearnTag.jsx'
 /* ★ **送る / 判定する操作**(第5.417節・段階4)。当てはめる決まりは
      `cardMove.js` 1か所で、`CardMove` は描いて測るだけ */
-import CardMove from './CardMove.jsx'
+import CardMove, { MoveArrow } from './CardMove.jsx'
 import { isCoarse, keyLabel } from '../lib/cardMove.js'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
@@ -2716,6 +2716,16 @@ export default function Wordbook({
                     そのときだけ、これまでの「覚えた」を出す
                     (**貼る前でも動く道を残す**・CLAUDE.md)。 */}
                 <div className="wordcard-answers">
+                  {/* ★ **◀▶ は、判定の左右**(2026-10-08 利用者の指定・段階4)。
+
+                      > 三角だけ、小さい方 /「まだ」「言えた」の左右に置く
+
+                      スワイプをやめた代わりである。**行は増えない**ので、
+                      カードの高さは1pxも変わらない。
+                      **指の端末にだけ出す** —— パソコンには紙の左右の余白と
+                      矢印キーがあり、**同じことをするものを2つ見せない**。
+                      **キーの印と同じ見分け方(`coarse`)**を使う */}
+                  <MoveArrow move="prev" show={coarse} />
                   {/* ★ **キーの印は、ボタンの中に出す**(第5.417節)。
                       説明の文を足さずに分かる形にする(**余計な説明書きを
                       置かない**・共通ルール)。
@@ -2742,6 +2752,7 @@ export default function Wordbook({
                         {keyLabel('覚えた', 'ok', { keys: !coarse })}
                       </button>
                     )}
+                  <MoveArrow move="next" show={coarse} />
                 </div>
               </div>
             )}

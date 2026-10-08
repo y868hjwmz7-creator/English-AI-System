@@ -33,6 +33,7 @@
  *   単語帳が「まだ」/「覚えかけ」と訊くのと同じ関係である。
  */
 import { useEffect, useRef, useState } from 'react'
+import { MoveArrow } from './CardMove.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -102,6 +103,15 @@ export default function QrCard({
    * (「問題を跨いでも」が成り立たない)。`RepeatToggle` と同じ作法。
    */
   hintOn = false, onHint = null,
+  /**
+   * ★ **◀▶ を、答えの行の左右に出すか**(2026-10-08 利用者の指定・段階4)。
+   *
+   *   > 三角だけ、小さい方 / 「まだ」「言えた」の左右に置く
+   *
+   * **指の端末だけ**(呼ぶ側が `isCoarse()` で決める)。
+   * **何をするかは `CardMove` が持つ** —— ここは置き場所だけを決める。
+   */
+  arrows = false,
 }) {
   const [shown, setShown] = useState(false)
   /**
@@ -317,10 +327,16 @@ export default function QrCard({
           {extra}
         </div>
         <div className="qr-answers">
+          {/* ★ **◀▶ は、判定の左右**(2026-10-08 利用者の指定)。
+              **行は増えない**ので、カードの高さが変わらない。
+              **指の端末にだけ出る**(`arrows`)—— パソコンには
+              紙の左右の余白と矢印キーがある(同じことをするものを2つ見せない) */}
+          <MoveArrow move="prev" show={arrows} />
           <button type="button" className="btn btn--quiet"
                   onClick={() => onAnswer(false)}>{yetLabel}</button>
           <button type="button" className="btn btn--primary"
                   onClick={() => onAnswer(true)}>{okLabel}</button>
+          <MoveArrow move="next" show={arrows} />
         </div>
       </div>
     </div>

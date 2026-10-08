@@ -8,18 +8,25 @@
  *   |---|---|---|---|---|
  *   | **矢印キー** | **←** | **→** | **↑** | **↓** |
  *   | **紙の余白をクリック** | **左の余白** | **右の余白** | — | — |
- *   | **スワイプ**(指の端末だけ) | **左へ** | **右へ** | — | — |
+ *   | **◀▶ のボタン**(指の端末だけ) | **◀** | **▶** | — | — |
  *
- *   ★ **横の動きは、どれも「送る」である**(2026-10-08 利用者の指定)。
- *   **スワイプでは判定しない** —— はらっただけで記録が変わってはいけない。
+ *   ★ **スワイプは廃止した**(2026-10-08 利用者の指定)。
+ *   理由は `cardMove.js` の `SWIPE_OFF` に書いてある。
+ *   **パソコンの操作は1ミリも変えていない**(矢印キー・余白のクリック)。
  *
  *   ボタン(「まだ ↓」「覚えた ↑」)は**呼ぶ側が描く** ——
  *   あちらは答えの行の一部で、この部品の持ちものではない。
+ *   **◀▶ も同じ行に並ぶ**ので、描くのは呼ぶ側(`MoveArrow`)である。
  *
  * 【どちらが決めるか】
- *   **当てはまるかどうかは `cardMove.js` 1か所**(`keyMove` / `swipeMove` /
- *   `edgeFits`)。ここは**描くことと、測ることだけ**を受け持つ ——
+ *   **当てはまるかどうかは `cardMove.js` 1か所**(`keyMove` / `edgeFits` /
+ *   `FLY_MS` / `flyX`)。ここは**描くことと、測ることだけ**を受け持つ ——
  *   そうしておけば、算段は `npm run test:play` が素の node で見張れる。
+ *
+ * 【送る道は1本】
+ *   矢印キーも、余白のクリックも、◀▶ のボタンも、**この `go()` を通る。**
+ *   `MoveArrow` は `CardMoveCtx` から受け取るので、
+ *   **流す動きを2か所に書かずに済む**(CLAUDE.md「判断は1か所に持つ」)。
  *
  * 【押せる帯は「紙の入れ物」の中に置く】
  *   窓に対して置くと、**上の帯にも下のタブバーにもかかる**
@@ -32,18 +39,24 @@
  *   押せる幅(44px)が取れないときは**帯ごと描かない** ——
  *   出しても押せないものは、効かない操作である(CLAUDE.md)。
  *   **幅は実測する。決め打ちにしない。**
- *
- * 【なぞる操作とぶつけない】
- *   語をなぞって単語帳に入れる道(第5.17節)は、**指で横に引く動き**である。
- *   そのままだと、なぞるたびに判定が走る。
- *   だから**英文の上から始まった指の動きは、スワイプとして見ない**
- *   (`.etext` の中で始まったかどうかで見分ける)。
  * ============================================================================
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  FLY_MS, dragShift, edgeFits, edgeSpace, flyX, isCoarse, keyMove, swipeMove,
-} from '../lib/cardMove.js'
+  createContext, useCallback, useContext, useEffect, useRef, useState,
+} from 'react'
+import { FLY_MS, TAP_MIN, edgeFits, edgeSpace, flyX, keyMove } from '../lib/cardMove.js'
+
+/**
+ * ★ **送る道を、中のボタンへ渡す**(2026-10-08)。
+ *
+ * ◀▶ は「まだ」「言えた」と同じ行に並ぶ(利用者の指定)ので、
+ * **カードの中**に描かれる。入れ物の `CardMove` までは props が届かないため、
+ * **ここを通して渡す。**
+ *
+ * **無ければ `null`** —— そのとき `MoveArrow` は何も描かない
+ * (**既定は「見せない」側**・CLAUDE.md)。
+ */
+export const CardMoveCtx = createContext(null)
 
 /** いま字を打っているか。**打っていたら矢印キーを1つも効かせない** */
 function typingNow() {
@@ -66,10 +79,8 @@ export default function CardMove({
   const holdRef = useRef(null)
   /** 片側の余白(px)。**実測した値だけを使う** */
   const [space, setSpace] = useState(0)
-  /** スワイプで送ったあと、その向きへ流す */
+  /** 送ったあと、その向きへ流す */
   const [fly, setFly] = useState('')
-  /** ★ 引いている最中の、指についていくズレ(px) */
-  const [drag, setDrag] = useState(0)
 
   /* 鳴らしている最中に呼ぶものは控えで持つ(いつも最新になる) */
   const doRef = useRef({})
@@ -80,6 +91,34 @@ export default function CardMove({
     const fn = doRef.current[move]
     if (typeof fn === 'function') fn()
   }, [])
+
+  /** 流している最中かどうか。**重ねて押されても1回しか送らない** */
+  const 流し中 = useRef(null)
+  /* **画面が消えるときは、必ず止める**(時計を置き去りにしない) */
+  useEffect(() => () => {
+    if (流し中.current) { window.clearTimeout(流し中.current); 流し中.current = null }
+  }, [])
+
+  /**
+   * ★ **送る道は、ここ1本**(2026-10-08)。
+   *
+   * **送り(`prev` / `next`)だけ流して消す**(利用者の指定「飛ばす 600ms」)。
+   * **判定(`ok` / `yet`)は流さない** —— 指がボタンの上にあるので、
+   * 動かすと次の問のボタンが指の下に来る(共通ルール)。
+   */
+  const go = useCallback((move) => {
+    if (!on || !move) return
+    if (move !== 'prev' && move !== 'next') { run(move); return }
+    if (!doRef.current[move]) return
+    /* **流している最中は、受け取らない**(二重に送らない) */
+    if (流し中.current) return
+    setFly(move)
+    流し中.current = window.setTimeout(() => {
+      流し中.current = null
+      setFly('')
+      run(move)
+    }, FLY_MS)
+  }, [on, run])
 
   /* ── 余白を実測する ────────────────────────────────────────── */
   useEffect(() => {
@@ -114,125 +153,78 @@ export default function CardMove({
       if (!move) return
       /* **ページの送りとぶつけない。** ↑↓ はふだん画面を送るキーである */
       e.preventDefault()
-      run(move)
+      go(move)
     }
     window.addEventListener('keydown', 聞く)
     return () => window.removeEventListener('keydown', 聞く)
-  }, [on, run])
-
-  /* ── スワイプ(指の端末だけ)──────────────────────────────── */
-  const 指 = useRef(null)
-  /** 引いているあいだ、窓で聞いているものを外す道 */
-  const 外す = useRef(null)
-  const 終い = useCallback(() => {
-    if (外す.current) { 外す.current(); 外す.current = null }
-    指.current = null
-    setDrag(0)
-  }, [])
-  /* **画面が消えるときは、必ず外す**(聞きっぱなしにしない) */
-  useEffect(() => 終い, [終い])
-
-  const down = (e) => {
-    if (!on || !isCoarse()) return
-    /* **英文の上から始まった動きは、なぞる操作である**(第5.17節)。
-       ここで送りに取ると、語を選ぶたびにカードが飛ぶ */
-    try { if (e.target?.closest?.('.etext')) return } catch { /* 下で拾う */ }
-    const from = { x: e.clientX, y: e.clientY, t: Date.now() }
-    指.current = from
-
-    /* ★ **指は「窓」で追いかける**(2026-10-08)。
-         カードの外へ出ても届くので、端ではらっても途中で消えない。
-
-         ★★ **`setPointerCapture` は使わない。**
-         いちど使ったところ、**指の端末でカードの中のボタンが
-         1つも押せなくなった**(実測 —— `click` が、押したボタンではなく
-         `.cardmove` に当たる)。捕まえると、そのあとの `pointerup` まで
-         入れ物へ付け替えられるので、**ブラウザがボタンを押したと見なせない。**
-         窓で聞けば、付け替えは起きない。 */
-    /** 引いたか(ただ触れただけか)。**引いたなら、押したことにしない** */
-    let 引いた = false
-    const 動く = (ev) => {
-      const f = 指.current
-      if (!f) return
-      const ずれ = dragShift({ dx: ev.clientX - f.x, dy: ev.clientY - f.y })
-      if (ずれ) 引いた = true
-      setDrag(ずれ)
-    }
-    const 離す = (ev) => {
-      const f = 指.current
-      終い()
-      /* ★ **引いたあとの「押した」を飲み込む**(2026-10-08 実測)。
-
-           はらい始めが「まだ」「言える」の上だと、**はらったあとに
-           そのボタンまで押されて、記録が動いていた。**
-           (`setPointerCapture` をやめた日に出てきた —— あれは
-           ついでにクリックも殺していたので、隠れていた。)
-
-           **引いたときだけ飲み込む。** ただ触れただけなら、
-           これまでどおり押したことになる。 */
-      if (引いた) {
-        const 飲む = (ev2) => { ev2.stopPropagation(); ev2.preventDefault() }
-        window.addEventListener('click', 飲む, true)
-        window.setTimeout(() => window.removeEventListener('click', 飲む, true), 0)
-      }
-      if (!f) return
-      const 行き先 = swipeMove({
-        dx: ev.clientX - f.x, dy: ev.clientY - f.y, ms: Date.now() - f.t,
-      })
-      /* **届かなかったら、その場へ戻る。** 戻る動きが見えるので、
-         「効かなかった」ことが分かる(黙って何も起きない、をやめる) */
-      if (!行き先) return
-      /* ★ **その向きへ流して、すぐ送る**(2026-10-07 利用者の指定)。
-           **ボタンで押したときは流さない** —— 指がボタンの上にあるので、
-           動かすと次の問のボタンが指の下に来る(共通ルール)。
-           **ここへ来るのは `prev` / `next` だけ**(`swipeMove` は
-           判定を返さない・2026-10-08 の仕様変更) */
-      setFly(行き先)
-      window.setTimeout(() => { setFly(''); run(行き先) }, FLY_MS)
-    }
-    window.addEventListener('pointermove', 動く)
-    window.addEventListener('pointerup', 離す)
-    window.addEventListener('pointercancel', 終い)
-    外す.current = () => {
-      window.removeEventListener('pointermove', 動く)
-      window.removeEventListener('pointerup', 離す)
-      window.removeEventListener('pointercancel', 終い)
-    }
-  }
+  }, [on, go])
 
   const 出す = edgeFits(space)
   const 幅 = `${space}px`
 
   return (
-    <div className="cardmove" ref={holdRef} onPointerDown={down}
-         style={(() => {
-           /* **数は `cardMove.js` 1か所から来る。** CSS にも書かない */
-           if (fly) {
-             return {
+    <CardMoveCtx.Provider value={on ? go : null}>
+      <div className="cardmove" ref={holdRef}
+           style={fly
+             /* **数は `cardMove.js` 1か所から来る。** CSS にも書かない */
+             ? {
                transform: `translateX(${flyX(fly)})`,
                opacity: 0,
                transition: `transform ${FLY_MS}ms ease-in, opacity ${FLY_MS}ms ease-in`,
              }
-           }
-           /* ★ **引いている最中は、指についていく。**
-                `transition` を付けない —— 付けると指より遅れて動き、
-                **引っぱっているのに重い**と感じる */
-           if (drag) return { transform: `translateX(${drag}px)`, transition: 'none' }
-           /* **離して届かなかったときは、ここへ戻る**(戻る動きは見せる) */
-           return undefined
-         })()}>
-      {children}
-      {/* ★ **押せる帯は、この入れ物の中**(第5.417節)。
-            窓に対して置くと、上の帯にも下のタブバーにもかかる。
-            **幅が取れないときは、描かない** */}
-      {出す && onPrev && (
-        <button type="button" className="cardmove-edge cardmove-edge--l"
-                style={{ width: 幅 }} aria-label="前へ" onClick={() => run('prev')} />
-      )}
-      {出す && onNext && (
-        <button type="button" className="cardmove-edge cardmove-edge--r"
-                style={{ width: 幅 }} aria-label="次へ" onClick={() => run('next')} />
-      )}
-    </div>
+             : undefined}>
+        {children}
+        {/* ★ **押せる帯は、この入れ物の中**(第5.417節)。
+              窓に対して置くと、上の帯にも下のタブバーにもかかる。
+              **幅が取れないときは、描かない** */}
+        {出す && onPrev && (
+          <button type="button" className="cardmove-edge cardmove-edge--l"
+                  style={{ width: 幅 }} aria-label="前へ" onClick={() => go('prev')} />
+        )}
+        {出す && onNext && (
+          <button type="button" className="cardmove-edge cardmove-edge--r"
+                  style={{ width: 幅 }} aria-label="次へ" onClick={() => go('next')} />
+        )}
+      </div>
+    </CardMoveCtx.Provider>
+  )
+}
+
+/**
+ * ★ **◀▶ のボタン**(2026-10-08 利用者の指定・段階4)。
+ *
+ *   > 三角だけ、小さい方
+ *   > 「まだ」「言えた」の左右に置く
+ *
+ * 9つの置き場所と、4通りの形・大きさを実際に描いて見くらべてもらい、
+ * **「三角だけ・44px・『まだ』『言えた』の行の左右」**がえらばれた。
+ *
+ * - **指の端末にだけ出す**(利用者の指定「スマホ、タブレットのみ」)。
+ *   パソコンには、これまでどおり**紙の左右の余白**と**矢印キー**がある ——
+ *   **同じことをするものを2つ見せない**(CLAUDE.md)
+ * - **三角だけでも、押せる的は 44px**(`TAP_MIN`)。
+ *   見た目が軽くなるだけで、押しにくくはしない
+ * - **送る道は `CardMoveCtx` から受け取る** —— 流す動きをここに書き写さない
+ * - **入れ物が無ければ、何も描かない**(既定は「見せない」側)
+ *
+ * @param {'prev'|'next'} move どちらへ送るか
+ * @param {boolean} show 出してよいか(呼ぶ側が `isCoarse()` で決める)
+ */
+export function MoveArrow({ move = 'next', show = false }) {
+  const go = useContext(CardMoveCtx)
+  if (!show || !go) return null
+  const 前 = move === 'prev'
+  return (
+    <button type="button" className={`move-arrow move-arrow--${move}`}
+            aria-label={前 ? '前へ' : '次へ'}
+            /* **押せる的の大きさは `TAP_MIN` 1か所から**(CSS に書き写さない) */
+            style={{ width: `${TAP_MIN}px`, height: `${TAP_MIN}px` }}
+            onClick={() => go(move)}>
+      {/* **絵文字(◀▶)は使わない** —— 端末ごとに形も大きさも違う
+          (共通ルール)。線で描けば、どこでも同じ三角になる */}
+      <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+        <path d={前 ? 'M8 0 L2 5 L8 10 Z' : 'M2 0 L8 5 L2 10 Z'} fill="currentColor" />
+      </svg>
+    </button>
   )
 }

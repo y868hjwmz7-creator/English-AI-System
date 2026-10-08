@@ -141,9 +141,8 @@ import {
 /* ★ カードを送る・判定する操作(第5.417節・段階4)。
      **何にも依存しない形**に出してあるので、素の node で数字を見張れる */
 import {
-  COARSE_Q, DRAG_FROM, FLY_MS, KEY_MARK, SWIPE_FLICK, SWIPE_MIN, SWIPE_SLOPE,
-  SWIPE_SPEED, TAP_MIN,
-  dragShift, edgeFits, edgeSpace, flyX, isCoarse, keyLabel, keyMove, swipeMove,
+  COARSE_Q, FLY_MS, KEY_MARK, SWIPE_OFF, TAP_MIN,
+  edgeFits, edgeSpace, flyX, isCoarse, keyLabel, keyMove,
 } from '../src/lib/cardMove.js'
 /* ★ 出会った時期(第5.414節)。**素の node で測れる形**に出してある */
 import { MET_RANGES, inMet, metLabel } from '../src/lib/metRange.js'
@@ -15487,120 +15486,83 @@ console.log('\n▶ キーの印は、キーの使える端末だけに出す(第
   }
 }
 
-console.log('\n▶ スワイプは「送る」だけ。判定しない(第5.417節・2026-10-08)')
+console.log('\n▶ スワイプは廃止。◀▶ のボタンにした(第5.417節・2026-10-08)')
 {
-  /* ★ **仕様変更**(2026-10-08 利用者の指定)。
+  /* ★ **利用者の指定**(2026-10-08)。
 
-       > 左スワイプは「ひとつ前に戻る」右スワイプは「ひとつ先に進む」に
-       > しましょう。…「まだ」「言えた」ボタンはそのまま残します。
+       > スワイプが使いにくすぎるのでやめにしょう。スマホ、タブレットのみ
+       > 仕様を変えましょう。◀▶で戻ったり進めるボタンを追加して
+       > スワイプは廃止します。
 
-     はじめ**右へはらう = 覚えた**にしていたので、
-     **← → と余白は「送る」なのに、スワイプだけ「判定」**だった。
-     **横の動きは、どれも「送る」に揃える。** */
-  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 }) === 'next',
-    '右へはらうと、ひとつ先へ進む', String(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 })))
-  ok(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 }) === 'prev',
-    '左へはらうと、ひとつ前へ戻る', String(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 })))
+     **算段ごと消す。** 残しておくと、**どこかで呼び戻されて2通りになる**
+     (CLAUDE.md「数え方を2通り持たない」)。 */
+  ok(SWIPE_OFF === true, 'スワイプは廃止したと、1か所で宣言してある')
 
-  /* ★★ **はらっただけで、記録が変わってはいけない。**
-         ここが `ok` / `yet` を返すと、**指が触れただけで復習の記録が動く** ——
-         いちばん壊してはいけないところである。
-         **当てはまる形を総当たりして、1つも判定が出ないこと**を見る */
-  const 判定 = []
-  for (const dx of [-400, -SWIPE_MIN * 2, -SWIPE_MIN, SWIPE_MIN, SWIPE_MIN * 2, 400]) {
-    for (const dy of [0, 5, -5, SWIPE_MIN / 2]) {
-      for (const ms of [50, 300, 3000]) {
-        const m = swipeMove({ dx, dy, ms })
-        if (m && m !== 'prev' && m !== 'next') 判定.push(`${dx}/${dy}/${ms} → ${m}`)
-      }
-    }
-  }
-  ok(判定.length === 0, 'どうはらっても、判定は1つも出ない',
-    判定.slice(0, 3).join(' / ') || 'なし')
-  /* **送りそのものは、ちゃんと出ている**(何も返さない形に書き換えても
-     上の1本は緑になるので、出る側も数える) */
-  const 送り = new Set()
-  for (const dx of [-400, -SWIPE_MIN, SWIPE_MIN, 400]) {
-    const m = swipeMove({ dx, dy: 0, ms: 100 })
-    if (m) 送り.add(m)
-  }
-  ok(送り.size === 2 && 送り.has('prev') && 送り.has('next'),
-    '左右で、前へと次への2通りが出る', [...送り].join(' / '))
-
-  /* **境目の数を書き写さない。** `SWIPE_MIN` などから組む */
-  /* **届かない動き** —— 引きも足りず、はらってもいない
-     (`SWIPE_MIN` に届かず、速さも `SWIPE_SPEED` に届かない) */
-  ok(swipeMove({ dx: SWIPE_MIN - 1, dy: 0, ms: (SWIPE_MIN - 1) / SWIPE_SPEED + 100 }) === null,
-    '短くて、しかも遅い動きは送らない', `${SWIPE_MIN - 1}px`)
-  ok(swipeMove({ dx: 0, dy: 0, ms: 100 }) === null,
-    'ただのタップ(動いていない)は、何もしない')
-  ok(swipeMove({ dx: SWIPE_MIN, dy: SWIPE_MIN * SWIPE_SLOPE, ms: 100 }) === null,
-    '横より縦に動いていたら、画面を送っているだけ')
-  ok(swipeMove() === null, '何も渡されなければ、何もしない')
-  ok(swipeMove({ dx: SWIPE_MIN * 2, dy: SWIPE_MIN, ms: 200 }) === 'next',
-    '斜めでも、横が大きければ効く')
-
-  /* ★ **流れる向きと、はらった向きがそろっているか。**
-       ここが裏返ると、**引っぱった手と画面が反対に動く** */
-  const 右 = swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 })
-  const 左 = swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 })
-  ok(!flyX(右).startsWith('-'), 'はらった向き(右)へ流れる', `${右} → ${flyX(右)}`)
-  ok(flyX(左).startsWith('-'), 'はらった向き(左)へ流れる', `${左} → ${flyX(左)}`)
-  ok(flyX(右) !== flyX(左), '右と左で、流れる向きが違う')
-  /* **画面の外まで流す**(途中で止まると、消えずに残って見える) */
-  ok(/^-?1\d\d%$/.test(flyX('next')) && /^-?1\d\d%$/.test(flyX('prev')),
-    'カードの幅より大きく流す(画面の外へ出る)', `${flyX('next')} / ${flyX('prev')}`)
-  ok(FLY_MS > 0 && FLY_MS < 1000,
-    '流れるのは、待たされない短さである', `${FLY_MS}ms`)
-
-  /* ★ **さっとはらったら、短くても送る**(2026-10-08 利用者の指摘
-       「なんかスワイプの反応が良くないです」)。
-
-       指は**速く小さく**動かすほうが自然で、`SWIPE_MIN` まで引く前に
-       離してしまう。**速さを見れば、その短いはらいも拾える。** */
-  ok(swipeMove({ dx: SWIPE_FLICK, dy: 0, ms: SWIPE_FLICK / SWIPE_SPEED }) === 'next',
-    'さっとはらえば、短くても送る', `${SWIPE_FLICK}px`)
-  ok(swipeMove({ dx: SWIPE_FLICK - 1, dy: 0, ms: 10 }) === null,
-    '短すぎるものは、速くても送らない(ただのタップ)', `${SWIPE_FLICK - 1}px`)
-  ok(swipeMove({ dx: SWIPE_FLICK, dy: 0, ms: SWIPE_FLICK / SWIPE_SPEED * 3 }) === null,
-    '短いまま、ゆっくりなら送らない(指が置かれてずれただけ)')
-  /* ★ **ゆっくりでも、しっかり引いたなら送る**(時間で切らない)。
-       もとは1秒を超えると**黙って消えていた** */
-  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 5000 }) === 'next',
-    'ゆっくり引いても、しっかり引いたなら送る', '5 秒かけても効く')
-  /* **引く長さの下限は、押せる的と同じ数から出す**(書き写さない) */
-  ok(SWIPE_MIN === TAP_MIN, '引く長さの下限は、押せる的と同じ1か所から',
-    `${SWIPE_MIN}px`)
-
-  /* ★ **引いている最中、カードが指についてくるか**(2026-10-08)。
-
-       **実測したら、引いている最中のズレは 0px だった** ——
-       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
-       **動かしているあいだ何も起きないものは、効いていないのと同じ**。
-       どれだけずらすかは `dragShift()` 1か所で決める。 */
-  ok(dragShift({ dx: 40, dy: 0 }) === 40, '引いたぶんだけ、カードが動く(1 対 1)')
-  ok(dragShift({ dx: -40, dy: 0 }) === -40, '左へ引いても、そのぶん動く')
-  ok(dragShift({ dx: DRAG_FROM - 1, dy: 0 }) === 0,
-    'ほんの少し触れただけでは動かない(タップと分ける)', `${DRAG_FROM - 1}px`)
-  ok(dragShift({ dx: DRAG_FROM, dy: 0 }) === DRAG_FROM,
-    `${DRAG_FROM}px 引いたら、そこから指についてくる`)
-  ok(dragShift({ dx: 30, dy: 60 }) === 0,
-    '縦のほうが大きければ動かさない(画面を送っているだけ)')
-  ok(dragShift() === 0, '何も渡されなければ、動かさない')
-  /* **動く側と動かない側の両方を数える**(片方だけだと、
-     どんな動きでも動かす形・1つも動かさない形で緑になる) */
-  {
-    const 動く = [10, 40, -40, 200].filter((d) => dragShift({ dx: d, dy: 0 }) !== 0).length
-    const 動かない = [0, 1, 3].filter((d) => dragShift({ dx: d, dy: 0 }) === 0).length
-    ok(動く === 4 && 動かない === 3, '動く形と動かない形が、どちらもある',
-      `動く ${動く} / 動かない ${動かない}`)
+  /* ★ **本当に消えているか**(名前が残っていれば、また呼べてしまう)。
+       **`export` の形で数える** —— 説明の中の語には当たらない */
+  const lib = readFileSync('src/lib/cardMove.js', 'utf8')
+  for (const 名 of ['swipeMove', 'dragShift', 'SWIPE_MIN', 'SWIPE_FLICK',
+    'SWIPE_SPEED', 'SWIPE_SLOPE', 'DRAG_FROM', 'SWIPE_MS']) {
+    ok(!new RegExp(`export\\s+(const|function)\\s+${名}\\b`).test(lib),
+      `スワイプの算段(${名})は、もう持っていない`)
   }
 
-  /* ★ **キーは、いままでどおり4つとも効く**(判定は ↑↓ が持つ) */
-  ok(keyMove({ key: 'ArrowUp' }) === 'ok' && keyMove({ key: 'ArrowDown' }) === 'yet',
-    '判定は ↑ ↓ が持っている(ボタンと同じ)')
+  /* ★ **パソコンの操作は1ミリも変えていない**(利用者の指定
+       「スマホ、タブレットのみ仕様を変えましょう」)。
+       矢印キーと、紙の左右の余白は、これまでどおり効く */
   ok(keyMove({ key: 'ArrowLeft' }) === 'prev' && keyMove({ key: 'ArrowRight' }) === 'next',
-    '← → は、スワイプとまったく同じ送りである')
+    'パソコン … ← → は、これまでどおり送る')
+  ok(keyMove({ key: 'ArrowUp' }) === 'ok' && keyMove({ key: 'ArrowDown' }) === 'yet',
+    'パソコン … 判定は ↑ ↓ が持っている(ボタンと同じ)')
+  ok(edgeFits(TAP_MIN), 'パソコン … 紙の左右の余白は、これまでどおり押せる')
+
+  /* ★ **◀▶ の大きさは、押せる的と同じ1か所から**(三角だけでも小さくしない)。
+       画面は `TAP_MIN` を `style` に渡す —— CSS に 44 と書かない */
+  const c = readFileSync('src/components/CardMove.jsx', 'utf8')
+  ok(/TAP_MIN/.test(c), '◀▶ の大きさは `TAP_MIN` 1か所から取っている')
+  const css = readFileSync('src/styles.css', 'utf8')
+  const 決 = css.slice(css.indexOf('.move-arrow {'), css.indexOf('}', css.indexOf('.move-arrow {')))
+  ok(決.length > 0, '◀▶ の見た目が CSS にある')
+  ok(!new RegExp(`(^|[^\\w.])${TAP_MIN}([^\\w]|$)`).test(決),
+    `◀▶ の大きさ(${TAP_MIN})を CSS に書き写していない`)
+  /* ★ **囲まない**(利用者の指定「三角だけ」)。
+       枠も地色も持たないことを、**打ち消しているか**で見る */
+  ok(/border:\s*0/.test(決) && /background:\s*none/.test(決),
+    '◀▶ は囲まない(枠も地色も持たない)')
+}
+
+console.log('\n▶ 送ったら、その向きへ飛ばす(第5.417節・2026-10-08「飛ばす 600ms」)')
+{
+  /* ★ **利用者が、7つの演出を実際に押して見くらべてえらんだ**(2026-10-08)。
+
+       > 飛ばす 600ms
+
+     **向きと長さは `cardMove.js` 1か所**(`flyX` / `FLY_MS`)。
+     CSS にも画面にも書き写さない。 */
+  ok(!flyX('next').startsWith('-'), '次へ(▶)なら、右へ飛ぶ', flyX('next'))
+  ok(flyX('prev').startsWith('-'), '前へ(◀)なら、左へ飛ぶ', flyX('prev'))
+  ok(flyX('next') !== flyX('prev'), '前と次で、飛ぶ向きが違う')
+  ok(/^-?1\d\d%$/.test(flyX('next')) && /^-?1\d\d%$/.test(flyX('prev')),
+    'カードの幅より大きく飛ばす(画面の外へ出る)', `${flyX('next')} / ${flyX('prev')}`)
+  /* **値を書き写さない。性質で見る**(CLAUDE.md)。
+     「押してから見える長さ」で、かつ「待たされない短さ」であること */
+  ok(FLY_MS >= 300 && FLY_MS < 1000,
+    '飛ぶのは、目で追えて、しかも待たされない長さである', `${FLY_MS}ms`)
+
+  /* ★ **飛ばすのは送りだけ。判定では飛ばさない**(共通ルール
+       「押しても、まわりの物が動かない」)—— 指がボタンの上にあるので、
+       動かすと次の問のボタンが指の下に来る。
+       **`flyX` は送り以外を知らない**(知っていたら、判定でも飛ばせてしまう) */
+  ok(flyX('ok') === flyX('yet'),
+    '判定(覚えた / まだ)には、飛ぶ向きが無い', `${flyX('ok')} / ${flyX('yet')}`)
+
+  /* ★ **戻る動きを残していない**(2026-10-08)。
+       `.cardmove` に `transition` が残っていると、飛ばし終えて
+       `transform` を外した瞬間に、**飛んだ先から戻ってくる** */
+  const css2 = readFileSync('src/styles.css', 'utf8')
+  const 入 = css2.slice(css2.indexOf('.cardmove {'), css2.indexOf('}', css2.indexOf('.cardmove {')))
+  ok(!/transition:/.test(入),
+    'カードの入れ物に、戻る動きを残していない', 入.replace(/\s+/g, ' ').slice(0, 60))
 }
 
 console.log('\n▶ 紙の余白を押せるのは、44px 取れたときだけ(第5.417節)')
@@ -15654,13 +15616,16 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
 
   const c = 素('src/components/CardMove.jsx')
   /* **使っている形で数える**(「名前が出てくるか」で見ない・CLAUDE.md) */
-  for (const 呼ぶ of ['keyMove(', 'swipeMove(', 'dragShift(', 'edgeFits(', 'edgeSpace(',
-    'flyX(', 'isCoarse(']) {
+  for (const 呼ぶ of ['keyMove(', 'edgeFits(', 'edgeSpace(', 'flyX(']) {
     ok(c.includes(呼ぶ), `判定は \`${呼ぶ})\` に任せている`)
+  }
+  /* ★ **スワイプの算段を、画面の側に残していない** */
+  for (const 呼ぶ of ['swipeMove(', 'dragShift(', 'pointerdown', 'onPointerDown']) {
+    ok(!c.includes(呼ぶ), `スワイプ(\`${呼ぶ}\`)は、画面にも残っていない`)
   }
   /* ★ **境目の数を、画面に書き写していない。**
        書き写すと、`cardMove.js` を直した日に片方だけ古くなる */
-  for (const 数 of [String(TAP_MIN), String(SWIPE_FLICK), String(DRAG_FROM), String(FLY_MS)]) {
+  for (const 数 of [String(FLY_MS)]) {
     const 回 = (c.match(new RegExp(`(^|[^\\w.])${数}([^\\w]|$)`, 'g')) ?? []).length
     ok(回 === 0, `境目の数(${数})を画面に書き写していない`, `${回} か所`)
   }
@@ -15668,10 +15633,10 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
     'キーの名前を画面に書き写していない')
   ok(!c.includes('pointer: coarse'),
     '指の端末の見分け方を画面に書き写していない')
-  /* ★ **なぞる操作とぶつけない**(第5.17節)。
-       英文の上から始まった指の動きは、スワイプと見ない */
-  ok(/closest\??\.?\(\s*'\.etext'\s*\)/.test(c),
-    '英文の上から始まった指の動きは、スワイプと見ない')
+  /* ★ **なぞる操作とぶつからなくなった**(第5.17節)。
+       スワイプを廃止したので、**英文の上をよける細工も要らない** ——
+       要らなくなった守りを残すと、「まだ何かを守っている」と誤読される */
+  ok(!/\.etext/.test(c), 'なぞる操作をよける細工は、もう要らない')
   /* ★ **字を打っているかを、本当に見ているか。**
        `typing:` を渡していなければ、`keyMove` のあの守りは1度も働かない */
   ok(/typing:\s*typingNow\(\)/.test(c), '字を打っているかを渡している')
