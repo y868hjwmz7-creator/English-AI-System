@@ -897,12 +897,11 @@ for (const [label, want] of Object.entries(WANT)) {
           return {
             名: b.getAttribute('aria-label') || '',
             押している: b.getAttribute('aria-pressed') === 'true',
-            /* **回す範囲の線**(`rect`)が在るか。「しない」は無い */
-            線: b.querySelectorAll('svg rect').length,
-            /* **長さ**で範囲を見分ける。3つとも違っていないと意味が無い */
-            長さ: [...b.querySelectorAll('svg rect')]
-              .map((r) => Math.round(r.getBoundingClientRect().width * 10) / 10)
-              .join('/'),
+            /* ★ **回す範囲は「点の数」**(2026-10-08 利用者がえらんだ案3・
+                 第5.419節)。長さを測るのをやめた ——
+                 **ボタン1つでは、長さを比べる相手がいない。**
+                 「しない」は点が1つも無い */
+            点: b.querySelectorAll('svg circle').length,
             うすい: Math.round((parseFloat(cs.opacity) || 1) * 100),
           }
         })
@@ -922,25 +921,29 @@ for (const [label, want] of Object.entries(WANT)) {
           `${見た[0]?.名} → ${見た[REPEAT_UNITS.length]?.名}`)
       } else if (!しない || しない.押している) {
         ng('くり返し … 「しない」が押している印のままになっている')
-      } else if (しない.線 !== 0) {
-        ng('くり返し … 「しない」なのに、回す範囲の線が描いてある',
-          `${しない.線} 本。**線が無いことでも分かる**(色だけに頼らない)`)
+      } else if (しない.点 !== 0) {
+        ng('くり返し … 「しない」なのに、回す範囲の点が描いてある',
+          `${しない.点} つ。**点が無いことでも分かる**(色だけに頼らない)`)
       } else if (しない.うすい >= 90) {
         ng('くり返し … 「しない」がうすくなっていない', `${しない.うすい}%`)
-      } else if (回す.some((v) => v.線 === 0)) {
-        ng('くり返し … くり返す範囲なのに、線が描かれていない')
-      } else if (new Set(回す.map((v) => v.線)).size !== 1) {
-        ng('くり返し … 範囲によって線の本数が違う', '長さで見分ける(本数ではない)')
+      } else if (回す.some((v) => v.点 === 0)) {
+        ng('くり返し … くり返す範囲なのに、点が1つも描かれていない')
       } else if (回す.length !== REPEAT_UNITS.length - 1) {
         ng(`くり返し … 押している印が ${回す.length} 通り`,
           `くり返す範囲は ${REPEAT_UNITS.length - 1} 通りある`)
-      } else if (new Set(回す.map((v) => v.長さ)).size !== 回す.length) {
+      } else if (new Set(回す.map((v) => v.点)).size !== 回す.length) {
         ng('くり返し … 範囲が見分けられない',
-          `線の長さが ${回す.map((v) => v.長さ).join(' / ')} で、同じものがある`)
+          `点の数が ${回す.map((v) => v.点).join(' / ')} で、同じものがある`)
+      } else if (回す.some((v, i) => i > 0 && v.点 <= 回す[i - 1].点)) {
+        /* ★ **狭い順に増える**(文 → 段落 → 全文)。数そのものは書かない ——
+             回る順(`REPEAT_UNITS`)のまま、**増えているか**だけを見る。
+             逆に並べても「ぜんぶ違う」だけなら緑になってしまう */
+        ng('くり返し … 範囲が広がる向きに、点が増えていない',
+          `${回す.map((v) => `${v.点}`).join(' → ')}(狭い順に増えるはず)`)
       } else {
         ok(`くり返し … ボタン1つで ${名.join(' → ')} と回る。`
-          + `「しない」は線なし・${しない.うすい}% のうすさ。`
-          + `範囲は線の長さ ${回す.map((v) => v.長さ).join(' / ')}px で見分ける`)
+          + `「しない」は点なし・${しない.うすい}% のうすさ。`
+          + `範囲は点の数 ${回す.map((v) => v.点).join(' / ')} で見分ける`)
       }
     }
   }
@@ -2178,11 +2181,14 @@ for (const [label, want] of Object.entries(WANT)) {
            **その変数はもう誰も描いていない。**
            「描かれていないものを測る」と、見張りが素通りする */
       印: 色で(g('.repeat-key.is-on')?.color ?? null),
-      /* 囲みを外したこと自体も見る(地色と枠線が無い) */
+      /* 囲みを外したこと自体も見る(地色と枠線が**見えない**)。
+         ★ **太さでは見ない。** 素の `.repeat-key` は
+           `border: 1px solid transparent` を持っている ——
+           **押したときに 1px ずれないよう、場所を取ってあるだけ**で、
+           これは囲み線ではない(共通ルール「押しても、まわりの物が
+           動かない」)。**見えるかどうか**は、濃さで決まる */
       印の地: 色で(g('.repeat-key.is-on')?.backgroundColor ?? null),
-      印の枠: g('.repeat-key.is-on')
-        ? parseFloat(window.getComputedStyle(p.querySelector('.repeat-key.is-on')).borderTopWidth) || 0
-        : null,
+      印の枠: 色で(g('.repeat-key.is-on')?.borderTopColor ?? null),
     }
   })
 
@@ -2220,7 +2226,7 @@ for (const [label, want] of Object.entries(WANT)) {
          > 適用時は囲み線ではなく色の変化のみで OK です */
     if (m.印の枠 == null) 悪い.push('効いているくり返しが黒帯の中に無い')
     else {
-      if (m.印の枠) 悪い.push(`効いている印に枠線が残っている(${m.印の枠}px)`)
+      if (m.印の枠.rgb[3]) 悪い.push(`効いている印に枠線が見えている(${m.印の枠.css})`)
       if (m.印の地?.rgb?.[3]) 悪い.push(`効いている印に地色が残っている(${m.印の地.css})`)
     }
     for (const [名, v, 下限] of [['いま何問め', m.番号, 4.5], ['速さ', m.速さ, 4.5], ['効いている印', m.印, 4.5]]) {
