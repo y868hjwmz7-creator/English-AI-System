@@ -10072,8 +10072,14 @@ button.wbfilter-ctl { text-align: left; }
      **塗りと、その上の色を2か所に書かない。** */
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
+/* ★ **鳴っているが閉じている**。ここも色を決め打ちしていた
+     (2026-10-08・第5.425節)。`#cfe3ff`(水色)と直に書いてあったので、
+     **暗い配色では金の帯に水色**が乗っていた。
+     枠も絵も、その帯の差し色(`--player-accent`)から引く ——
+     明るい配色なら青、暗い配色なら金。
+     **黒い帯の上で読める明るさ**まで持ち上げたものを、そのまま使う。 */
 .lesson-bar .player-launch.is-playing:not(.is-open) {
-  border-color: var(--accent); color: #cfe3ff;
+  border-color: var(--player-accent); color: var(--player-accent);
 }
 
 /* ★ **絵だけのボタンの大きさは、ここで決める**(第5.316節)。
@@ -10289,17 +10295,22 @@ button.wbfilter-ctl { text-align: left; }
        (6.3 : 1)。暗い配色の金は、そのままで読めるので混ぜない ——
        だから**配色ごとに3か所**書く(`:root` / `@media` / `[data-theme]`
        の作法どおり)。 */
-/* ★ **黒い帯は3つある**(`.player--bar` / `.player--dock` / `.focus-bar`)。
-     **3つとも同じ行に書く** —— `--player-ink` を書き忘れて、明るい配色の
-     ときだけ読めない錠剤になったのと同じ轍を踏まないため。 */
-.player--bar, .player--dock, .focus-bar {
+/* ★ **黒い帯は4つある**(`.lesson-bar` / `.player--bar` / `.player--dock` /
+     `.focus-bar`)。**4つとも同じ行に書く** —— `--player-ink` を書き忘れて、
+     明るい配色のときだけ読めない錠剤になったのと同じ轍を踏まないため。
+
+     ★ `.lesson-bar` を4つめとして足した(2026-10-08・第5.425節)。
+     あそこにも**色を決め打ちした場所**が残っていた(下の「鳴っている」)。 */
+.lesson-bar, .player--bar, .player--dock, .focus-bar {
   --player-accent: color-mix(in srgb, var(--accent) 55%, #ffffff);
 }
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lesson-bar,
   :root:not([data-theme="light"]) .player--bar,
   :root:not([data-theme="light"]) .player--dock,
   :root:not([data-theme="light"]) .focus-bar { --player-accent: var(--accent); }
 }
+:root[data-theme="dark"] .lesson-bar,
 :root[data-theme="dark"] .player--bar,
 :root[data-theme="dark"] .player--dock,
 :root[data-theme="dark"] .focus-bar { --player-accent: var(--accent); }
