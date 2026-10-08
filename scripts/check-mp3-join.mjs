@@ -5347,7 +5347,17 @@ function fakeMp3({
   /* ── ⑦ **置いてあるものは作り直さない = 0円** ── */
   const clips = readFileSync(new URL('../src/lib/audioClips.js', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-  if (!/addEventListener\('loadedmetadata', \(\) => stop\('had'\)\)/.test(clips)) {
+  /* ★ **式を書き写さない**(2026-10-08・第5.421節)。
+       もとは `addEventListener('loadedmetadata', () => stop('had'))` を
+       そのまま探していたので、**合図の受け口に名前を付けた日に、
+       仕組みは1ミリも壊れていないのに赤くなった。**
+       **名前を先に読み取ってから**、その名前で性質を見る。 */
+  const 受け口 = clips.match(/addEventListener\('loadedmetadata',\s*([A-Za-z_$\u3040-\u30ff\u4e00-\u9fff][\w$\u3040-\u30ff\u4e00-\u9fff]*)\)/)
+  const 直に = /addEventListener\('loadedmetadata',\s*\(\)\s*=>\s*stop\('had'\)\)/.test(clips)
+  /** その名前の中身。**`'had'` で終える = 置いてあった、と答えている** */
+  const 中身 = 受け口 ? clips.slice(clips.indexOf(`const ${受け口[1]} =`),
+    clips.indexOf(`const ${受け口[1]} =`) + 200) : ''
+  if (!直に && !/'had'/.test(中身)) {
     ng('支度 … 置いてあるかを見ずに作っている(二度課金する)')
   } else ok('支度 … 置いてあれば作り直さない(0円)')
   /* **時間切れでも作りに行かない。** 行くと二度目の課金になる */
