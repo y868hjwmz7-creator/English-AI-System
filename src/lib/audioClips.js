@@ -1522,22 +1522,67 @@ export function ensureClip(text, voiceId = DEFAULT_CLIP_VOICE, tier = STANDARD) 
     clipUrl(text, voiceId, tier).then((url) => {
       if (!url) { done('skip'); return }
       let settled = false
-      const end = (v) => { if (!settled) { settled = true; done(v) } }
+      /**
+       * ★ **温め終わったら、その `<audio>` を手放す**(2026-10-08・第5.421節)。
+       *
+       *   利用者の報告「教材をシャッフル再生していると、アプリが突然
+       *   リセットされる」。**作った札を、1枚も片づけていなかった。**
+       *
+       *   `preload = 'auto'` なので、この札は**MP3 を丸ごと端末のメモリへ
+       *   落とす。** 温めるのは**教材の項目ぜんぶ**で、しかも
+       *   シャッフルを押すと `sections` が新しくなるので
+       *   **押すたびに全部もう一度**温めにいく(`LessonView` の先読み)。
+       *   60 問の教材で2〜3回シャッフルすれば、鳴らしもしない札が
+       *   100 枚以上、中身を抱えたまま残る。
+       *
+       *   **iPhone はメモリが足りなくなるとページごと捨てる。**
+       *   捨てられたページは、次に見たときに読み込み直しになる ——
+       *   これが「突然リセットされる」の正体だと考えている。
+       *
+       *   `src` を空にして `load()` を呼ぶと、**読み込みを打ち切り、
+       *   ためこんだ中身を手放す。** 鳴らしてはいないので、
+       *   止める処理(`stopClip`)とは関わらない。
+       */
+      let warm = null
+      /* ★ **手放す前に、合図の受け口を外す。**
+           `src` を空にして `load()` を呼ぶと、端末によっては
+           **`error` が飛んでくる。** 外さずに手放すと、その `error` が
+           「置いていない」と読まれて **`makeClip()` に入り、二度課金**になる。
+           **決まった答えのあとに、作りに行く道を残さない。** */
+      let 片づけ = () => {}
+      const 手放す = () => {
+        if (!warm) return
+        片づけ()
+        try {
+          warm.removeAttribute('src')
+          warm.load()
+        } catch { /* もう居ない */ }
+        warm = null
+      }
+      const end = (v) => { if (!settled) { settled = true; 手放す(); done(v) } }
       /* **時間切れでも、作りには行かない。** 置いてあるのに合図が
          来なかっただけかもしれず、作れば**二度目の課金**になる */
       const timer = setTimeout(() => end('unknown'), WARM_WAIT)
       const stop = (v) => { clearTimeout(timer); end(v) }
       // **`<audio>` の先読み。** ここで作った札は鳴らさない
-      const warm = new Audio()
+      warm = new Audio()
       warm.preload = 'auto'
       /* **長さが読めた = 置いてある。** `canplay` を待たない ——
          あれは中身を落とし終わるまで来ないことがある */
-      warm.addEventListener('loadedmetadata', () => stop('had'))
-      warm.addEventListener('error', () => {
+      const 読めた = () => stop('had')
+      const 読めない = () => {
+        /* **決まったあとは、何もしない**(手放したときの `error` を拾わない) */
+        if (settled) return
         makeClip(text, voiceId, tier)
           .then((made) => stop(made ? 'made' : 'ng'))
           .catch(() => stop('ng'))
-      })
+      }
+      warm.addEventListener('loadedmetadata', 読めた)
+      warm.addEventListener('error', 読めない)
+      片づけ = () => {
+        warm?.removeEventListener('loadedmetadata', 読めた)
+        warm?.removeEventListener('error', 読めない)
+      }
       warm.src = url
       warm.load()
     }).catch(() => done('ng'))

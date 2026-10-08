@@ -14162,6 +14162,33 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     '無音 … 解錠に使う無音も、同じ `silentWav()` から作る')
   }
 
+  /* ── ★ **温めた `<audio>` を、手放しているか**(第5.421節)──────────
+       利用者の報告「教材をシャッフル再生していると、アプリが突然
+       リセットされる」。`ensureClip()` が作る札は `preload = 'auto'` で
+       **MP3 を丸ごと端末のメモリへ落とす。** シャッフルを押すたびに
+       教材ぜんぶを温め直すので、鳴らしもしない札が積み上がる。
+
+       **見るのは3つ。**
+         ①手放している(`src` を外して読み込みを打ち切る)
+         ②**手放す前に、合図の受け口を外している**
+         ③**決まったあとに、作りに行く道が無い**(`error` を拾って
+           `makeClip()` に入ると**二度課金**になる) */
+  {
+    const clips = noC5(read5('src/lib/audioClips.js'))
+    const i = clips.indexOf('export function ensureClip')
+    const 中 = i < 0 ? '' : clips.slice(i, clips.indexOf('\nexport ', i + 10))
+    ok(/new Audio\(\)/.test(中), '温め … `ensureClip` は `<audio>` を作っている(測る相手が居る)')
+    ok(/removeAttribute\('src'\)/.test(中) && /\.load\(\)/.test(中),
+      '温め … 終わったら `src` を外して、ためこんだ中身を手放す')
+    ok(/removeEventListener\('loadedmetadata'/.test(中)
+      && /removeEventListener\('error'/.test(中),
+    '温め … 手放す前に、合図の受け口を外す')
+    /* **`error` を拾う側が、決まったあとに作りへ行かない** */
+    const 受け = 中.slice(中.indexOf('const 読めない'), 中.indexOf('warm.addEventListener'))
+    ok(/if \(settled\) return/.test(受け) && /makeClip\(/.test(受け),
+      '温め … 決まったあとの `error` では、作りに行かない(二度課金しない)')
+  }
+
   /* ── ④ **端末に「いま鳴らしている」と伝える** ──────────────────── */
   {
     const clips = noC5(read5('src/lib/audioClips.js'))
