@@ -10061,7 +10061,16 @@ button.wbfilter-ctl { text-align: left; }
      **色だけに頼らない**(共通ルール)ので、開閉は `aria-pressed` と
      `aria-label`(「読み上げの操作を開く / 閉じる」)にも出してある */
 .lesson-bar .player-launch.is-open {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  /* ★ **塗りの上に乗る色は `--on-accent`**(2026-10-08 利用者の指定・
+       第5.423節)
+
+         > 黄色の中に白ではなく黒線にしてみてください
+
+     `#fff` と直に書いてあったので、**暗い配色では金の上に白**が乗っていた。
+     `--on-accent` は、明るい配色では白(青の上)、
+     暗い配色では `--rizap-gold-on`(金の上の黒)である ——
+     **塗りと、その上の色を2か所に書かない。** */
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
 .lesson-bar .player-launch.is-playing:not(.is-open) {
   border-color: var(--accent); color: #cfe3ff;
