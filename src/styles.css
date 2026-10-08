@@ -11891,6 +11891,31 @@ button.wbfilter-ctl { text-align: left; }
   .cardmove.is-fly .move-stage { transition: none !important; }
 }
 
+/* ★ **用意しているあいだは、絵がゆっくり明滅する**(第5.418節・
+     2026-10-08 利用者の指定)。
+
+     > 段落を飛ばす時に、「聴く」ボタンが準備中になって横に伸びるせいで
+     > 段落の縦の長さが伸びてしまいます。横に伸びないようにしてください。
+
+   「用意しています…」の文言は**どのボタンからも外した**(あれは 30px の
+   「聴く」を 141px にする)。代わりに、**押した瞬間から絵が明滅する** ——
+   「押したのに何も起きない」への答えは、これで残る。
+
+   **動かすのは `opacity` だけ。** 場所も大きさも1px も変わらない
+   (共通ルール「押しても、まわりの物が動かない」)。
+   **長さは `motion.js` の段から組む**(生のミリ秒を書かない・第5.371節)。 */
+@keyframes wait-blink { 50% { opacity: .35; } }
+.btn.is-waiting .icon,
+.btn.is-waiting > svg {
+  animation: wait-blink calc(var(--motion-cheer) * 2) var(--ease-out) infinite;
+}
+/* **動きを減らす人には、明滅させない**(第5.371節と同じ断り)。
+   絵が Stop に変わることは、そのまま残る */
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-waiting .icon,
+  .btn.is-waiting > svg { animation: none; }
+}
+
 /* ★ **◀▶ の行**(第5.417節・2026-10-08 利用者の指定)。
 
    実機の写真に**手書きの三角**で位置を描いてもらった ——

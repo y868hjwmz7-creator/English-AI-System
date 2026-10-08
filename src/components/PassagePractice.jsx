@@ -48,7 +48,7 @@ import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.
 import { progressKey, useProgress } from '../lib/progress.js'
 import { markIn } from '../lib/useWordStatuses.js'
 import { SpeakerIcon, StopIcon } from './Icons.jsx'
-import { preparingLabel } from './SpeakButton.jsx'
+import SteadyLabel from './SteadyLabel.jsx'
 /* **色は1か所で決める**(第5.242節・2026-09-23 利用者の指摘
    「ボタンが全て白なのも分かりにくい要因の一つです」)。
    休んでいるあいだが白だと、紙の上で押せるものに見えない */
@@ -210,8 +210,9 @@ export default function PassagePractice({
   /* **音が出るまでのあいだ**(2026-09 利用者の指摘「1度目に押すと反応しない」)。
      MP3 をこれから作るときは数秒かかる。`SpeakButton` と同じ見せ方にする */
   const [allWaiting, setAllWaiting] = useState(false)
-  const [allSecs, setAllSecs] = useState(0)
-  const allTicker = useRef(null)
+  /* ★ **経過秒数は、もう数えていない**(第5.418節・2026-10-08)。
+     「用意中 N 秒」を出すためだけの札だった —— 文言ごと外したので、
+     数える仕組みも落とす(使われない仕組みを残さない) */
   // いま読み上げている語の位置(何文字目か)。合図を出さない端末では
   // null のままで、これまでどおり発言ごとの色分けだけが残る
   const [readingAt, setReadingAt] = useState(null)
@@ -294,8 +295,6 @@ export default function PassagePractice({
     setSpeakingId(null)
     speakingRef.current = null
     setPlayingAll(false)
-    window.clearInterval(allTicker.current)
-    allTicker.current = null
     setAllWaiting(false)
     setReadingAt(null)
   }
@@ -363,15 +362,7 @@ export default function PassagePractice({
     // MP3 がまだ無いと数秒間まったく音がせず、押しても反応が無いように見える。
     // 文言は `SpeakButton` と共通のものを使う(2か所に書き分けない)
     setAllWaiting(true)
-    setAllSecs(0)
-    const from = Date.now()
-    window.clearInterval(allTicker.current)
-    allTicker.current = window.setInterval(() => {
-      setAllSecs(Math.round((Date.now() - from) / 1000))
-    }, 500)
     const heard = () => {
-      window.clearInterval(allTicker.current)
-      allTicker.current = null
       setAllWaiting(false)
     }
     // 先に「読めるもの」だけに絞ってから並べる。絞ったあとで番号を数えないと、
@@ -622,11 +613,15 @@ export default function PassagePractice({
             止める場所を探さなくてよい(`SpeakButton` も同じ形)。 */}
         {current.unit === 'passage' && (
           <button type="button"
-                  className={`btn ${toneOn(playingAll)}`}
+                  className={`btn ${toneOn(playingAll)}${allWaiting ? ' is-waiting' : ''}`}
                   onClick={() => (playingAll ? stopPlaying() : playAll())}>
-            {playingAll
-              ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop (全体)'}</>
-              : <><SpeakerIcon />{wholePlayText()}</>}
+            {/* ★ **横に伸びない**(第5.418節・2026-10-08 利用者の指定)。
+                待ちの文言は出さず、**絵の明滅**で知らせる(`is-waiting`)。
+                幅は `SteadyLabel` が、起こりうる言葉のいちばん広いぶんで取る */}
+            {playingAll ? <StopIcon /> : <SpeakerIcon />}
+            <SteadyLabel keep={[wholePlayText(), 'Stop (全体)']}>
+              {playingAll ? 'Stop (全体)' : wholePlayText()}
+            </SteadyLabel>
           </button>
         )}
         {/* **速さは、①ディクテーションでは出さない**(2026-09 利用者の指定)。

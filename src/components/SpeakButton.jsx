@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 /* **1文ずつのボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
    ここに書き写すと、片方だけ古くなる */
 import { SPEAK_LISTEN, SPEAK_STOP } from '../lib/speakLabel.js'
+import SteadyLabel from './SteadyLabel.jsx'
 import { loadEnglishVoices } from '../lib/speech.js'
 import { canReadAloud, readAloud, stopReading } from '../lib/readAloud.js'
 import { STANDARD } from '../lib/voiceTier.js'
@@ -100,7 +101,6 @@ export default function SpeakButton({
    * そう書き、**2秒を過ぎたら経過秒数も出す。**
    */
   const [waiting, setWaiting] = useState(false)
-  const [secs, setSecs] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -116,18 +116,15 @@ export default function SpeakButton({
   repeatRef.current = repeat
   const timer = useRef(null)
 
-  /** 経過秒数を数える札。**用意しているあいだだけ動かす** */
-  const ticker = useRef(null)
-  const stopTicker = () => {
-    window.clearInterval(ticker.current)
-    ticker.current = null
-  }
+  /* ★ **経過秒数は、もう数えていない**(第5.418節・2026-10-08)。
+       「用意中 N 秒」を出すためだけの札だったが、**文言ごと外した**
+       (横に伸びるため)。数える仕組みも一緒に落とす ——
+       **使われない仕組みを残すと、まだ何かを守っていると誤読される** */
 
   /** 止める。**くり返しの予約も消す** */
   const stop = () => {
     playingRef.current = false
     window.clearTimeout(timer.current)
-    stopTicker()
     setWaiting(false)
     stopReading()
     setState(false)
@@ -146,12 +143,7 @@ export default function SpeakButton({
     const from = Date.now()
     // **押した瞬間から「用意しています…」。** 鳴り始めたら消す
     setWaiting(true)
-    setSecs(0)
-    stopTicker()
-    ticker.current = window.setInterval(() => {
-      setSecs(Math.round((Date.now() - from) / 1000))
-    }, 500)
-    const heard = () => { stopTicker(); setWaiting(false) }
+    const heard = () => setWaiting(false)
 
     readAloud(text, {
       voice, clipVoice, clipTier: tier, rate: speed, onWord, onStart: heard, whole,
@@ -212,7 +204,6 @@ export default function SpeakButton({
   useEffect(() => () => {
     if (playingRef.current) { playingRef.current = false; stopReading() }
     window.clearTimeout(timer.current)
-    window.clearInterval(ticker.current)
   }, [])
 
   if (!text || !canReadAloud()) return null
@@ -227,13 +218,31 @@ export default function SpeakButton({
     run()
   }
 
+  /* ★ **押しても、横に伸びない**(第5.418節・2026-10-08 利用者の指定)。
+
+       > 段落を飛ばす時に、「聴く」ボタンが準備中になって横に伸びるせいで
+       > 段落の縦の長さが伸びてしまいます。横に伸びないようにしてください。
+       > すべての教材、すべてのページでこの仕様に揃えてください
+
+     **「用意しています…」は、もう出さない。** あれは 30px の「聴く」を
+     141px にする(実測・第5.311節の表)ので、**どう取っておいても
+     ボタンが4倍以上に太る。** 操作盤(`PlayerBar`)では
+     **2026-09 に同じ理由で外してある** —— 画面ぜんぶを、そこに揃える。
+
+     **起きていることは、絵で伝える** —— スピーカーが Stop に変わり、
+     音が出るまでは**その絵がゆっくり明滅する**(`is-waiting`)。
+     明滅は `opacity` だけなので、**場所も大きさも1px も動かない**
+     (共通ルール「押しても、まわりの物が動かない」)。
+
+     幅は `SteadyLabel` が**起こりうる言葉のいちばん広いぶん**で取る ——
+     数を書かないので、言葉を変えた日もついてくる。 */
   return (
     <button type="button"
-            className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`}
+            className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`
+              + (waiting ? ' is-waiting' : '')}
             onClick={play}>
-      {playing
-        ? <><StopIcon />{waiting ? preparingLabel(secs) : SPEAK_STOP}</>
-        : <><SpeakerIcon />{label}</>}
+      {playing ? <StopIcon /> : <SpeakerIcon />}
+      <SteadyLabel keep={[label, SPEAK_STOP]}>{playing ? SPEAK_STOP : label}</SteadyLabel>
     </button>
   )
 }

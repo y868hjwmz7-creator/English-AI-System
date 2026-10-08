@@ -108,7 +108,8 @@ import PassagePractice from './PassagePractice.jsx'
 /* **添削した文章も Quick Response に混ぜる**(第5.330節)。
    **対を組み直さない** —— 教材に段を1つ足した写しを渡すだけ */
 import { hasQuickResponse, withWritingReviews } from '../lib/quickResponse.js'
-import SpeakButton, { preparingLabel } from './SpeakButton.jsx'
+import SpeakButton from './SpeakButton.jsx'
+import SteadyLabel from './SteadyLabel.jsx'
 import AnswerEn from './AnswerEn.jsx'
 import WritingAnswer from './WritingAnswer.jsx'
 import PhraseChips from './PhraseChips.jsx'
@@ -613,7 +614,6 @@ export default function LessonView({
   /* **音が出るまでのあいだ**(2026-09 利用者の指摘「1度目に押すと反応しない」)。
      `SpeakButton` と同じ見せ方にする(文言も共通のものを使う) */
   const allWaiting = player.waiting
-  const allSecs = player.secs
   /**
    * **いま通しで何番目を鳴らしているか**(操作盤のため・2026-09)。
    *
@@ -2663,10 +2663,15 @@ export default function LessonView({
                 {/* **三角は付けない**(2026-09 利用者の指定)。
                     送り戻しは**操作盤の1つ**に集めた(下の `PlayerBar`)。
                     同じことをするものを、画面のあちこちに置かない */}
-                <button type="button" className="btn btn--small btn--quiet" onClick={playWhole}>
-                  {playingAll
-                    ? <><StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}</>
-                    : <><SpeakerIcon />{wholePlayText()}</>}
+                {/* ★ **横に伸びない**(第5.418節・2026-10-08 利用者の指定)。
+                    待ちの文言は出さず、**絵の明滅**で知らせる(`is-waiting`) */}
+                <button type="button"
+                        className={`btn btn--small btn--quiet${allWaiting ? ' is-waiting' : ''}`}
+                        onClick={playWhole}>
+                  {playingAll ? <StopIcon /> : <SpeakerIcon />}
+                  <SteadyLabel keep={[wholePlayText(), 'Stop']}>
+                    {playingAll ? 'Stop' : wholePlayText()}
+                  </SteadyLabel>
                 </button>
               </div>
             )}
@@ -2866,9 +2871,11 @@ export default function LessonView({
                        (聞き逃した文へ戻る・先へ飛ばす)。
                        **鳴らす前と後で、形を変えない。** 変わるのは
                        中の言葉(Listen ⇄ Stop)だけにする */
-                    <button type="button" className="btn btn--small btn--quiet"
+                    <button type="button"
+                            className={`btn btn--small btn--quiet${allWaiting ? ' is-waiting' : ''}`}
                             onClick={() => { stopAll(); setReadingAt(null) }}>
-                      <StopIcon />{allWaiting ? preparingLabel(allSecs) : 'Stop'}
+                      {/* ★ **横に伸びない**(第5.418節)。待ちは絵の明滅で知らせる */}
+                      <StopIcon /><SteadyLabel keep={['Stop']}>Stop</SteadyLabel>
                     </button>
                   ) : audioTextOf(it, sec.exercise_type) && (
                     /* **区間は `wholeSliceOf()` が決める**(下の `whole`)。

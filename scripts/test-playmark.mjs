@@ -15657,6 +15657,59 @@ console.log('\n▶ 送ったら、その向きへ飛ばす(第5.417節・2026-10
   }
 }
 
+console.log('\n▶ 聴くボタンは、押しても横に伸びない(第5.418節・2026-10-08)')
+{
+  /* ★ **利用者の指定**(2026-10-08)。
+
+       > 段落を飛ばす時に、「聴く」ボタンが準備中になって横に伸びるせいで
+       > 段落の縦の長さが伸びてしまいます。横に伸びないようにしてください。
+       > すべての教材、すべてのページでこの仕様に揃えてください
+
+     「用意しています…」は 30px の「聴く」を 141px にする(実測・第5.311節)。
+     **どう取っておいてもボタンが4倍以上に太る**ので、文言ごと外した。
+     操作盤では 2026-09 に同じ理由で外してある —— **画面ぜんぶを、そこに揃える。** */
+  const 落とす = (f) => readFileSync(f, 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
+
+  for (const [名, f] of [
+    ['聴く', 'src/components/SpeakButton.jsx'],
+    ['本文(レッスン)', 'src/components/LessonView.jsx'],
+    ['本文(集中モード)', 'src/components/PassagePractice.jsx'],
+  ]) {
+    const w = 落とす(f)
+    /* **押しても文言が変わらない** —— 変われば、そのぶん幅が動く */
+    ok(!/preparingLabel\(/.test(w), `${名} … 待ちの文言を、ボタンに出していない`)
+    /* **幅は、起こりうる言葉のいちばん広いぶんで取っておく**(数を書かない) */
+    ok(/<SteadyLabel/.test(w), `${名} … 札の幅を取っておく仕組みを使っている`)
+    /* **「押したのに何も起きない」への答えは残す** —— 絵が明滅する */
+    ok(/is-waiting/.test(w), `${名} … 待ちは、絵の明滅で知らせる`)
+  }
+
+  /* ★ **言葉そのものは、消していない。** 操作盤では読み上げと吹き出しに
+       使っている(幅には効かない) —— **消すと、何が起きているか分からない** */
+  const pb = 落とす('src/components/PlayerBar.jsx')
+  ok(/aria-label=\{playSay\}/.test(pb) && /preparingLabel\(/.test(pb),
+    '操作盤 … 待ちの言葉は、読み上げと吹き出しには残っている')
+
+  /* ★ **明滅は、場所も大きさも変えない**(共通ルール)。
+       `opacity` だけを動かしているか、決まりそのものを読む */
+  const css3 = readFileSync('src/styles.css', 'utf8')
+  const 枠 = css3.slice(css3.indexOf('@keyframes wait-blink'),
+    css3.indexOf('}', css3.indexOf('@keyframes wait-blink') + 30) + 1)
+  ok(枠.length > 0, '明滅の決まりが CSS にある')
+  ok(/opacity:/.test(枠), '明滅は、濃さだけを変えている')
+  ok(!/(width|height|transform|margin|padding|font-size)\s*:/.test(枠),
+    '明滅で、場所も大きさも変えていない')
+  const 使い = css3.slice(css3.indexOf('.btn.is-waiting .icon'),
+    css3.indexOf('}', css3.indexOf('.btn.is-waiting .icon')))
+  ok(/animation:\s*wait-blink/.test(使い), '待っているあいだだけ明滅する')
+  /* **長さは `motion.js` の段から組む**(生のミリ秒を書かない・第5.371節) */
+  ok(/var\(--motion-/.test(使い) && !/\d+ms/.test(使い),
+    '明滅の長さを、生のミリ秒で書いていない', 使い.replace(/\s+/g, ' ').slice(0, 70))
+}
+
 console.log('\n▶ 紙の余白を押せるのは、44px 取れたときだけ(第5.417節)')
 {
   /* ★ **幅を実測して決める。決め打ちにしない**(第5.417節)。
