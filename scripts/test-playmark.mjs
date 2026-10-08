@@ -15486,16 +15486,47 @@ console.log('\n▶ キーの印は、キーの使える端末だけに出す(第
   }
 }
 
-console.log('\n▶ スワイプの向きと、見分ける境目(第5.417節)')
+console.log('\n▶ スワイプは「送る」だけ。判定しない(第5.417節・2026-10-08)')
 {
-  /* **境目の数を書き写さない。** `SWIPE_MIN` などから組む ——
-     値を変えた日に期待値も一緒に動く形にすると、仕組みを壊しても素通りする */
-  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 }) === 'ok',
-    '右へはらうと「覚えた(言える)」')
-  ok(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 }) === 'yet',
-    '左へはらうと「まだ」')
-  /* ★ **出ない側を3つとも測る。** 1つでも抜けると、
-       **ただのタップや、画面を上下に送る動きまで判定になる** */
+  /* ★ **仕様変更**(2026-10-08 利用者の指定)。
+
+       > 左スワイプは「ひとつ前に戻る」右スワイプは「ひとつ先に進む」に
+       > しましょう。…「まだ」「言えた」ボタンはそのまま残します。
+
+     はじめ**右へはらう = 覚えた**にしていたので、
+     **← → と余白は「送る」なのに、スワイプだけ「判定」**だった。
+     **横の動きは、どれも「送る」に揃える。** */
+  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 }) === 'next',
+    '右へはらうと、ひとつ先へ進む', String(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 })))
+  ok(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 }) === 'prev',
+    '左へはらうと、ひとつ前へ戻る', String(swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 })))
+
+  /* ★★ **はらっただけで、記録が変わってはいけない。**
+         ここが `ok` / `yet` を返すと、**指が触れただけで復習の記録が動く** ——
+         いちばん壊してはいけないところである。
+         **当てはまる形を総当たりして、1つも判定が出ないこと**を見る */
+  const 判定 = []
+  for (const dx of [-400, -SWIPE_MIN * 2, -SWIPE_MIN, SWIPE_MIN, SWIPE_MIN * 2, 400]) {
+    for (const dy of [0, 5, -5, SWIPE_MIN / 2]) {
+      for (const ms of [50, 300, SWIPE_MS]) {
+        const m = swipeMove({ dx, dy, ms })
+        if (m && m !== 'prev' && m !== 'next') 判定.push(`${dx}/${dy}/${ms} → ${m}`)
+      }
+    }
+  }
+  ok(判定.length === 0, 'どうはらっても、判定は1つも出ない',
+    判定.slice(0, 3).join(' / ') || 'なし')
+  /* **送りそのものは、ちゃんと出ている**(何も返さない形に書き換えても
+     上の1本は緑になるので、出る側も数える) */
+  const 送り = new Set()
+  for (const dx of [-400, -SWIPE_MIN, SWIPE_MIN, 400]) {
+    const m = swipeMove({ dx, dy: 0, ms: 100 })
+    if (m) 送り.add(m)
+  }
+  ok(送り.size === 2 && 送り.has('prev') && 送り.has('next'),
+    '左右で、前へと次への2通りが出る', [...送り].join(' / '))
+
+  /* **境目の数を書き写さない。** `SWIPE_MIN` などから組む */
   ok(swipeMove({ dx: SWIPE_MIN - 1, dy: 0, ms: 100 }) === null,
     '短すぎる動きは、スワイプではない', `${SWIPE_MIN - 1}px`)
   ok(swipeMove({ dx: 0, dy: 0, ms: 100 }) === null,
@@ -15505,23 +15536,27 @@ console.log('\n▶ スワイプの向きと、見分ける境目(第5.417節)')
   ok(swipeMove({ dx: SWIPE_MIN * 4, dy: 1, ms: SWIPE_MS + 1 }) === null,
     'ゆっくりすぎる動きは、スワイプではない', `${SWIPE_MS + 1}ms`)
   ok(swipeMove() === null, '何も渡されなければ、何もしない')
-  /* **縦に少し動いていても、横に大きく動いていれば効く**(指は斜めに動く) */
-  ok(swipeMove({ dx: SWIPE_MIN * 2, dy: SWIPE_MIN, ms: 200 }) === 'ok',
+  ok(swipeMove({ dx: SWIPE_MIN * 2, dy: SWIPE_MIN, ms: 200 }) === 'next',
     '斜めでも、横が大きければ効く')
 
-  /* ★ **流れる向きと、判定の向きがそろっているか**(第5.417節)。
-       ここが裏返ると、**右へはらったのに左へ飛ぶ** ——
-       どちらも1か所にあるので、**この2つを突き合わせて測る** */
+  /* ★ **流れる向きと、はらった向きがそろっているか。**
+       ここが裏返ると、**引っぱった手と画面が反対に動く** */
   const 右 = swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 100 })
   const 左 = swipeMove({ dx: -SWIPE_MIN, dy: 0, ms: 100 })
   ok(!flyX(右).startsWith('-'), 'はらった向き(右)へ流れる', `${右} → ${flyX(右)}`)
   ok(flyX(左).startsWith('-'), 'はらった向き(左)へ流れる', `${左} → ${flyX(左)}`)
   ok(flyX(右) !== flyX(左), '右と左で、流れる向きが違う')
   /* **画面の外まで流す**(途中で止まると、消えずに残って見える) */
-  ok(/^-?1\d\d%$/.test(flyX('ok')) && /^-?1\d\d%$/.test(flyX('yet')),
-    'カードの幅より大きく流す(画面の外へ出る)', `${flyX('ok')} / ${flyX('yet')}`)
+  ok(/^-?1\d\d%$/.test(flyX('next')) && /^-?1\d\d%$/.test(flyX('prev')),
+    'カードの幅より大きく流す(画面の外へ出る)', `${flyX('next')} / ${flyX('prev')}`)
   ok(FLY_MS > 0 && FLY_MS < 1000,
     '流れるのは、待たされない短さである', `${FLY_MS}ms`)
+
+  /* ★ **キーは、いままでどおり4つとも効く**(判定は ↑↓ が持つ) */
+  ok(keyMove({ key: 'ArrowUp' }) === 'ok' && keyMove({ key: 'ArrowDown' }) === 'yet',
+    '判定は ↑ ↓ が持っている(ボタンと同じ)')
+  ok(keyMove({ key: 'ArrowLeft' }) === 'prev' && keyMove({ key: 'ArrowRight' }) === 'next',
+    '← → は、スワイプとまったく同じ送りである')
 }
 
 console.log('\n▶ 紙の余白を押せるのは、44px 取れたときだけ(第5.417節)')

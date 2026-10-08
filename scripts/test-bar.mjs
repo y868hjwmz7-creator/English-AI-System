@@ -14351,34 +14351,87 @@ for (const [q2, 期待, 何] of [
     await page.close()
   }
 
-  console.log('\n▶ スワイプは、指の端末だけ(第5.417節)')
+  console.log('\n▶ スワイプは「送る」だけ。記録は動かさない(第5.417節・2026-10-08)')
   {
-    for (const [名, opts, 効くか] of [
-      ['指の端末', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, true],
-      ['マウスの端末', { viewport: { width: 1200, height: 900 } }, false],
-    ]) {
-      const page = await 単語帳を開く(opts)
-      const 頭 = await いまの語(page)
+    /* ★ **仕様変更**(2026-10-08 利用者の指定)。
+
+         > 左スワイプは「ひとつ前に戻る」右スワイプは「ひとつ先に進む」
+         > …「まだ」「言えた」ボタンはそのまま残します。
+
+       **はらっただけで記録が変わってはいけない。**
+       ソースを読むだけでは足りない —— **本当に押して、記録を数える。**
+       数えるのは**進み具合の帯の、済んだ段の数**である
+       (判定するとここが1つ進む)。 */
+    const 済み = (page) => page.evaluate(() => (
+      document.querySelectorAll('.drill-bar > span.is-done').length))
+    const はらう = async (page, 向き) => {
       const 箱 = await page.evaluate(() => {
         const el = document.querySelector('.wordcard-answers') ?? document.querySelector('.wordcard')
         const { x, y, width, height } = el.getBoundingClientRect()
         return { x: x + width / 2, y: y + height / 2 }
       })
-      /* **右へはらう**(`SWIPE_MIN` より大きく。**数は1か所から取る**) */
-      await page.mouse.move(箱.x - SWIPE_MIN, 箱.y)
+      /* **`SWIPE_MIN` より大きく動かす。数は1か所から取る** */
+      await page.mouse.move(箱.x - SWIPE_MIN * 向き, 箱.y)
       await page.mouse.down()
-      await page.mouse.move(箱.x + SWIPE_MIN, 箱.y, { steps: 6 })
+      await page.mouse.move(箱.x + SWIPE_MIN * 向き, 箱.y, { steps: 6 })
       await page.mouse.up()
       /* **流れる時間ぶん待つ**(流してから送るので、すぐには変わらない) */
       await page.waitForTimeout(700)
-      const 後 = await いまの語(page)
-      if (効くか) {
-        if (後 !== 頭) ok(`${名} … 右へはらうと、判定されて次へ進む`, `${頭} → ${後}`)
-        else ng(`${名} … 右へはらっても、何も起きない`, `${頭} / ${後}`)
-      } else if (後 === 頭) {
-        ok(`${名} … 引きずっても、判定されない(なぞる操作とぶつけない)`, 頭)
+    }
+
+    /* ── 指の端末 … 右へはらうと次、左へはらうと前 ───────── */
+    {
+      const page = await 単語帳を開く({
+        viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+      })
+      const 頭 = await いまの語(page)
+      const 記録 = await 済み(page)
+      await はらう(page, 1)
+      const 次 = await いまの語(page)
+      const 記録2 = await 済み(page)
+      if (次 !== 頭) ok('指の端末 … 右へはらうと、ひとつ先へ進む', `${頭} → ${次}`)
+      else ng('指の端末 … 右へはらっても、何も起きない', `${頭} / ${次}`)
+      /* ★★ **いちばん守りたいところ。** はらって記録が動いたら赤 */
+      if (記録2 === 記録) {
+        ok('指の端末 … はらっても、記録は1つも動かない', `済み ${記録} のまま`)
       } else {
-        ng(`${名} … マウスで引きずったら、判定されてしまった`, `${頭} → ${後}`)
+        ng('指の端末 … はらっただけで、記録が動いた',
+          `済み ${記録} → ${記録2} —— スワイプは判定しない決まりである`)
+      }
+      await はらう(page, -1)
+      const 戻り = await いまの語(page)
+      if (戻り === 頭) ok('指の端末 … 左へはらうと、ひとつ前へ戻る', 戻り)
+      else ng('指の端末 … 左へはらっても、前に戻らない', `${頭} → ${次} → ${戻り}`)
+      const 記録3 = await 済み(page)
+      if (記録3 === 記録) ok('指の端末 … 戻っても、記録は動かない', `済み ${記録3}`)
+      else ng('指の端末 … 戻ったときに記録が動いた', `済み ${記録} → ${記録3}`)
+
+      /* ★ **出る側。** ボタンを押したときは、ちゃんと記録が動く ——
+           これが無いと「どこを押しても記録されない」形でも緑になる */
+      await page.evaluate(() => {
+        const b2 = [...document.querySelectorAll('.wordcard-answers button')]
+        if (b2[0]) b2[0].click()
+      })
+      await page.waitForTimeout(600)
+      const 記録4 = await 済み(page)
+      if (記録4 > 記録3) ok('指の端末 … ボタンを押したときは、記録が動く', `済み ${記録3} → ${記録4}`)
+      else ng('指の端末 … ボタンを押しても記録が動かない', `済み ${記録3} → ${記録4}`)
+      await page.close()
+    }
+
+    /* ── マウスの端末 … 引きずっても何も起きない ───────── */
+    {
+      const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
+      const 頭 = await いまの語(page)
+      const 記録 = await 済み(page)
+      await はらう(page, 1)
+      const 後 = await いまの語(page)
+      const 記録2 = await 済み(page)
+      if (後 === 頭 && 記録2 === 記録) {
+        ok('マウスの端末 … 引きずっても、送りも記録も動かない(なぞる操作とぶつけない)', 頭)
+      } else {
+        ng('マウスで引きずったら、カードか記録が動いた',
+          `${頭} → ${後} / 済み ${記録} → ${記録2}`)
       }
       await page.close()
     }
