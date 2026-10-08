@@ -14435,18 +14435,46 @@ for (const [q2, 期待, 何] of [
     }
   }
 
-  console.log('\n▶ 覚え具合の点と、題の先頭(第5.417節・案A-3)')
+  console.log('\n▶ 覚え具合の札と、題の先頭(第5.417節・案A-3)')
   {
     const page = await 単語帳を開く({ viewport: { width: 390, height: 844 } })
     const m = await page.evaluate(() => {
-      const dots = [...document.querySelectorAll('.learn-dot')]
-      const 紙 = document.querySelector('.wordcard')?.getBoundingClientRect()
-      const 点箱 = document.querySelector('.learn-dots')?.getBoundingClientRect()
+      const 枠 = (el) => {
+        if (!el) return null
+        const b = el.getBoundingClientRect()
+        return { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height, w: b.width }
+      }
+      /* ★ **帯と同じ見た目のものを、カードの中に置いていないか**
+           (2026-10-08 実機・利用者の指摘)。
+
+           覚え具合を**進み具合の帯と同じ形・同じ金色の横棒**で描いたので、
+           **1本の壊れた帯**に見えた。名前で探すと、次に別の名前で
+           同じものを描いた日に素通りする —— **描かれた形で数える。**
+           「低くて横に長い丸み」= 帯の段そのものの形である */
+      const 帯の段 = [...document.querySelectorAll('.drill-bar > span')]
+      const 高さ = 帯の段.length
+        ? Math.max(...帯の段.map((x) => x.getBoundingClientRect().height)) : 0
+      const そっくり = [...document.querySelectorAll('.wordcard *')].filter((el) => {
+        if (el.closest('.drill-bar')) return false
+        const b = el.getBoundingClientRect()
+        if (b.height <= 0 || b.width <= 0) return false
+        const c = window.getComputedStyle(el)
+        if (c.backgroundColor === 'rgba(0, 0, 0, 0)') return false
+        /* 帯の段と同じくらい低くて、横に長くて、丸い */
+        return b.height <= 高さ + 2 && b.width >= b.height * 3
+          && parseFloat(c.borderTopLeftRadius) >= b.height / 2 - 0.5
+      }).map((el) => el.className || el.tagName)
+
+      const 札 = document.querySelector('.wc-tag--stage')
       return {
-        数: dots.length,
-        点いている: dots.filter((d) => d.classList.contains('is-on')).length,
-        ラベル: document.querySelector('.learn-dots')?.getAttribute('aria-label') ?? '',
-        紙の中: !!(紙 && 点箱 && 点箱.top >= 紙.top - 0.5 && 点箱.bottom <= 紙.bottom + 0.5),
+        札: 札 ? { ...枠(札), 字: 札.textContent.trim() } : null,
+        帯: 枠(document.querySelector('.drill-bar')),
+        段の高さ: 高さ,
+        そっくり,
+        点が残っている: document.querySelectorAll('.learn-dot').length,
+        紙: 枠(document.querySelector('.wordcard')),
+        行: [...document.querySelectorAll('.wordcard-tags .wc-tag')]
+          .map((x) => x.textContent.trim()),
         題: document.querySelector('.drill-title')?.textContent?.trim() ?? '',
         題の行: (() => {
           const el = document.querySelector('.drill-title')
@@ -14455,23 +14483,63 @@ for (const [q2, 期待, 何] of [
           const ひと行 = parseFloat(window.getComputedStyle(el).lineHeight)
           return Number.isFinite(ひと行) && ひと行 > 0 ? Math.round(h / ひと行) : 0
         })(),
-        札: [...document.querySelectorAll('.wordcard .badge, .wordcard .chip')].length,
       }
     })
-    /* **数を書き写さない。`LEARN_STAGES` の長さそのもの**(第5.406節) */
-    if (m.数 === LEARN_STAGES.length) ok('点の数は、段の数そのもの', `${m.数} 個`)
-    else ng(`点が ${m.数} 個しかない`, `${LEARN_STAGES.length} 段あるので同じ数が要る`)
-    /* **箱 2 の語は「学習中」** —— その段まで点が灯る */
-    const 学習中 = LEARN_STAGES.findIndex((s) => s.id === 'learning') + 1
-    if (m.点いている === 学習中) ok(`「${stageLabel('learning')}」の語は、${学習中} 個灯る`, `${m.点いている} 個`)
-    else ng(`灯っている点が ${m.点いている} 個`, `${学習中} 個のはず`)
-    /* **色だけに頼らない** —— 読み上げに言葉で届く */
-    if (m.ラベル.includes(stageLabel('learning'))) ok('読み上げに、段の名前が言葉で届く', m.ラベル)
-    else ng('読み上げに、段の名前が届いていない', m.ラベル)
-    if (m.紙の中) ok('点は、カードの中にある(札を別に足していない)')
-    else ng('点がカードの外にいる')
-    /* ★ **A-3 は「1行にまとめる」**(2026-10-07 利用者の指定)。
-         札も帯も足さず、**題の先頭に範囲を出すだけ**である */
+
+    /* ★ **丸く囲った文字で出す**(2026-10-08 利用者の指定)。
+         **言葉は `learnStage.js` から読み取って突き合わせる**(書き写さない) */
+    const 名 = stageLabel('learning')
+    if (!m.札) {
+      ng('覚え具合の札が出ていない', '`.wc-tag--stage` が描かれていない')
+    } else if (m.札.字 !== 名) {
+      ng(`覚え具合の札の字がちがう(${m.札.字})`, `箱2の語は「${名}」のはず`)
+    } else {
+      ok(`覚え具合は、丸く囲った文字で出る(${m.札.字})`)
+    }
+    /* **丸いか**(「丸く囲った文字」という指定そのもの) */
+    if (m.札) {
+      const 丸 = await page.evaluate(() => {
+        const el = document.querySelector('.wc-tag--stage')
+        const c = window.getComputedStyle(el)
+        return parseFloat(c.borderTopLeftRadius) >= el.getBoundingClientRect().height / 2 - 0.5
+      })
+      if (丸) ok('覚え具合の札は、丸く囲ってある')
+      else ng('覚え具合の札が、丸く囲われていない')
+    }
+    /* ★ **進み具合の帯と重なっていないか**(実機で重なっていた) */
+    if (m.札 && m.帯) {
+      const 重なり = !(m.札.b <= m.帯.t + 0.5 || m.札.t >= m.帯.b - 0.5
+        || m.札.r <= m.帯.l + 0.5 || m.札.l >= m.帯.r - 0.5)
+      if (重なり) {
+        ng('覚え具合の札が、進み具合の帯と重なっている',
+          `札 ${Math.round(m.札.t)}→${Math.round(m.札.b)} / 帯 ${Math.round(m.帯.t)}→${Math.round(m.帯.b)}`)
+      } else {
+        ok('覚え具合の札は、進み具合の帯と重なっていない',
+          `すき間 ${Math.round(m.札.t - m.帯.b)}px`)
+      }
+    }
+    /* ★ **帯とそっくりなものを、カードの中に置いていないか**(形で数える) */
+    if (m.段の高さ <= 0) {
+      ng('進み具合の帯が描かれていない', '形で見比べる相手がいない(見張りが素通りする)')
+    } else if (m.そっくり.length) {
+      ng(`進み具合の帯とそっくりなものが ${m.そっくり.length} 個ある`,
+        `${m.そっくり.slice(0, 4).join(' / ')} —— 同じ見た目のものを2つ置かない`)
+    } else {
+      ok('進み具合の帯とそっくりなものを、カードの中に置いていない')
+    }
+    if (m.点が残っている) {
+      ng(`やめたはずの点が ${m.点が残っている} 個残っている`, '`.learn-dot` は廃止した')
+    } else ok('やめた点(`.learn-dot`)は、1つも残っていない')
+    /* **もとからある札の行に入っているか**(新しい行を増やしていない) */
+    if (m.行.includes(名)) ok('覚え具合は、もとからある札の行に並んでいる', m.行.join(' / '))
+    else ng('覚え具合が、札の行の外にいる', m.行.join(' / ') || '(札が無い)')
+    /* **段は4つとも言葉を持っている**(数も言葉も書き写さない) */
+    const 言葉 = LEARN_STAGES.map((x) => stageLabel(x.id)).filter(Boolean)
+    if (言葉.length === LEARN_STAGES.length) {
+      ok(`段は ${LEARN_STAGES.length} つとも、字で言える`, 言葉.join(' / '))
+    } else ng('段の名前が足りない', 言葉.join(' / '))
+
+    /* ★ **A-3 は「1行にまとめる」**(2026-10-07 利用者の指定) */
     const 範囲 = pickName('due')
     if (m.題.startsWith(範囲)) ok('題の先頭に、いま出している範囲が出る', m.題)
     else ng('題の先頭に範囲が出ていない', `${m.題}(「${範囲}」で始まるはず)`)
@@ -14554,6 +14622,120 @@ for (const [q2, 期待, 何] of [
     if (印.length === 2) ok('Quick Response … 答えの2つにキーの印が付く', 印.join(' / '))
     else ng('Quick Response … キーの印が付いていない', m.ボタン.join(' / ') || '(ボタンが無い)')
     await page.close()
+  }
+
+  console.log('\n▶ 文の長さが変わっても、箱の大きさは変わらない(第5.417節)')
+  {
+    /* ★ **2026-10-08 実機・利用者の指摘。**
+
+         > quick responseはなぜあんなに上によせたのですか？
+         > 狭過ぎてスワイプできません。
+         > 文の長さに関わらずかならず同じスペース、箱の大きさをキープして
+
+       `CardMove` を挟んだ日に、`.qrfocus` の「残りいっぱいを取る」決まりを
+       **入れ物へ渡し忘れた。** カードが中身なりの高さになり、問題も答えも
+       **画面のてっぺんに寄り**、下はまるごと空白 ——
+       **はらう場所も無くなっていた。**
+
+       **測り方。** 同じ画面で**文の長さだけを変えて**、箱の大きさと場所が
+       1px も動かないことを見る。**短い文だけで測ると、伸びていても緑のまま**
+       である(CLAUDE.md「いちばん危ない形を、検証の中に必ず1つ置く」)。 */
+    const 測る = async (pg) => pg.evaluate(() => {
+      const 枠 = (q) => {
+        const el = document.querySelector(q)
+        if (!el) return null
+        const b = el.getBoundingClientRect()
+        return {
+          t: Math.round(b.top), b: Math.round(b.bottom),
+          h: Math.round(b.height), w: Math.round(b.width),
+        }
+      }
+      const 本文 = document.querySelector('.qr-body')
+      const 答え = document.querySelector('.qr-answers button')
+      return {
+        入れ物: 枠('.cardmove'), カード: 枠('.qr-card'), 箱: 枠('.qr'),
+        答えの上: 答え ? Math.round(答え.getBoundingClientRect().top) : null,
+        字数: (本文?.textContent ?? '').trim().length,
+        はみ出し: 本文 ? 本文.scrollHeight - 本文.clientHeight : null,
+        送る: document.scrollingElement.scrollHeight > window.innerHeight + 1,
+      }
+    })
+    const 見た = []
+    for (const [名, 倍] of [['短い文', 1], ['長い文', 6]]) {
+      const pg = await browser.newPage({ viewport: { width: 390, height: 844 } })
+      await pg.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
+        { waitUntil: 'domcontentloaded' })
+      try {
+        await pg.waitForSelector('.qr-card', { timeout: 10000 })
+      } catch {
+        ng(`箱の大きさ ${名} … Quick Response が開かない`)
+        await pg.close()
+        continue
+      }
+      await pg.waitForTimeout(600)
+      /* **文の長さだけを変える。** ほかは1ミリも動かさない */
+      await pg.evaluate((n) => {
+        const el = document.querySelector('.qr-body')
+        if (el && n > 1) el.textContent = (el.textContent || '…').trim().repeat(n)
+      }, 倍)
+      await pg.waitForTimeout(200)
+      見た.push([名, await 測る(pg)])
+      await pg.close()
+    }
+    if (見た.length !== 2) {
+      ng('箱の大きさ … 2通り測れなかった', `${見た.length} 通り`)
+    } else {
+      const 短 = 見た[0][1]
+      const 長 = 見た[1][1]
+      /* **長い文が、本当に長くなっているか**(でなければ何も測っていない) */
+      if (長.字数 <= 短.字数) {
+        ng('箱の大きさ … 文の長さが変わっていない',
+          `${短.字数} → ${長.字数} 字。これでは伸びていても緑のまま`)
+      } else {
+        ok('箱の大きさ … 文の長さを変えて測った', `${短.字数} → ${長.字数} 字`)
+        const 差 = ['t', 'b', 'h', 'w'].filter((k) => Math.abs(短.カード[k] - 長.カード[k]) > 1)
+        if (差.length) {
+          ng('箱の大きさ … 文の長さで、箱の大きさや場所が変わる',
+            `${差.join(' / ')} が動いた(${JSON.stringify(短.カード)} → ${JSON.stringify(長.カード)})`)
+        } else {
+          ok('箱の大きさ … 文が長くなっても、箱の大きさと場所は同じ',
+            `${短.カード.t}→${短.カード.b}(${短.カード.h}px)`)
+        }
+        if (短.答えの上 !== null && 短.答えの上 === 長.答えの上) {
+          ok('箱の大きさ … 答えのボタンの場所も動かない', `${短.答えの上}px`)
+        } else {
+          ng('箱の大きさ … 答えのボタンが、文の長さで動く', `${短.答えの上} → ${長.答えの上}`)
+        }
+      }
+      /* ★ **上に寄っていないか。** カードは練習の箱をいっぱいに使う ——
+           使わないと下が空白になり、**はらう場所が無くなる** */
+      for (const [名, m] of 見た) {
+        if (!m.カード || !m.箱) {
+          ng(`箱の大きさ ${名} … カードか箱が描かれていない`)
+          continue
+        }
+        const 余り = m.箱.h - m.カード.h
+        if (m.カード.h <= m.箱.h / 2) {
+          ng(`箱の大きさ ${名} … カードが箱の半分も使っていない(上に寄っている)`,
+            `カード ${m.カード.h} / 箱 ${m.箱.h}px`)
+        } else if (余り > m.箱.h / 4) {
+          ng(`箱の大きさ ${名} … カードの下に空白が多すぎる`,
+            `余り ${余り} / 箱 ${m.箱.h}px —— はらう場所が無くなる`)
+        } else {
+          ok(`箱の大きさ ${名} … カードが練習の箱をいっぱいに使っている`,
+            `カード ${m.カード.h} / 箱 ${m.箱.h}px`)
+        }
+        /* **挟んだ入れ物が、縦を止めていないか** */
+        if (m.入れ物 && Math.abs(m.入れ物.h - m.カード.h) > 1) {
+          ng(`箱の大きさ ${名} … 挟んだ入れ物とカードの高さが違う`,
+            `入れ物 ${m.入れ物.h} / カード ${m.カード.h}px`)
+        } else {
+          ok(`箱の大きさ ${名} … 挟んだ入れ物は、縦の決まりをそのまま通している`)
+        }
+        if (m.はみ出し > 1) ng(`箱の大きさ ${名} … 本文が枠からはみ出している`, `${m.はみ出し}px`)
+        if (m.送る) ng(`箱の大きさ ${名} … 画面を送ることになっている`)
+      }
+    }
   }
 }
 

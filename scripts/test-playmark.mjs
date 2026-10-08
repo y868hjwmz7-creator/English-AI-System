@@ -149,7 +149,7 @@ import { MET_RANGES, inMet, metLabel } from '../src/lib/metRange.js'
 import { FILTER_KEYS } from '../src/lib/wordbookFilter.js'
 /* ★ 覚え具合の4段階(第5.406節)。**素の node で測れる形**に出してある */
 import {
-  DONE_BOX, LEARN_STAGES, stageLead, stageOf, stagePool, stageTally,
+  DONE_BOX, LEARN_STAGES, stageLabel, stageLead, stageOf, stagePool, stageTally,
 } from '../src/lib/learnStage.js'
 import {
   lastLearner, openLearner, rememberLearner, watchLearner,
@@ -15684,33 +15684,46 @@ console.log('\n▶ いま出している範囲を、題の先頭に出す(第5.4
   }
 }
 
-console.log('\n▶ 覚え具合の点は、段の数そのもの(第5.417節・案A-3)')
+console.log('\n▶ 覚え具合は、丸く囲った文字で出す(第5.417節・2026-10-08)')
 {
-  const 素 = readFileSync('src/components/LearnDots.jsx', 'utf8')
+  /* ★ **点をやめた**(2026-10-08 利用者の指摘)。
+
+       > 単語帳の覚度合いのメーターが、出している数のメーターに
+       > 被っちゃってますよね…。覚え度合いはやはり丸く囲った文字で
+
+     4つの小さな横棒は、すぐ上の**進み具合の帯**と同じ形・同じ金色で、
+     **1本の壊れた帯**に見えた。**同じ見た目のものを2つ置かない。**
+     見た目そのものは `npm run test:bar` が描いて測る。
+     ここでは**どこから値を取っているか**を見る。 */
+  const 素 = readFileSync('src/components/LearnTag.jsx', 'utf8')
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
     .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
     .replace(/(^|[^:])\/\/[^\n]*/g, (m, a) => a + ' '.repeat(m.length - a.length))
 
-  /* ★ **数を書き写していない**(第5.406節で CSS に `repeat(3, …)` と
-       決め打ちして、**4枚めが2段めに落ちた**)。
-       点の数は `LEARN_STAGES` の長さそのものである */
-  ok(/LEARN_STAGES\.map\(/.test(素), '点の数は `LEARN_STAGES` の長さそのもの')
-  const 回 = (素.match(new RegExp(`(^|[^\\w.])${LEARN_STAGES.length}([^\\w]|$)`, 'g')) ?? []).length
-  ok(回 === 0, `段の数(${LEARN_STAGES.length})を書き写していない`, `${回} か所`)
-  /* ★ **段の決め方は `learnStage.js` 1か所。**
+  /* ★ **段の決め方も、言葉も `learnStage.js` 1か所。**
        ここで `box` や `status` を読むと、見る場所の数だけ食い違う */
   ok(/stageOf\(/.test(素), '段は `stageOf()` が決めている')
+  ok(/stageLabel\(/.test(素), '言葉も `learnStage.js` から取っている')
   ok(!/\.box\b/.test(素) && !/\.status\b/.test(素),
     '箱も状態も、ここでは読んでいない')
-  /* ★ **色だけに頼らない**(CLAUDE.md)。点は濃さでしか違わないので、
-       読み上げを使う人には言葉で届ける */
-  ok(/aria-label=/.test(素), '読み上げに、言葉で届けている')
-  ok(/stageLabel\(/.test(素), '言葉も `learnStage.js` から取っている')
+  /* **段の名前を書き写していない** —— 書き写すと、言い方を変えた日に
+     ここだけ古くなる(CLAUDE.md「呼び名を2か所に書かない」) */
+  const 書き写し = LEARN_STAGES.filter((s) => 素.includes(`'${s.label}'`)
+    || 素.includes(`"${s.label}"`) || 素.includes(`>${s.label}<`))
+  ok(書き写し.length === 0, '段の名前を書き写していない',
+    書き写し.map((s) => s.label).join(' ') || 'なし')
   /* **段が決まらない行には、何も出さない**(当てずっぽうで「未学習」を
      描くと、まだ読めていないだけの語が苦手に見える) */
-  ok(/if \(at < 0\) return null/.test(素), '段が決まらなければ、何も描かない')
+  ok(/return null/.test(素), '段が決まらなければ、何も描かない')
+  /* ★ **点は、道具ごと消えているか。** 名前が残っていると、
+       「まだ使える」と思って次に描いてしまう(効かないものを残さない) */
+  ok(!existsSync(new URL('../src/components/LearnDots.jsx', import.meta.url)),
+    'やめた点の部品は、残っていない')
+  const css = readFileSync('src/styles.css', 'utf8')
+  ok(!/\.learn-dot\b/.test(css), 'やめた点の見た目も、残っていない')
+  ok(/\.wc-tag--stage/.test(css), '覚え具合の札の見た目がある')
 
-  /* ── 4段ぜんぶが、ちがう濃さの点になるか ───────────── */
+  /* ── 4段とも、ちがう名前の段になるか ───────────────── */
   const 行 = (o) => ({
     added_at: '2026-01-01T00:00:00+00:00',
     updated_at: '2026-01-01T00:00:00+00:00', box: 0, ...o,
@@ -15725,10 +15738,12 @@ console.log('\n▶ 覚え具合の点は、段の数そのもの(第5.417節・�
     ok(stageOf(見本[s.id]) === s.id, `「${s.label}」の行が、その段になる`,
       stageOf(見本[s.id]))
   }
-  /* **点の数 =(その段までの数)。** 4段なら 1 / 2 / 3 / 4 になる */
-  const 点 = LEARN_STAGES.map((s) => LEARN_STAGES.findIndex((x) => x.id === s.id) + 1)
-  ok(点.join(',') === LEARN_STAGES.map((_, i) => i + 1).join(','),
-    '段が進むほど、点が増える', 点.join(' '))
+  /* **4段とも、字で言える**(どれか1つでも空なら、札が出ない) */
+  const 言葉 = LEARN_STAGES.map((s) => stageLabel(s.id)).filter(Boolean)
+  ok(言葉.length === LEARN_STAGES.length,
+    `${LEARN_STAGES.length} 段とも、字で言える`, 言葉.join(' / '))
+  /* **名前が重なっていない**(重なると、どの段か見分けられない) */
+  ok(new Set(言葉).size === 言葉.length, '段の名前は、どれも違う')
 }
 
 console.log(ng

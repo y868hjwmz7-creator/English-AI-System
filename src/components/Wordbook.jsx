@@ -50,7 +50,7 @@ import {
 import BookPick from './BookPick.jsx'
 import DrillHead from './DrillHead.jsx'
 /* ★ **覚え具合の4つの点**(第5.417節・段階4の案A-3) */
-import LearnDots from './LearnDots.jsx'
+import LearnTag from './LearnTag.jsx'
 /* ★ **送る / 判定する操作**(第5.417節・段階4)。当てはめる決まりは
      `cardMove.js` 1か所で、`CardMove` は描いて測るだけ */
 import CardMove from './CardMove.jsx'
@@ -2436,13 +2436,7 @@ export default function Wordbook({
                 Quick Response と**同じ部品・同じ置き場所**である */}
             {drillHead}
 
-            {/* ★ **覚え具合の4つの点**(第5.417節・2026-10-07 利用者の指定・
-                段階4の案A-3)。**いま開いている語が、どの段なのか**を
-                押す前に受け取れる。
-                **段を決めるのは `learnStage.js` 1か所**で、
-                この画面は行を渡すだけである */}
-            <LearnDots row={card} />
-
+            
             {/* **出題は、高さの決まった枠に入れる**(2026-09 利用者の指定)。
                   > 単語や解答の長さに関わらず、しっかり中央に居座るように
                   > してください。(特にスマホで)
@@ -2476,6 +2470,16 @@ export default function Wordbook({
                 **あやふやなことを言わない**(CLAUDE.md)ので、
                 見分けられるようになるまでは「言い回し」とだけ書く。 */}
             <p className="wordcard-tags">
+              {/* ★ **覚え具合は、ここに1つの札として出す**(第5.417節・
+                  2026-10-08 利用者の指定「丸く囲った文字で表現しましょう」)。
+
+                  はじめ**進み具合の帯のすぐ下に4つの横棒**で描いたが、
+                  帯とまったく同じ形・同じ金色だったので**1本の壊れた帯**に
+                  見えた。**同じ見た目のものを、同じ画面に2つ置かない。**
+
+                  ここに入れれば**新しい行が増えない**ので、帯とは
+                  構造として離れる(余白を変えた日に寄っていかない)。 */}
+              <LearnTag row={card} />
               <span className="wc-tag wc-tag--kind">
                 {card.kind === 'phrase' ? '言い回し' : '単語'}
               </span>
