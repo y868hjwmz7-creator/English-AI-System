@@ -164,14 +164,19 @@ export default function CardMove({
 
   return (
     <CardMoveCtx.Provider value={on ? go : null}>
-      <div className="cardmove" ref={holdRef}
+      {/* ★ **飛ぶのは、線と線のあいだの中身だけ**(2026-10-08 利用者の指定)。
+
+            > 横に内容が動く際、黄色の線の内側の内容だけ動くようにできませんか？
+            > 箱全体が動くのは不自然に感じます。動くのは単語やクイック
+            > レスポンスの内容のみ、上の線と下の線の間にあるものだけです。
+
+          **入れ物はここで動かさない。** 動くのは `.move-stage`
+          (出題の枠 = `.qr-body` / `.wordcard-q`)で、見た目は CSS が持つ。
+          **数は `cardMove.js` 1か所から来る** —— ここは `style` に渡すだけで、
+          CSS にも画面にも書き写さない。 */}
+      <div className={`cardmove${fly ? ' is-fly' : ''}`} ref={holdRef}
            style={fly
-             /* **数は `cardMove.js` 1か所から来る。** CSS にも書かない */
-             ? {
-               transform: `translateX(${flyX(fly)})`,
-               opacity: 0,
-               transition: `transform ${FLY_MS}ms ease-in, opacity ${FLY_MS}ms ease-in`,
-             }
+             ? { '--fly-x': flyX(fly), '--fly-ms': `${FLY_MS}ms` }
              : undefined}>
         {children}
         {/* ★ **押せる帯は、この入れ物の中**(第5.417節)。

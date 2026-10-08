@@ -11825,6 +11825,37 @@ button.wbfilter-ctl { text-align: left; }
 
 /* **動きを減らす人には、流さない**(第5.371節と同じ断り)。
    `transition` を打ち消すだけで、送り先は1ミリも変わらない */
+/* ★ **飛ぶのは、線と線のあいだの中身だけ**(第5.417節・2026-10-08 利用者の指定)。
+
+     > 横に内容が動く際、黄色の線の内側の内容だけ動くようにできませんか？
+     > 箱全体が動くのは不自然に感じます。動くのは単語やクイックレスポンスの
+     > 内容のみ、上の線と下の線の間にあるものだけです。
+
+   はじめはカードごと動かしていた。**題も、進み具合の帯も、ボタンも
+   一緒に飛んでいた** —— 動く必要の無いものまで動くと、作りが伝わらない。
+
+   動かすのは **`transform` と `opacity` だけ**(`motion.js` の決まり)。
+   **場所は1pxも変えない**ので、まわりの物は動かない。
+
+   - **長さと向きは `cardMove.js` 1か所**から来る(`--fly-ms` / `--fly-x`)。
+     画面が `style` で渡すので、ここに数を書かない
+   - **飛んでいるあいだだけ、カードの外へ出さない**(`overflow: hidden`)。
+     名前で指さず**「`.cardmove` の直の子」**で指す ——
+     単語帳(`.wordcard`)と Quick Response(`.qr-card`)で名前が違うので、
+     書くと2か所になる */
+.cardmove.is-fly > :not(.cardmove-edge) { overflow: hidden; }
+.cardmove.is-fly .move-stage {
+  transform: translateX(var(--fly-x));
+  opacity: 0;
+  transition: transform var(--fly-ms) var(--ease-in),
+              opacity var(--fly-ms) var(--ease-in);
+}
+/* **動きを減らす人には、飛ばさない**(第5.371節と同じ断り)。
+   送り先は1ミリも変わらない */
+@media (prefers-reduced-motion: reduce) {
+  .cardmove.is-fly .move-stage { transition: none !important; }
+}
+
 /* ★ **◀▶ の行**(第5.417節・2026-10-08 利用者の指定)。
 
    実機の写真に**手書きの三角**で位置を描いてもらった ——

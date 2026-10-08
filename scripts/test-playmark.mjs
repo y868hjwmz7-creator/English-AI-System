@@ -13495,8 +13495,12 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(!/'英語を見る'|'英語を隠す'|'意味を見る'|'答えを見る'/.test(card)
       && !/'英語を見る'|'英語を隠す'|'意味を見る'|'意味を隠す'/.test(wb2),
     'タップ … 「英語を見る」のボタンは、どちらの画面からも消えている')
-    /* **伏せているあいだは本物の `<button>`。** キーボードでも押せる */
-    ok(/<button type="button" className="qr-body qr-body--tap"/.test(card),
+    /* **伏せているあいだは本物の `<button>`。** キーボードでも押せる。
+       ★ **印の並びを書き写さない**(2026-10-08 に踏んだ)——
+       `move-stage` を1つ足しただけで赤くなり、**仕組みは1ミリも
+       壊れていないのに見張りだけが赤くなった**(CLAUDE.md)。
+       **性質で見る** —— `<button>` であることと、その印を持っていること */
+    ok(/<button[^>]*className="[^"]*\bqr-body\b[^"]*\bqr-body--tap\b/.test(card),
       'タップ … Quick Response は、伏せているあいだ本物のボタン')
     /* **出したあとは素の入れ物 + 押された場所を見る** */
     ok(/if \(tapToggles\(e\.target\)\) setShown\(false\)/.test(card),
@@ -15598,6 +15602,52 @@ console.log('\n▶ 送ったら、その向きへ飛ばす(第5.417節・2026-10
   const 入 = css2.slice(css2.indexOf('.cardmove {'), css2.indexOf('}', css2.indexOf('.cardmove {')))
   ok(!/transition:/.test(入),
     'カードの入れ物に、戻る動きを残していない', 入.replace(/\s+/g, ' ').slice(0, 60))
+
+  /* ★ **飛ぶのは、線と線のあいだの中身だけ**(2026-10-08 利用者の指定)。
+
+       > 動くのは単語やクイックレスポンスの内容のみ、
+       > 上の線と下の線の間にあるものだけです
+
+     見た目は `test:bar` が実際に描いて測る。ここでは
+     **動かすものが `transform` と `opacity` だけか**を見る ——
+     幅や余白を動かすと、**まわりの物が動く**(共通ルール) */
+  const 中 = css2.slice(css2.indexOf('.cardmove.is-fly .move-stage {'),
+    css2.indexOf('}', css2.indexOf('.cardmove.is-fly .move-stage {')))
+  ok(中.length > 0, '飛ぶ中身の決まりが CSS にある')
+  ok(/transform:/.test(中) && /opacity:/.test(中),
+    '飛ぶのは `transform` と `opacity`')
+  ok(!/(width|height|margin|padding|left|top|right|bottom)\s*:/.test(中),
+    '場所も大きさも動かさない(まわりの物が動かない)')
+  /* **長さも向きも、画面から渡される**(CSS に数を書かない) */
+  ok(/var\(--fly-x\)/.test(中) && /var\(--fly-ms\)/.test(中),
+    '飛ぶ向きと長さは、画面が渡したものを読んでいる')
+  ok(!new RegExp(`(^|[^\\d.])${FLY_MS}(?![\\d.])`).test(中),
+    `飛ぶ長さ(${FLY_MS})を CSS に書き写していない`)
+  /* ★ **飛んでいるあいだだけ、カードの外へ出さない。**
+       名前で指すと2か所になる(単語帳と Quick Response で名前が違う) */
+  ok(/\.cardmove\.is-fly > :not\(\.cardmove-edge\) \{[^}]*overflow: hidden/.test(css2),
+    '飛んでいるあいだは、カードの外へ出さない')
+
+  /* ★ **2つの画面が、どちらも出題の枠に印を付けている。**
+       付け忘れると、**その画面だけ何も動かない** */
+  for (const [名, f, 枠] of [
+    ['単語帳', 'src/components/Wordbook.jsx', 'wordcard-q'],
+    ['Quick Response', 'src/components/QrCard.jsx', 'qr-body'],
+  ]) {
+    const w = readFileSync(f, 'utf8')
+    /* ★ **出題の枠は、1つとは限らない。** Quick Response は
+         **伏せているとき(`<button>`)と出したあと(`<div>`)の2つ**を描く
+         (第5.262節)。片方だけに付けると、**その状態のときだけ飛ばない** ——
+         実際、赤チェックで**片方を外しても緑**だった(2026-10-08)。
+         **出てくるぜんぶに付いているか**を数える */
+    const 印 = [...w.matchAll(new RegExp(`className="([^"]*\\b${枠}\\b[^"]*)"`, 'g'))]
+      .map((m) => m[1])
+    ok(印.length > 0, `${名} … 出題の枠がある`, `${印.length} か所`)
+    const 抜け = 印.filter((c) => !/\bmove-stage\b/.test(c))
+    ok(抜け.length === 0,
+      `${名} … 出題の枠ぜんぶに、飛ぶ印が付いている`,
+      抜け.length ? 抜け.join(' / ') : `${印.length} か所とも`)
+  }
 }
 
 console.log('\n▶ 紙の余白を押せるのは、44px 取れたときだけ(第5.417節)')

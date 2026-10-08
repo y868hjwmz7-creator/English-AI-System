@@ -14390,13 +14390,36 @@ for (const [q2, 期待, 何] of [
       })
       return { 矢, 枠: 箱(枠s), 答え: 箱(答えs), 行: 箱('.move-row') }
     }, [枠, 答え])
-    /** カードが、いま横にどれだけずれているか(飛んでいる最中を測る) */
-    const ずれ = (page) => page.evaluate(() => {
-      const el = document.querySelector('.cardmove')
-      if (!el) return 0
-      const t = window.getComputedStyle(el).transform
-      return t === 'none' ? 0 : Math.round(parseFloat(t.split(',')[4] || '0'))
-    })
+    /**
+     * ★ **飛んでいる最中の様子**(2026-10-08 利用者の指定)。
+     *
+     *   > 動くのは単語やクイックレスポンスの内容のみ、
+     *   > 上の線と下の線の間にあるものだけです
+     *
+     * **動く側(出題の枠)と、動いてはいけない側(題・判定)を同時に測る** ——
+     * 片方だけだと、**カードごと飛んでいても緑**になる。
+     */
+    const 飛び様 = (page, 答え) => page.evaluate((答えs) => {
+      const ずれ = (sel) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const t = window.getComputedStyle(el).transform
+        return t === 'none' ? 0 : Math.round(parseFloat(t.split(',')[4] || '0'))
+      }
+      const 場所 = (sel) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return `${Math.round(r.left)},${Math.round(r.top)}`
+      }
+      return {
+        中身: ずれ('.move-stage'),
+        入れ物: ずれ('.cardmove'),
+        題: 場所('.drill-bar'),
+        答え: 場所(答えs),
+      }
+    }, 答え)
+    const ずれ = async (page) => (await 飛び様(page, '.wordcard-answers')).中身
     /** 指で引きずる(**もう何も起きないはず**) */
     const 引きずる = async (page, 向き) => {
       const 箱 = await page.evaluate(() => {
@@ -14471,6 +14494,8 @@ for (const [q2, 期待, 何] of [
       /* ── ▶ を押すと、飛んでから次へ ───────────────── */
       const 頭 = await いまの語(page)
       const 記録 = await 済み(page)
+      /* **押す前の場所を控える** —— 飛んでいる最中と比べる */
+      const 止まるもの = await 飛び様(page, '.wordcard-answers')
       try {
         await page.locator('.move-row .move-arrow').last().tap({ timeout: 4000 })
       } catch (e) {
@@ -14480,9 +14505,21 @@ for (const [q2, 期待, 何] of [
            **長さの半分のところ**を覗く —— CSS に決まりがあるかではなく、
            **動いている最中のずれ**を測る(CLAUDE.md `test:feel`) */
       await page.waitForTimeout(Math.round(FLY_MS / 2))
-      const 飛び = await ずれ(page)
-      if (Math.abs(飛び) > 1) ok('指の端末 … 押したカードが、横へ飛んでいく', `${飛び}px`)
-      else ng('指の端末 … カードが飛ばずに、ただ入れ替わっている', `ずれ ${飛び}px`)
+      const 飛び = await 飛び様(page, '.wordcard-answers')
+      if (Math.abs(飛び.中身) > 1) ok('指の端末 … 出題の中身が、横へ飛んでいく', `${飛び.中身}px`)
+      else ng('指の端末 … 中身が飛ばずに、ただ入れ替わっている', `ずれ ${飛び.中身}px`)
+      /* ★★ **カードごと飛んでいないか**(2026-10-08 利用者の指定)。
+           **入れ物が動いていたら赤** —— 題も進み具合の帯もボタンも
+           一緒に飛ぶことになる */
+      if (!飛び.入れ物) ok('指の端末 … 飛ぶのは中身だけ(カードは動かない)')
+      else ng('指の端末 … カードごと飛んでいる', `入れ物のずれ ${飛び.入れ物}px`)
+      if (飛び.題 === 止まるもの.題 && 飛び.答え === 止まるもの.答え) {
+        ok('指の端末 … 題も判定のボタンも、1pxも動かない',
+          `題 ${飛び.題} / 答え ${飛び.答え}`)
+      } else {
+        ng('指の端末 … 飛ばしたときに、題か判定のボタンが動いた',
+          `題 ${止まるもの.題} → ${飛び.題} / 答え ${止まるもの.答え} → ${飛び.答え}`)
+      }
 
       await page.waitForTimeout(FLY_MS)
       const 次 = await いまの語(page)

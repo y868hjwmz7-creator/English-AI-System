@@ -2452,7 +2452,7 @@ export default function Wordbook({
                 一度やった・CLAUDE.md)。
                 **上限も置く。** 長い文で4択が画面の外へ押し出されるのを
                 防ぐため、はみ出したぶんはこの枠の中だけで送る。 */}
-            <div className="wordcard-q">
+            <div className="wordcard-q move-stage">
 
             {/* **種類と品詞は、いちばん上**(2026-09 利用者の指定
                   「言い回し、名詞というのは上に持ってこう」)。

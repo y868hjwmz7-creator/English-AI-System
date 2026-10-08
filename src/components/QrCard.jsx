@@ -260,7 +260,7 @@ export default function QrCard({
 
           **送りの面倒(`bodyRef`)は、どちらの形でも同じところに付ける。** */}
       {!shown ? (
-        <button type="button" className="qr-body qr-body--tap" ref={bodyRef}
+        <button type="button" className="qr-body qr-body--tap move-stage" ref={bodyRef}
                 aria-expanded={false}
                 aria-label={revealLabel(false, pair.askEn ? 'answer' : 'en')}
                 onClick={() => setShown(true)}>
@@ -273,7 +273,7 @@ export default function QrCard({
            入るので、**押せるものの中に押せるものが入る**ことになる。
            **キーボードで閉じる道は無い** —— そちらは「まだ / 言える」で
            次の問へ進むと、ひとりでに閉じた状態から始まる */
-        <div className="qr-body qr-body--tap is-shown" ref={bodyRef}
+        <div className="qr-body qr-body--tap is-shown move-stage" ref={bodyRef}
              aria-label={revealLabel(true, pair.askEn ? 'answer' : 'en')}
              onClick={(e) => { if (tapToggles(e.target)) setShown(false) }}>
           {face}
