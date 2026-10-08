@@ -2633,6 +2633,23 @@ export default function Wordbook({
 
             </div>
 
+            {/* ★ **◀▶ は、出題の枠のすぐ下**(第5.417節・2026-10-08 利用者の指定)。
+                実機の写真に**手書きの三角**で位置を描いてもらった ——
+                出題の箱の下のほう、**まん中から左右に離して**2つ。
+                Quick Response とまったく同じ置き場所である
+                (**2つの画面で、同じ操作・同じ見た目**にそろえる)。
+
+                **行は出題の枠の伸びしろから取る**ので、カードは高くならない。
+                **指の端末にだけ出す** —— パソコンには紙の左右の余白と
+                矢印キーがあり、**同じことをするものを2つ見せない**。
+                **キーの印と同じ見分け方(`coarse`)**を使う */}
+            {coarse && (
+              <div className="move-row">
+                <MoveArrow move="prev" show={coarse} />
+                <MoveArrow move="next" show={coarse} />
+              </div>
+            )}
+
             {/* ── 4択 ───────────────────────────────────────── */}
             {form === 'choice' && choices && (
               <ul className="wordbook-choices">
@@ -2716,16 +2733,6 @@ export default function Wordbook({
                     そのときだけ、これまでの「覚えた」を出す
                     (**貼る前でも動く道を残す**・CLAUDE.md)。 */}
                 <div className="wordcard-answers">
-                  {/* ★ **◀▶ は、判定の左右**(2026-10-08 利用者の指定・段階4)。
-
-                      > 三角だけ、小さい方 /「まだ」「言えた」の左右に置く
-
-                      スワイプをやめた代わりである。**行は増えない**ので、
-                      カードの高さは1pxも変わらない。
-                      **指の端末にだけ出す** —— パソコンには紙の左右の余白と
-                      矢印キーがあり、**同じことをするものを2つ見せない**。
-                      **キーの印と同じ見分け方(`coarse`)**を使う */}
-                  <MoveArrow move="prev" show={coarse} />
                   {/* ★ **キーの印は、ボタンの中に出す**(第5.417節)。
                       説明の文を足さずに分かる形にする(**余計な説明書きを
                       置かない**・共通ルール)。
@@ -2752,7 +2759,6 @@ export default function Wordbook({
                         {keyLabel('覚えた', 'ok', { keys: !coarse })}
                       </button>
                     )}
-                  <MoveArrow move="next" show={coarse} />
                 </div>
               </div>
             )}

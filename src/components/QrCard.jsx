@@ -280,6 +280,25 @@ export default function QrCard({
         </div>
       )}
 
+      {/* ★ **◀▶ は、本文のすぐ下**(第5.417節・2026-10-08 利用者の指定)。
+          実機の写真に**手書きの三角**で位置を描いてもらった ——
+          本文の箱の下のほう、区切りの線の上、**まん中から左右に離して**2つ。
+
+          **本文の箱(`.qr-body`)の中には入れられない。**
+          伏せているあいだ、あれは**それ自体が押せるボタン**である
+          (押せるものの中に、押せるものを入れない)。
+          だから**すぐ外の、同じ高さに**置く。
+          **行は本文の伸びしろから取る**ので、カードは高くならない。
+
+          **指の端末にだけ出る**(`arrows`)—— パソコンには紙の左右の余白と
+          矢印キーがある(同じことをするものを2つ見せない) */}
+      {arrows && (
+        <div className="move-row">
+          <MoveArrow move="prev" show={arrows} />
+          <MoveArrow move="next" show={arrows} />
+        </div>
+      )}
+
       {/* **単語帳と同じ形にそろえる**(言葉づかいも見た目も並べ方も)。
           「英語を見る」は答えではないので1段上に出し、
           **答えの2つはとなりどうし**に置く(2026-08 利用者の指定) */}
@@ -327,16 +346,10 @@ export default function QrCard({
           {extra}
         </div>
         <div className="qr-answers">
-          {/* ★ **◀▶ は、判定の左右**(2026-10-08 利用者の指定)。
-              **行は増えない**ので、カードの高さが変わらない。
-              **指の端末にだけ出る**(`arrows`)—— パソコンには
-              紙の左右の余白と矢印キーがある(同じことをするものを2つ見せない) */}
-          <MoveArrow move="prev" show={arrows} />
           <button type="button" className="btn btn--quiet"
                   onClick={() => onAnswer(false)}>{yetLabel}</button>
           <button type="button" className="btn btn--primary"
                   onClick={() => onAnswer(true)}>{okLabel}</button>
-          <MoveArrow move="next" show={arrows} />
         </div>
       </div>
     </div>

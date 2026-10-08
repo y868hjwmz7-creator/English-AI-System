@@ -15523,12 +15523,47 @@ console.log('\n▶ スワイプは廃止。◀▶ のボタンにした(第5.417
   const css = readFileSync('src/styles.css', 'utf8')
   const 決 = css.slice(css.indexOf('.move-arrow {'), css.indexOf('}', css.indexOf('.move-arrow {')))
   ok(決.length > 0, '◀▶ の見た目が CSS にある')
-  ok(!new RegExp(`(^|[^\\w.])${TAP_MIN}([^\\w]|$)`).test(決),
+  /* ★ **単位が付いていても捕まえる**(`44px`)。
+       はじめ `([^\\w]|$)` で閉じていたので、**`44px` の `p` に当たって
+       素通りしていた**(赤チェックで出た・2026-10-08)。
+       **数のうしろが数や小数点でなければ、書き写しである** */
+  ok(!new RegExp(`(^|[^\\d.])${TAP_MIN}(?![\\d.])`).test(決),
     `◀▶ の大きさ(${TAP_MIN})を CSS に書き写していない`)
   /* ★ **囲まない**(利用者の指定「三角だけ」)。
        枠も地色も持たないことを、**打ち消しているか**で見る */
   ok(/border:\s*0/.test(決) && /background:\s*none/.test(決),
     '◀▶ は囲まない(枠も地色も持たない)')
+
+  /* ★ **置き場所は「出題の箱の下」**(2026-10-08 利用者が実機の写真に
+       手書きの三角で描いた場所)。見た目は `test:bar` が実際に描いて測る。
+       ここでは**2つの画面が同じ1つの行を使っているか**だけを見る ——
+       置き場所を2か所に書くと、片方だけ古くなる(CLAUDE.md) */
+  const 行 = css.slice(css.indexOf('.move-row {'), css.indexOf('}', css.indexOf('.move-row {')))
+  ok(行.length > 0, '◀▶ の行の決まりが CSS にある')
+  /* **カードを高くしない**(出題の箱の伸びしろから取る) */
+  ok(/flex:\s*0 0 auto/.test(行), '◀▶ の行は、カードを高くしない(伸びない)')
+  /* **すき間は `gap` で作る**(子に余白を付けて回らない・共通ルール) */
+  ok(/gap:/.test(行) && !/margin-left|margin-right/.test(行),
+    '◀▶ のあいだは `gap` で空けている')
+  ok(/justify-content:\s*center/.test(行), '◀▶ は、まん中に置いている')
+
+  /* ★ **2つの画面が、どちらも同じ行に置いている。**
+       **判定の行には置いていない**(写真の指定どおり) */
+  const 落とす = (f) => readFileSync(f, 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => ' '.repeat(m.length))
+  for (const [名, f, 判定] of [
+    ['単語帳', 'src/components/Wordbook.jsx', 'wordcard-answers'],
+    ['Quick Response', 'src/components/QrCard.jsx', 'qr-answers'],
+  ]) {
+    const w = 落とす(f)
+    const 行の中 = w.slice(w.indexOf('"move-row"'), w.indexOf('"move-row"') + 400)
+    ok(w.includes('"move-row"'), `${名} … ◀▶ は、同じ1つの行に置いている`)
+    ok((行の中.match(/<MoveArrow/g) ?? []).length === 2,
+      `${名} … その行に ◀▶ が2つある`)
+    /* **判定の行には置いていない**(置くと、まだ / 言えたが細くなる) */
+    const 判定の中 = w.slice(w.indexOf(`"${判定}"`), w.indexOf(`"${判定}"`) + 500)
+    ok(!/<MoveArrow/.test(判定の中), `${名} … 判定の行には置いていない`)
+  }
 }
 
 console.log('\n▶ 送ったら、その向きへ飛ばす(第5.417節・2026-10-08「飛ばす 600ms」)')
@@ -15626,7 +15661,7 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
   /* ★ **境目の数を、画面に書き写していない。**
        書き写すと、`cardMove.js` を直した日に片方だけ古くなる */
   for (const 数 of [String(FLY_MS)]) {
-    const 回 = (c.match(new RegExp(`(^|[^\\w.])${数}([^\\w]|$)`, 'g')) ?? []).length
+    const 回 = (c.match(new RegExp(`(^|[^\\d.])${数}(?![\\d.])`, 'g')) ?? []).length
     ok(回 === 0, `境目の数(${数})を画面に書き写していない`, `${回} か所`)
   }
   ok(!c.includes('ArrowLeft') && !c.includes('ArrowRight'),

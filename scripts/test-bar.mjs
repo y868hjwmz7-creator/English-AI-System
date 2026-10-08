@@ -14366,19 +14366,26 @@ for (const [q2, 期待, 何] of [
        (判定するとここが1つ進む)。 */
     const 済み = (page) => page.evaluate(() => (
       document.querySelectorAll('.drill-bar > span.is-done').length))
-    /** 答えの行に並んでいるものを、**描かれたまま**読み取る */
-    const 答えの行 = (page) => page.evaluate(() => {
-      const row = document.querySelector('.wordcard-answers')
-      if (!row) return []
-      return [...row.children].map((el) => {
+    /** ◀▶ と、その上下にあるものを、**描かれたまま**読み取る */
+    const 矢印の様子 = (page, 枠, 答え) => page.evaluate(([枠s, 答えs]) => {
+      const 箱 = (sel) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { top: Math.round(r.top), bottom: Math.round(r.bottom),
+          left: Math.round(r.left), right: Math.round(r.right) }
+      }
+      const 矢 = [...document.querySelectorAll('.move-row .move-arrow')].map((el) => {
         const r = el.getBoundingClientRect()
         return {
-          矢印: el.classList.contains('move-arrow'),
-          名: el.getAttribute('aria-label') || el.textContent.trim(),
-          w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+          名: el.getAttribute('aria-label') || '',
+          w: Math.round(r.width), h: Math.round(r.height),
+          top: Math.round(r.top), 中: Math.round(r.left + r.width / 2),
+          左: Math.round(r.left), 右: Math.round(r.right),
         }
       })
-    })
+      return { 矢, 枠: 箱(枠s), 答え: 箱(答えs), 行: 箱('.move-row') }
+    }, [枠, 答え])
     /** カードが、いま横にどれだけずれているか(飛んでいる最中を測る) */
     const ずれ = (page) => page.evaluate(() => {
       const el = document.querySelector('.cardmove')
@@ -14406,10 +14413,10 @@ for (const [q2, 期待, 何] of [
       const page = await 単語帳を開く({
         viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
       })
-      const 行 = await 答えの行(page)
-      const 矢 = 行.filter((x) => x.矢印)
+      const 様子 = await 矢印の様子(page, '.wordcard-q', '.wordcard-answers')
+      const 矢 = 様子.矢
       if (矢.length === 2) ok('指の端末 … ◀▶ が2つ出ている', 矢.map((x) => x.名).join(' / '))
-      else ng('指の端末 … ◀▶ が2つ出ていない', `${矢.length} 個 / 行は ${行.length} 個`)
+      else ng('指の端末 … ◀▶ が2つ出ていない', `${矢.length} 個`)
 
       /* ★ **三角だけでも、押せる的は小さくしない**(利用者の指定「小さい方」は
            見た目の話である)。**数は `TAP_MIN` 1か所から取る** */
@@ -14422,27 +14429,46 @@ for (const [q2, 期待, 何] of [
           `${小さい.map((x) => `${x.w}×${x.h}`).join(' / ')} —— ${TAP_MIN}px 以上が要る`)
       }
 
-      /* ★ **置き場所は「まだ・言えた」の左右**(利用者の指定)。
-           いちばん左といちばん右が矢印で、**あいだに判定が入っている** */
-      if (行.length >= 4 && 行[0].矢印 && 行[行.length - 1].矢印
-          && !行.slice(1, -1).some((x) => x.矢印)) {
-        ok('指の端末 … ◀▶ は、判定の左右にある',
-          行.map((x) => x.名).join(' | '))
-      } else {
-        ng('指の端末 … ◀▶ が、判定の左右に並んでいない', 行.map((x) => x.名).join(' | '))
+      /* ★ **置き場所は「出題の箱の下、判定より上」**(利用者が実機の写真に
+           手書きの三角で描いた場所)。**描かれた座標で確かめる** */
+      if (矢.length === 2 && 様子.枠 && 様子.答え) {
+        const 下 = 矢.every((x) => x.top >= 様子.枠.bottom - 2)
+        const 上 = 矢.every((x) => x.top < 様子.答え.top)
+        if (下 && 上) {
+          ok('指の端末 … ◀▶ は、出題の箱の下・判定より上にある',
+            `枠 ${様子.枠.bottom}px < 矢印 ${矢[0].top}px < 答え ${様子.答え.top}px`)
+        } else {
+          ng('指の端末 … ◀▶ の置き場所がちがう',
+            `枠 ${様子.枠.bottom}px / 矢印 ${矢[0].top}px / 答え ${様子.答え.top}px`)
+        }
       }
 
-      /* ★ **行は増えていない**(カードの高さを1pxも変えない)。
-           **上端がぜんぶ同じ**なら1段である */
-      const 段 = new Set(行.map((x) => x.top)).size
-      if (行.length && 段 === 1) ok('指の端末 … 答えの行は、1段のまま', `上端 ${行[0].top}px`)
-      else ng('指の端末 … 答えの行が2段になっている', `上端 ${行.map((x) => x.top).join(' / ')}`)
+      /* ★ **2つは1段に並び、まん中から左右へ同じだけ離れている**
+           (利用者の指定「バランスよく配置する」)。
+           **カードのまん中からの距離を比べる** —— 片寄っていたら赤 */
+      if (矢.length === 2 && 様子.行) {
+        const まん中 = (様子.行.left + 様子.行.right) / 2
+        const 左 = Math.round(まん中 - 矢[0].中)
+        const 右 = Math.round(矢[1].中 - まん中)
+        const 同じ段 = 矢[0].top === 矢[1].top
+        const あいだ = 矢[1].左 - 矢[0].右
+        if (同じ段 && Math.abs(左 - 右) <= 1) {
+          ok('指の端末 … ◀▶ は、まん中から左右へ同じだけ離れている', `左 ${左}px / 右 ${右}px`)
+        } else {
+          ng('指の端末 … ◀▶ が、まん中から片寄っている',
+            `左 ${左}px / 右 ${右}px / 上端 ${矢[0].top} ${矢[1].top}`)
+        }
+        /* **くっつけない**(共通ルール「別々の物を、すき間ゼロでくっつけない」)。
+           写真の三角も、はっきり離して描かれていた */
+        if (あいだ >= TAP_MIN) ok('指の端末 … ◀▶ のあいだが、しっかり空いている', `${あいだ}px`)
+        else ng('指の端末 … ◀▶ が近すぎる', `あいだ ${あいだ}px`)
+      }
 
       /* ── ▶ を押すと、飛んでから次へ ───────────────── */
       const 頭 = await いまの語(page)
       const 記録 = await 済み(page)
       try {
-        await page.locator('.wordcard-answers .move-arrow').last().tap({ timeout: 4000 })
+        await page.locator('.move-row .move-arrow').last().tap({ timeout: 4000 })
       } catch (e) {
         ng('指の端末 … ▶ を指で押せない', String(e.message).split('\n')[0].slice(0, 60))
       }
@@ -14469,7 +14495,7 @@ for (const [q2, 期待, 何] of [
 
       /* ── ◀ で、ひとつ前へ戻る ───────────────────── */
       try {
-        await page.locator('.wordcard-answers .move-arrow').first().tap({ timeout: 4000 })
+        await page.locator('.move-row .move-arrow').first().tap({ timeout: 4000 })
       } catch (e) {
         ng('指の端末 … ◀ を指で押せない', String(e.message).split('\n')[0].slice(0, 60))
       }
@@ -14488,7 +14514,7 @@ for (const [q2, 期待, 何] of [
            **指の動き(pointer)をまたいで届いてしまう**ので、
            **実機で1つも押せなくなっていても緑のまま**だった(2026-10-08)。 */
       try {
-        await page.locator('.wordcard-answers button:not(.move-arrow)').first().tap({ timeout: 4000 })
+        await page.locator('.wordcard-answers button').first().tap({ timeout: 4000 })
       } catch (e) {
         ng('指の端末 … カードの中のボタンを、指で押せない',
           String(e.message).split('\n')[0].slice(0, 60))
@@ -14543,8 +14569,7 @@ for (const [q2, 期待, 何] of [
            あちらには**紙の左右の余白**と**矢印キー**がある ——
            **同じことをするものを2つ見せない**(CLAUDE.md) */
       const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
-      const 行 = await 答えの行(page)
-      const 矢 = 行.filter((x) => x.矢印)
+      const 矢 = (await 矢印の様子(page, '.wordcard-q', '.wordcard-answers')).矢
       if (矢.length === 0) ok('マウスの端末 … ◀▶ は出さない(余白とキーがある)')
       else ng('マウスの端末 … ◀▶ が出ている', `${矢.length} 個`)
       const 頭 = await いまの語(page)
@@ -14575,20 +14600,27 @@ for (const [q2, 期待, 何] of [
       await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrreal`,
         { waitUntil: 'networkidle' })
       await page.waitForSelector('.qr-card', { timeout: 10000 })
-      const 行 = await page.evaluate(() => {
-        const row = document.querySelector('.qr-answers')
-        if (!row) return []
-        return [...row.children].map((el) => {
+      const 様子 = await page.evaluate(() => {
+        const 箱 = (sel) => {
+          const el = document.querySelector(sel)
+          if (!el) return null
+          const r = el.getBoundingClientRect()
+          return { top: Math.round(r.top), bottom: Math.round(r.bottom),
+            left: Math.round(r.left), right: Math.round(r.right) }
+        }
+        const 矢 = [...document.querySelectorAll('.move-row .move-arrow')].map((el) => {
           const r = el.getBoundingClientRect()
           return {
-            矢印: el.classList.contains('move-arrow'),
-            名: el.getAttribute('aria-label') || el.textContent.trim(),
-            w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+            名: el.getAttribute('aria-label') || '',
+            w: Math.round(r.width), h: Math.round(r.height),
+            top: Math.round(r.top), 中: Math.round(r.left + r.width / 2),
+            左: Math.round(r.left), 右: Math.round(r.right),
           }
         })
+        return { 矢, 本文: 箱('.qr-body'), 答え: 箱('.qr-answers'), 行: 箱('.move-row') }
       })
-      const 矢 = 行.filter((x) => x.矢印)
-      if (!行.length) { ng(`Quick Response ${名} … 答えの行が描かれていない`); await page.close(); continue }
+      const 矢 = 様子.矢
+      if (!様子.答え) { ng(`Quick Response ${名} … 答えの行が描かれていない`); await page.close(); continue }
       if (出るか) {
         if (矢.length === 2) ok(`Quick Response ${名} … ◀▶ が2つ出ている`, 矢.map((x) => x.名).join(' / '))
         else ng(`Quick Response ${名} … ◀▶ が2つ出ていない`, `${矢.length} 個`)
@@ -14599,21 +14631,37 @@ for (const [q2, 期待, 何] of [
         } else if (矢.length) {
           ng(`Quick Response ${名} … ◀▶ が小さすぎる`, `${TAP_MIN}px 以上が要る`)
         }
-        /* **判定の左右にあり、行は1段のまま** */
-        if (行.length >= 4 && 行[0].矢印 && 行[行.length - 1].矢印
-            && !行.slice(1, -1).some((x) => x.矢印)) {
-          ok(`Quick Response ${名} … ◀▶ は、判定の左右にある`, 行.map((x) => x.名).join(' | '))
-        } else {
-          ng(`Quick Response ${名} … ◀▶ が、判定の左右に並んでいない`, 行.map((x) => x.名).join(' | '))
+        /* ★ **本文の下、判定より上**(利用者が実機の写真に描いた場所) */
+        if (矢.length === 2 && 様子.本文) {
+          const 下 = 矢.every((x) => x.top >= 様子.本文.bottom - 2)
+          const 上 = 矢.every((x) => x.top < 様子.答え.top)
+          if (下 && 上) {
+            ok(`Quick Response ${名} … ◀▶ は、本文の下・判定より上にある`,
+              `本文 ${様子.本文.bottom}px < 矢印 ${矢[0].top}px < 答え ${様子.答え.top}px`)
+          } else {
+            ng(`Quick Response ${名} … ◀▶ の置き場所がちがう`,
+              `本文 ${様子.本文.bottom}px / 矢印 ${矢[0].top}px / 答え ${様子.答え.top}px`)
+          }
         }
-        const 段 = new Set(行.map((x) => x.top)).size
-        if (段 === 1) ok(`Quick Response ${名} … 答えの行は、1段のまま`)
-        else ng(`Quick Response ${名} … 答えの行が2段になっている`, `上端 ${行.map((x) => x.top).join(' / ')}`)
+        /* ★ **まん中から左右へ同じだけ離れ、くっついていない** */
+        if (矢.length === 2 && 様子.行) {
+          const まん中 = (様子.行.left + 様子.行.right) / 2
+          const 左 = Math.round(まん中 - 矢[0].中)
+          const 右 = Math.round(矢[1].中 - まん中)
+          const あいだ = 矢[1].左 - 矢[0].右
+          if (矢[0].top === 矢[1].top && Math.abs(左 - 右) <= 1) {
+            ok(`Quick Response ${名} … ◀▶ は、まん中から左右へ同じだけ離れている`, `左 ${左}px / 右 ${右}px`)
+          } else {
+            ng(`Quick Response ${名} … ◀▶ が、まん中から片寄っている`, `左 ${左}px / 右 ${右}px`)
+          }
+          if (あいだ >= TAP_MIN) ok(`Quick Response ${名} … ◀▶ のあいだが、しっかり空いている`, `${あいだ}px`)
+          else ng(`Quick Response ${名} … ◀▶ が近すぎる`, `あいだ ${あいだ}px`)
+        }
         /* ★ **押して、本当に文が変わるか**(出すだけで効かない形を弾く) */
         const 文 = () => page.evaluate(() => (
           document.querySelector('.qr-body')?.textContent?.trim()?.slice(0, 40) ?? ''))
         const 頭 = await 文()
-        try { await page.locator('.qr-answers .move-arrow').last().tap({ timeout: 4000 }) }
+        try { await page.locator('.move-row .move-arrow').last().tap({ timeout: 4000 }) }
         catch (e) { ng(`Quick Response ${名} … ▶ を指で押せない`, String(e.message).split('\n')[0].slice(0, 60)) }
         await page.waitForTimeout(FLY_MS + 400)
         const 次 = await 文()
