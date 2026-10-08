@@ -2065,6 +2065,95 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+ * **黒帯の差し色と、上段と下段のあいだの線**(2026-10-08 実機・
+ * 利用者の指定・第5.418節。5つ描いて見比べてもらい、**案B**に決まった)
+ *
+ *   > 下のプレーヤーのデザインが味気ないのを少し差し色を入れて、
+ *   > 上下のパーツの間に薄いラインを入れるなどして改善できませんか？
+ *
+ * **見るのは4つ。**
+ *   ①上段の下に**線がある**(太さが 0 でなく、透明でもない)
+ *   ②**いま何問めか**が金
+ *   ③**速さ**が金
+ *   ④**いま効いている印**(くり返し・シャッフル)の枠が金
+ *
+ * **金の値は書き写さない**(CLAUDE.md「値を書き写さない。性質で見る」)——
+ * `:root` の `--rizap-gold` を読み取って、それと突き合わせる。
+ *
+ * **明るい配色と暗い配色の、両方で測る。** 黒帯は**どちらの配色でも
+ * 黒いまま**なので、`var(--accent)` と書いてしまうと
+ * **明るい配色のときだけ青**が乗る(`--player-ink` を決め打ちしたのと
+ * まったく同じ理由)。片方だけ測ると、そこを見落とす。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  const 色 = (page) => page.evaluate(() => {
+    const p = document.querySelector('.player-dock .player--dock')
+    if (!p) return { 欠け: '黒帯が無い' }
+    /* **金そのものは `:root` から読み取る**(ここに #d4af37 と書かない)。
+       `color` で一度描かせてから読むと、どちらも `rgb(…)` でそろう */
+    const 物差し = document.createElement('span')
+    物差し.style.color = 'var(--rizap-gold)'
+    p.appendChild(物差し)
+    const 金 = getComputedStyle(物差し).color
+    物差し.remove()
+    const cs = (sel) => {
+      const el = p.querySelector(sel)
+      return el ? getComputedStyle(el) : null
+    }
+    const 上 = cs('.player-head')
+    const 番号 = cs('.player-at-now')
+    const 速さ = cs('.player-rate-now')
+    const 印 = getComputedStyle(p).getPropertyValue('--pick-line').trim()
+    /* 印の金も、同じ物差しで測る(文字列の突き合わせにしない) */
+    const 物差し2 = document.createElement('span')
+    物差し2.style.color = 'var(--pick-line)'
+    p.appendChild(物差し2)
+    const 印の色 = getComputedStyle(物差し2).color
+    物差し2.remove()
+    return {
+      金,
+      線の太さ: 上 ? parseFloat(上.borderBottomWidth) || 0 : null,
+      線の色: 上 ? 上.borderBottomColor : null,
+      線の下: 上 ? parseFloat(上.paddingBottom) || 0 : null,
+      番号: 番号 ? 番号.color : null,
+      速さ: 速さ ? 速さ.color : null,
+      印: 印の色,
+      印の宣言: 印,
+    }
+  })
+
+  for (const 配色 of ['light', 'dark']) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), 配色)
+    await page.waitForTimeout(350)
+    const m = await 色(page)
+    await page.close()
+
+    if (m.欠け) { ng(`黒帯の差し色(${配色}) … ${m.欠け}`, '見張りが素通りしている'); continue }
+    const 悪い = []
+    /* ①線。**太さと色の両方**を見る —— どちらか片方だと、
+         `transparent` にしても・0 にしても緑のままになる */
+    if (!m.線の太さ) 悪い.push('上段の下に線が無い(太さ 0)')
+    else if (/^rgba\(.*,\s*0\)$/.test(m.線の色 || '')) 悪い.push(`線が透明(${m.線の色})`)
+    /* **線と押す行がくっついていない**(共通ルール「すき間ゼロでくっつけない」)*/
+    if (m.線の太さ && !m.線の下) 悪い.push('線と押す行のあいだに隙間が無い')
+    /* ②③④差し色。**金そのものと突き合わせる** */
+    for (const [名, v] of [['いま何問め', m.番号], ['速さ', m.速さ], ['効いている印の枠', m.印]]) {
+      if (v == null) 悪い.push(`${名} が黒帯の中に無い`)
+      else if (v !== m.金) 悪い.push(`${名} が金ではない(${v} / 金は ${m.金})`)
+    }
+    if (悪い.length) {
+      ng(`黒帯の差し色と線(${配色} ${悪い.length} 件)`, 悪い.join('\n    '))
+    } else {
+      ok(`黒帯(${配色}) … 上段の下にうすい線(${m.線の太さ}px)があり、`
+        + `いま何問め・速さ・効いている印が金(${m.金})`)
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
  * **シャッフル**(2026-09-30 利用者の指定・第5.325節)
  *
  *   > 文型トレーニングで使うシャッフルボタンを追加してください。

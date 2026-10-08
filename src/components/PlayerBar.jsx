@@ -386,7 +386,12 @@ export default function PlayerBar({
               (中身と意味は1文字も変えていない)。 */}
         <span className="player-head-l">
           <span className="player-at">
-            <span className="player-at-n">{dockShown == null ? '—' : dockShown}</span>
+            {/* ★ **いま何問めかだけ、金**(2026-10-08 利用者がえらんだ案B・
+                   第5.418節)。総数と単位は控えめのまま —— 2つとも金にすると、
+                   どちらが「いま」なのか分からなくなる。
+                   **色は `styles.css` の `.player--dock .player-at-now` 1か所**
+                   (ここに色を書かない) */}
+            <span className="player-at-n player-at-now">{dockShown == null ? '—' : dockShown}</span>
             <span className="player-at-sep"> / </span>
             <span className="player-at-n">{total}</span>
             <span className="wide-text player-at-unit"> {unit}</span>
