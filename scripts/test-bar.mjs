@@ -2173,7 +2173,16 @@ for (const [label, want] of Object.entries(WANT)) {
       線の下: 上 ? parseFloat(上.paddingBottom) || 0 : null,
       番号: 色で(g('.player-at-now')?.color ?? null),
       速さ: 色で(g('.player-rate-now')?.color ?? null),
-      印: 読む('var(--pick-line)'),
+      /* ★ **効いている印は、描かれているものを読む**(第5.419節)。
+           `--pick-line` を覗くのをやめた —— 囲みを外したので、
+           **その変数はもう誰も描いていない。**
+           「描かれていないものを測る」と、見張りが素通りする */
+      印: 色で(g('.repeat-key.is-on')?.color ?? null),
+      /* 囲みを外したこと自体も見る(地色と枠線が無い) */
+      印の地: 色で(g('.repeat-key.is-on')?.backgroundColor ?? null),
+      印の枠: g('.repeat-key.is-on')
+        ? parseFloat(window.getComputedStyle(p.querySelector('.repeat-key.is-on')).borderTopWidth) || 0
+        : null,
     }
   })
 
@@ -2185,6 +2194,12 @@ for (const [label, want] of Object.entries(WANT)) {
       { waitUntil: 'networkidle' })
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), 配色)
     await page.waitForTimeout(350)
+    /* **効いている印を測るので、1回押して効かせる**(既定は「しない」)。
+       **押せたかを確かめてから測る** —— 押せていなければ、
+       そのあとの見張りは何もしていないのと同じである */
+    const 押せた = await page.$('.player--dock .repeat-key')
+    if (押せた) { await 押せた.click(); await page.waitForTimeout(250) }
+    else ng('黒帯の差し色 … くり返しのボタンが無い', '見張りが素通りしている')
     const m = await 測る(page)
     await page.close()
 
@@ -2201,7 +2216,14 @@ for (const [label, want] of Object.entries(WANT)) {
     const 地 = m.地?.rgb ?? [0, 0, 0]
     const 白 = m.白.rgb
     const 色あいの基 = 色あい(m.accent.rgb)
-    for (const [名, v, 下限] of [['いま何問め', m.番号, 4.5], ['速さ', m.速さ, 4.5], ['効いている印の枠', m.印, 3]]) {
+    /* ★ **囲みを外したか**(2026-10-08 利用者の指定・第5.419節)。
+         > 適用時は囲み線ではなく色の変化のみで OK です */
+    if (m.印の枠 == null) 悪い.push('効いているくり返しが黒帯の中に無い')
+    else {
+      if (m.印の枠) 悪い.push(`効いている印に枠線が残っている(${m.印の枠}px)`)
+      if (m.印の地?.rgb?.[3]) 悪い.push(`効いている印に地色が残っている(${m.印の地.css})`)
+    }
+    for (const [名, v, 下限] of [['いま何問め', m.番号, 4.5], ['速さ', m.速さ, 4.5], ['効いている印', m.印, 4.5]]) {
       if (v == null) { 悪い.push(`${名} が黒帯の中に無い`); continue }
       /* ②黒帯の上で読めるか(文字は 4.5 : 1、枠線は 3 : 1) */
       const r = 比(v.rgb, 地)

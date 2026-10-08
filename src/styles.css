@@ -9831,10 +9831,21 @@ button.wbfilter-ctl { text-align: left; }
 .shuffle-key:hover:not(.is-on) { background: color-mix(in srgb, currentColor 14%, transparent); }
 .repeat-key:focus-visible,
 .shuffle-key:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* いま選んでいるもの。**色だけに頼らない** —— 地色 + 枠線 + 文字色の3つ
-   (`aria-pressed` と `title` も付けてある) */
+/* ★ **効いているときは、色だけ**(2026-10-08 利用者の指定・第5.419節)。
+
+     > 適用時は囲み線ではなく色の変化のみで OK です
+
+   **地色と枠線をやめた。** 色は、その帯の差し色(`--player-accent`)——
+   明るい配色なら青、暗い配色なら金。**黒い帯の上で読める明るさ**まで
+   持ち上げたものを、そのまま使う(値はここに書かない)。
+
+   **色だけに頼っていない** —— くり返しは、効いていないとき**点が1つも
+   無い**(形でも分かる)。濃さも違う(`:not(.is-on)` が .45)。
+   `aria-pressed` と `title` も付けてある。
+   **シャッフルには形の差が無い**(効いていても絵は同じ)ので、
+   残っているのは**色と濃さの2つ**である —— 利用者の指定どおり。 */
 .repeat-key.is-on, .shuffle-key.is-on {
-  background: var(--pick-bg); border-color: var(--pick-line); color: var(--pick-fg);
+  color: var(--player-accent, var(--accent));
 }
 
 /* ★ **速さは「いま何%か」だけ。枠も三角も無い**(第5.318節)
@@ -10188,8 +10199,13 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .btn--quiet { background: #45453f; border-color: #45453f; color: #f2f2ee; }
 .player--dock .btn--ghost { background: transparent; border-color: #55554e; color: var(--player-ink); }
 .player--dock .btn:disabled { opacity: .4; }
-.player--dock .repeat-key,
-.player--dock .shuffle-key { color: var(--player-ink); }
+/* ★ **効いているものは、ここで白くしない**(2026-10-08・第5.419節)。
+     この行は `.repeat-key.is-on`(差し色)より**後ろにいる**ので、
+     `:not(.is-on)` を付けないと**白が勝って、効いている印が
+     ふつうの白のまま**になる(実際そうなった)。
+     同じ細かさなら後ろが勝つ —— 共通ルール。 */
+.player--dock .repeat-key:not(.is-on),
+.player--dock .shuffle-key:not(.is-on) { color: var(--player-ink); }
 
 /* ★ **内側(文)のキーが無い画面**(スピーチ練習・第5.322節)。
 
@@ -10238,11 +10254,20 @@ button.wbfilter-ctl { text-align: left; }
        (6.3 : 1)。暗い配色の金は、そのままで読めるので混ぜない ——
        だから**配色ごとに3か所**書く(`:root` / `@media` / `[data-theme]`
        の作法どおり)。 */
-.player--dock { --player-accent: color-mix(in srgb, var(--accent) 55%, #ffffff); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .player--dock { --player-accent: var(--accent); }
+/* ★ **黒い帯は3つある**(`.player--bar` / `.player--dock` / `.focus-bar`)。
+     **3つとも同じ行に書く** —— `--player-ink` を書き忘れて、明るい配色の
+     ときだけ読めない錠剤になったのと同じ轍を踏まないため。 */
+.player--bar, .player--dock, .focus-bar {
+  --player-accent: color-mix(in srgb, var(--accent) 55%, #ffffff);
 }
-:root[data-theme="dark"] .player--dock { --player-accent: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .player--bar,
+  :root:not([data-theme="light"]) .player--dock,
+  :root:not([data-theme="light"]) .focus-bar { --player-accent: var(--accent); }
+}
+:root[data-theme="dark"] .player--bar,
+:root[data-theme="dark"] .player--dock,
+:root[data-theme="dark"] .focus-bar { --player-accent: var(--accent); }
 
 /* ★ **上段と下段のあいだの、うすい線**。
      **幅は `--player-w` のまま**(`.player-head` が持っている)なので、
