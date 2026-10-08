@@ -86,7 +86,9 @@ import {
 /* ★ **カードを送る・判定する操作の境目は `cardMove.js` 1か所**(第5.417節)。
      **数を書き写さない** —— 44px / 56px を見張りに書くと、
      値を変えた日に期待値も一緒に動いて、仕組みを壊しても素通りする */
-import { KEY_MARK, SWIPE_MIN, TAP_MIN, keyMove } from '../src/lib/cardMove.js'
+import {
+  KEY_MARK, SWIPE_MIN, TAP_MIN, keyLabel, keyMove,
+} from '../src/lib/cardMove.js'
 import { QUIZ_FORMS, WORD_ORDERS } from '../src/lib/wordQuiz.js'
 /* **速さの段と端は `speechRate.js` 1か所** */
 import { SPEECH_RATES } from '../src/lib/speechRate.js'
@@ -10478,15 +10480,27 @@ for (const W of [1280, 794, 453, 390, 320]) {
       }
     })
     await page.waitForTimeout(1500)
-    /* **「まだ」を押し切る。** 20 回まで(1回ぶんは 10 問なので足りる) */
+    /* **「まだ」を押し切る。** 20 回まで(1回ぶんは 10 問なので足りる)。
+
+       ★ **ボタンの字を、そのまま書き写していた**(2026-10-08 に踏んだ)。
+         `=== 'まだ'` と完全一致で探していたので、第5.417節で
+         **キーの印が付いて「まだ ↓」になったとたん、1回も押せなくなった**
+         —— 終わりの画面まで行けず、**この見張りが丸ごと死んだ。**
+         仕組みは1ミリも壊れていないのに赤くなる形である
+         (CLAUDE.md「式も、関数の名前も書き写さない」)。
+
+       **印は `keyLabel()` 1か所から取る。** 指の端末では付かないので、
+       **付いた形と付かない形の両方**を候補にする —— どちらで描かれても
+       当たるし、**「まだ」そのものが変わったら赤くなる。** */
+    const 押す字 = [keyLabel('まだ', 'yet'), keyLabel('まだ', 'yet', { keys: false })]
     for (let i = 0; i < 20; i += 1) {
-      const 押せた = await page.evaluate(() => {
+      const 押せた = await page.evaluate((候補) => {
         const b2 = [...document.querySelectorAll('.qr-answers button')]
-          .find((x) => (x.textContent || '').trim() === 'まだ')
+          .find((x) => 候補.includes((x.textContent || '').replace(/\s+/g, ' ').trim()))
         if (!b2) return false
         b2.click()
         return true
-      })
+      }, 押す字)
       if (!押せた) break
       await page.waitForTimeout(120)
     }
