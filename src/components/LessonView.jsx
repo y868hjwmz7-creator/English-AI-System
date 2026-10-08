@@ -1536,7 +1536,11 @@ export default function LessonView({
                     className={`btn btn--small${notes ? ' btn--primary' : ''}`}
                     aria-pressed={notes}
                     title="この日のセッションの記録(日付ごとに残ります)"
-                    onClick={() => setNotes((v) => !v)}>
+                    /* ★ **開いたら、設定のシートは閉じる**(第5.426節)。
+                         狭い画面では記録もシートで出すので、
+                         **閉じないとシートが2枚重なる**(下の設定は、
+                         もう用が無いのに残り続ける) */
+                    onClick={() => { setNotes((v) => !v); setViewSets(false) }}>
               <NoteIcon /><span className="mid-text">メモ</span>
             </button>
           )}
@@ -1565,6 +1569,29 @@ export default function LessonView({
 
   /** 帯に並べるとき(広い窓)。**横1列** */
   const 道具 = (<>{学習ツール}{速さの欄}</>)
+
+  /**
+   * **セッションの記録の中身**(2026-10-08・第5.426節)。
+   *
+   * 置き場所は2つある(広い窓では紙の右、狭い窓では下から出すシート)が、
+   * **中身は1つ** —— 書き写すと、片方だけ古くなる。
+   */
+  const 記録の中身 = owner ? (
+    <LessonNotes learnerId={owner} bare />
+  ) : (
+    /* **相手を選ぶ欄は、ここには置かない**(第5.178節)。
+       帯の名札が「誰の記録になるか」を持っており、
+       **同じことをするものを2つ見せない**(CLAUDE.md)。
+       語も Quick Response も記録も、あの1つで決まる */
+    <div className="lesson-notes-pick">
+      <p className="tip card-hint">
+        いまは<strong>自分の記録</strong>になっています。
+        上の帯の「自分の記録 ▾」でゲストを選ぶと、
+        その人のセッションの記録になります
+        (単語帳と Quick Response も同じ人のものになります)。
+      </p>
+    </div>
+  )
 
   return (
     /* **黒帯のぶん、紙の下に余白を足す**(下記の CSS)。
@@ -2391,7 +2418,12 @@ export default function LessonView({
           紙の**上に重ねず、横に並べる。** 重ねると、教材を見ながら
           書けない。狭い画面では下から出す(CSS)。
           **紙には出さない**(`no-print`)。記録は教材の控えではない */}
-      {canNote && notes && (
+      {/* ★ **横に置けるのは、パッド以上のときだけ**(2026-10-08 実機・
+             利用者の指摘・第5.426節)。狭い画面では**下から出す**
+             (すぐ下の `SettingsSheet`)。
+             **判断は `padUp`(= `NAV_PUSH_AT`)1つ** ——
+             シートの側も同じ値で決めているので、食い違わない */}
+      {canNote && notes && padUp && (
         <>
           {/* 紙とメモの境目。**つまんで動かすと、メモの幅が変わる**
               (2026-09 利用者の指定)。
@@ -2438,22 +2470,7 @@ export default function LessonView({
               <button type="button" className="btn btn--small btn--ghost"
                       onClick={() => setNotes(false)}>閉じる</button>
             </div>
-            {owner ? (
-              <LessonNotes learnerId={owner} bare />
-            ) : (
-              /* **相手を選ぶ欄は、ここには置かない**(第5.178節)。
-                 帯の名札が「誰の記録になるか」を持っており、
-                 **同じことをするものを2つ見せない**(CLAUDE.md)。
-                 語も Quick Response も記録も、あの1つで決まる */
-              <div className="lesson-notes-pick">
-                <p className="tip card-hint">
-                  いまは<strong>自分の記録</strong>になっています。
-                  上の帯の「自分の記録 ▾」でゲストを選ぶと、
-                  その人のセッションの記録になります
-                  (単語帳と Quick Response も同じ人のものになります)。
-                </p>
-              </div>
-            )}
+            {記録の中身}
           </aside>
         </>
       )}
@@ -2476,6 +2493,26 @@ export default function LessonView({
           入口によって違う速さで鳴るのはおかしい。
           速さは鳴らし方だけで、**置き場所(= 課金)には関係しない。**
           ══════════════════════════════════════════════════════ */}
+      {/* ★ **狭い画面では、下から出すシートで出す**(2026-10-08 実機・
+             利用者の指摘・第5.426節)
+
+               > スマホでのメモが機能してません
+
+           もとは**紙の下に積んでいた。** 画面が縦に並ぶので、
+           **教材ぜんぶを送り切らないとたどり着けない**(60 問なら、
+           はるか下)。押しても何も起きていないように見える。
+
+           **シートは「設定」とまったく同じもの**(`SettingsSheet`)——
+           同じことをするものを2つ作らない。あちらが
+           ✕ と外側と Esc で閉じることも、うしろを送れなくすることも、
+           もう持っている。**だから見出しの「閉じる」は、ここでは出さない**
+           (同じことをするものを2つ見せない)。 */}
+      {canNote && notes && !padUp && (
+        <SettingsSheet onClose={() => setNotes(false)} title="セッションの記録">
+          {記録の中身}
+        </SettingsSheet>
+      )}
+
       {answerRadio && (
         <WordRadio
           rows={answerRadio}

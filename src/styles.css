@@ -201,7 +201,21 @@
        残る(実際、赤みのある紙に合わせた値が残っていた)。
        混ぜる先を紙にしておけば、紙を変えても**ひとりでについてくる。** */
   --pd-answer:       #7fc49b;   --pd-answer-bg:    color-mix(in srgb, #7fc49b 12%, #1c1c1a);
-  --pd-translate:    #9bb6df;   --pd-translate-bg: color-mix(in srgb, #9bb6df 12%, #1c1c1a);
+  /* ★ **訳は、色を持たせない**(2026-10-08 実機・利用者の指定・第5.428節)
+
+       > ダークモードの解答の色の種類が多く、少しうるさく感じます。
+       > 回答が緑、そしてゴールドもOKなのですが、そこに青まで入れると
+       > うるさく感じる
+
+     もとは青(`#9bb6df`)だった。**解答の緑・補足の金と3色**が並ぶと、
+     1つの箱の中が賑やかになる。訳は**読み飛ばしてよいもの**なので、
+     いちばん引かせる —— **紙のふつうの字の色**(`--pd-ink-soft`)に戻す。
+     **新しい色は作らない**(値を2か所に書かない)。
+
+     **色だけに頼っていない** —— 左の線・うすい地色・小さめの文字の
+     3つは、そのまま残っている。 */
+  --pd-translate:    var(--pd-ink-soft);
+  --pd-translate-bg: color-mix(in srgb, var(--pd-ink-soft) 10%, #1c1c1a);
   --pd-note:         #dcbb7e;   --pd-note-bg:      color-mix(in srgb, #dcbb7e 12%, #1c1c1a);
 
   --pd-voice-a:      var(--rizap-gold);   /* 会話の1人目 */

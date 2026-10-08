@@ -2287,6 +2287,150 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+ * **スマホのメモ・シートの閉じ方・訳の色**(2026-10-08 実機・第5.426〜5.428節)
+ *
+ *   > スマホでのメモが機能してません
+ *   > 右上の詳細ボタンで開いたものを再び同じボタンを押しても閉じられない
+ *   > 青まで入れるとうるさく感じる
+ *
+ * **3つとも「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+ * ══════════════════════════════════════════════════════════════════════ */
+{
+  /** その幅で、メモがどう出るか */
+  const メモの出かた = async (w) => {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(500)
+    /* 「設定」を開いてから「メモ」を押す(狭い窓では帯に出ていない) */
+    const 設定 = await page.$('.lesson-sets')
+    if (設定) { await 設定.click(); await page.waitForTimeout(300) }
+    const 押せた = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')]
+        .find((x) => /メモ/.test(x.textContent) && x.getBoundingClientRect().width > 0)
+      if (!b) return false
+      b.click()
+      return true
+    })
+    await page.waitForTimeout(500)
+    const m = await page.evaluate(() => ({
+      シート: [...document.querySelectorAll('.sheet')]
+        .some((e) => e.getAttribute('aria-label') === 'セッションの記録'),
+      横の箱: !!document.querySelector('.lesson-notes'),
+      /* **残った設定のシート**(2枚重なっていないか) */
+      設定も: [...document.querySelectorAll('.sheet')]
+        .some((e) => e.getAttribute('aria-label') === '設定'),
+    }))
+    await page.close()
+    return { 押せた, ...m }
+  }
+
+  /* ── ★ **狭い画面では、下から出すシートで出す**(第5.426節)──────
+       もとは**紙の下に積んでいた** —— 教材ぜんぶを送り切らないと
+       たどり着けないので、押しても何も起きていないように見えた。
+       **広い画面では、これまでどおり紙の右**(そこには置く余地がある)。 */
+  const 狭い = await メモの出かた(390)
+  const 広い = await メモの出かた(1280)
+  if (!狭い.押せた || !広い.押せた) {
+    ng('メモ … ボタンを押せなかった', '見張りが素通りしている')
+  } else if (!狭い.シート || 狭い.横の箱) {
+    ng('メモ(390px) … 下から出すシートになっていない',
+      `シート ${狭い.シート} / 横の箱 ${狭い.横の箱}`)
+  } else if (狭い.設定も) {
+    ng('メモ(390px) … 設定のシートが残ったまま(2枚重なる)')
+  } else if (広い.シート || !広い.横の箱) {
+    ng('メモ(1280px) … 紙の右に出ていない',
+      `シート ${広い.シート} / 横の箱 ${広い.横の箱}`)
+  } else {
+    ok('メモ … 狭い画面では下から出すシート、広い画面では紙の右(設定は残らない)')
+  }
+
+  /* ── ★ **シートは「押して離した」ときに閉じる**(第5.427節)──────
+       膜は画面ぜんぶを覆うので、**開けたボタンの上にも乗っている。**
+       `pointerdown` で閉じると膜はその場で消え、**あとから来る `click` が
+       下のボタンに当たって、もう一度開く**(実機でそうなっていた)。
+       ここでは**押しただけでは閉じないこと**を measure する ——
+       閉じてしまう形に戻すと赤くなる。 */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.waitForTimeout(500)
+    const 設定 = await page.$('.lesson-sets')
+    if (!設定) {
+      ng('シートの閉じ方 … 「設定」のボタンが無い', '見張りが素通りしている')
+    } else {
+      await 設定.click()
+      await page.waitForTimeout(300)
+      const 開いた = await page.evaluate(() => !!document.querySelector('.sheet'))
+      /* **押しただけ**(離さない)。膜の上を押す */
+      await page.evaluate(() => {
+        const back = document.querySelector('.sheet-back')
+        back?.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }))
+      })
+      await page.waitForTimeout(250)
+      const 押しただけ = await page.evaluate(() => !!document.querySelector('.sheet'))
+      /* 離すと閉じる */
+      await page.evaluate(() => {
+        const back = document.querySelector('.sheet-back')
+        back?.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }))
+      })
+      await page.waitForTimeout(250)
+      const 離したあと = await page.evaluate(() => !!document.querySelector('.sheet'))
+      if (!開いた) ng('シートの閉じ方 … 「設定」を押しても開かない')
+      else if (!押しただけ) {
+        ng('シートの閉じ方 … 押しただけで閉じている',
+          '膜が消えたあとの `click` が、下のボタンに当たってもう一度開く(実機)')
+      } else if (離したあと) {
+        ng('シートの閉じ方 … 膜を押して離しても閉じない')
+      } else {
+        ok('シートの閉じ方 … 押しただけでは閉じず、離したときに閉じる(開けたボタンに届かない)')
+      }
+    }
+    await page.close()
+  }
+
+  /* ── ★ **暗い配色の紙で、訳に色を持たせない**(第5.428節)──────
+       解答(緑)・補足(金)と3色並ぶと、1つの箱の中が賑やかになる。
+       **数は書かない** —— 「ふつうの字と同じ色か」「解答・補足とは違うか」
+       だけを見る。 */
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+      { waitUntil: 'networkidle' })
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    await page.waitForTimeout(400)
+    const c = await page.evaluate(() => {
+      const 紙 = document.querySelector('.lesson-sheet')
+      if (!紙) return null
+      const e = document.createElement('span')
+      紙.appendChild(e)
+      const 読む = (v) => { e.style.color = v; return window.getComputedStyle(e).color }
+      const out = {
+        訳: 読む('var(--translate)'),
+        解答: 読む('var(--answer)'),
+        補足: 読む('var(--note)'),
+        字: 読む('var(--text-secondary)'),
+      }
+      e.remove()
+      return out
+    })
+    await page.close()
+    if (!c) ng('紙の色 … 紙が出ていない', '見張りが素通りしている')
+    else if (c.訳 !== c.字) {
+      ng('紙の色(暗い配色) … 訳が、ふつうの字と違う色になっている',
+        `訳 ${c.訳} / 字 ${c.字}`)
+    } else if (c.解答 === c.字 || c.補足 === c.字) {
+      ng('紙の色(暗い配色) … 解答か補足まで色が抜けている',
+        `解答 ${c.解答} / 補足 ${c.補足} / 字 ${c.字}`)
+    } else {
+      ok(`紙の色(暗い配色) … 訳はふつうの字と同じ(${c.訳})。`
+        + `解答(${c.解答})と補足(${c.補足})だけが色を持つ`)
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
  * **操作盤を開くボタンの絵は、「聴く」の絵と違う**
  * (2026-10-08 実機・利用者の指定・第5.424節)
  *

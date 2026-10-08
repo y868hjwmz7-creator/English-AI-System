@@ -82,10 +82,29 @@ export default function SettingsSheet({
 
   return createPortal(
     /* **膜そのものを押しても閉じる**(外側を押した、と同じこと)。
-       シートの中は `stopPropagation` で守る */
-    <div className="sheet-back" onPointerDown={onClose}>
+       シートの中は `stopPropagation` で守る。
+
+       ★ **閉じるのは「押した」ではなく「押して離した」とき**
+         (2026-10-08 実機・利用者の指摘・第5.427節)
+
+           > 右上の詳細ボタンで開いたものを再び同じボタンを押しても
+           > 閉じることができません
+
+         膜は画面ぜんぶを覆うので、**開けたボタンの上にも乗っている。**
+         `pointerdown` で閉じると、膜はその場で消える ——
+         そのあとに来る `click` が、**下から出てきたボタンに当たって
+         もう一度開く。** 指の端末では押して離すまでに間があるので、
+         必ずこうなる(こちらの Chromium では、膜が消える前に `click` の
+         行き先が決まるので**再現しない** ——
+         **実機でしか出ない形**である)。
+
+         `click` で閉じれば、押してから離すまで膜は消えない。
+         `click` の行き先は膜のままなので、**ボタンには何も届かない。** */
+    <div className="sheet-back" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title}
-           onPointerDown={(e) => e.stopPropagation()}>
+           /* **中を押したぶんは、膜へ渡さない**(閉じない)。
+              `click` で閉じるようにしたので、止めるのも `click` である */
+           onClick={(e) => e.stopPropagation()}>
         {/* **つまみ**(見た目だけ)。下から出てきたことが目で分かる。
             つまんで下ろす操作は付けていない —— ✕ と外側と Esc で足りる */}
         <div className="sheet-grip" aria-hidden="true" />
