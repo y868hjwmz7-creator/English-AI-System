@@ -122,59 +122,89 @@ export default function CardMove({
 
   /* ── スワイプ(指の端末だけ)──────────────────────────────── */
   const 指 = useRef(null)
+  /** 引いているあいだ、窓で聞いているものを外す道 */
+  const 外す = useRef(null)
+  const 終い = useCallback(() => {
+    if (外す.current) { 外す.current(); 外す.current = null }
+    指.current = null
+    setDrag(0)
+  }, [])
+  /* **画面が消えるときは、必ず外す**(聞きっぱなしにしない) */
+  useEffect(() => 終い, [終い])
+
   const down = (e) => {
     if (!on || !isCoarse()) return
     /* **英文の上から始まった動きは、なぞる操作である**(第5.17節)。
        ここで送りに取ると、語を選ぶたびにカードが飛ぶ */
     try { if (e.target?.closest?.('.etext')) return } catch { /* 下で拾う */ }
-    指.current = { x: e.clientX, y: e.clientY, t: Date.now() }
-    /* ★ **指を捕まえておく**(2026-10-08)。
-         取らないと、**指がカードの外へ出た時点で動きが届かなくなる** ——
-         端のほうではらうと、途中で消えたように見える */
-    try { e.currentTarget.setPointerCapture?.(e.pointerId) } catch { /* 無くても動く */ }
-  }
+    const from = { x: e.clientX, y: e.clientY, t: Date.now() }
+    指.current = from
 
-  /* ★ **引いている最中、カードを指につける**(2026-10-08 利用者の指摘
-       「なんかスワイプの反応が良くないです」)。
+    /* ★ **指は「窓」で追いかける**(2026-10-08)。
+         カードの外へ出ても届くので、端ではらっても途中で消えない。
 
-       **実測したら、引いている最中のズレは 0px だった** ——
-       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
-       **動かしているあいだ何も起きないものは、効いていないのと同じ**である。
+         ★★ **`setPointerCapture` は使わない。**
+         いちど使ったところ、**指の端末でカードの中のボタンが
+         1つも押せなくなった**(実測 —— `click` が、押したボタンではなく
+         `.cardmove` に当たる)。捕まえると、そのあとの `pointerup` まで
+         入れ物へ付け替えられるので、**ブラウザがボタンを押したと見なせない。**
+         窓で聞けば、付け替えは起きない。 */
+    /** 引いたか(ただ触れただけか)。**引いたなら、押したことにしない** */
+    let 引いた = false
+    const 動く = (ev) => {
+      const f = 指.current
+      if (!f) return
+      const ずれ = dragShift({ dx: ev.clientX - f.x, dy: ev.clientY - f.y })
+      if (ずれ) 引いた = true
+      setDrag(ずれ)
+    }
+    const 離す = (ev) => {
+      const f = 指.current
+      終い()
+      /* ★ **引いたあとの「押した」を飲み込む**(2026-10-08 実測)。
 
-       **どれだけずらすかは `dragShift()` 1か所**(画面では決めない)。 */
-  const move = (e) => {
-    const from = 指.current
-    if (!from) return
-    setDrag(dragShift({ dx: e.clientX - from.x, dy: e.clientY - from.y }))
-  }
+           はらい始めが「まだ」「言える」の上だと、**はらったあとに
+           そのボタンまで押されて、記録が動いていた。**
+           (`setPointerCapture` をやめた日に出てきた —— あれは
+           ついでにクリックも殺していたので、隠れていた。)
 
-  const up = (e) => {
-    const from = 指.current
-    指.current = null
-    setDrag(0)
-    if (!from) return
-    const 行き先 = swipeMove({
-      dx: e.clientX - from.x, dy: e.clientY - from.y, ms: Date.now() - from.t,
-    })
-    /* **届かなかったら、その場へ戻る。** 戻る動きが見えるので、
-       「効かなかった」ことが分かる(黙って何も起きない、をやめる) */
-    if (!行き先) return
-    /* ★ **その向きへ流して、すぐ送る**(2026-10-07 利用者の指定)。
-         **ボタンで押したときは流さない** —— 指がボタンの上にあるので、
-         動かすと次の問のボタンが指の下に来る(共通ルール)。
-         **ここへ来るのは `prev` / `next` だけ**(`swipeMove` は
-         判定を返さない・2026-10-08 の仕様変更) */
-    setFly(行き先)
-    window.setTimeout(() => { setFly(''); run(行き先) }, FLY_MS)
+           **引いたときだけ飲み込む。** ただ触れただけなら、
+           これまでどおり押したことになる。 */
+      if (引いた) {
+        const 飲む = (ev2) => { ev2.stopPropagation(); ev2.preventDefault() }
+        window.addEventListener('click', 飲む, true)
+        window.setTimeout(() => window.removeEventListener('click', 飲む, true), 0)
+      }
+      if (!f) return
+      const 行き先 = swipeMove({
+        dx: ev.clientX - f.x, dy: ev.clientY - f.y, ms: Date.now() - f.t,
+      })
+      /* **届かなかったら、その場へ戻る。** 戻る動きが見えるので、
+         「効かなかった」ことが分かる(黙って何も起きない、をやめる) */
+      if (!行き先) return
+      /* ★ **その向きへ流して、すぐ送る**(2026-10-07 利用者の指定)。
+           **ボタンで押したときは流さない** —— 指がボタンの上にあるので、
+           動かすと次の問のボタンが指の下に来る(共通ルール)。
+           **ここへ来るのは `prev` / `next` だけ**(`swipeMove` は
+           判定を返さない・2026-10-08 の仕様変更) */
+      setFly(行き先)
+      window.setTimeout(() => { setFly(''); run(行き先) }, FLY_MS)
+    }
+    window.addEventListener('pointermove', 動く)
+    window.addEventListener('pointerup', 離す)
+    window.addEventListener('pointercancel', 終い)
+    外す.current = () => {
+      window.removeEventListener('pointermove', 動く)
+      window.removeEventListener('pointerup', 離す)
+      window.removeEventListener('pointercancel', 終い)
+    }
   }
 
   const 出す = edgeFits(space)
   const 幅 = `${space}px`
 
   return (
-    <div className="cardmove" ref={holdRef}
-         onPointerDown={down} onPointerMove={move} onPointerUp={up}
-         onPointerCancel={() => { 指.current = null; setDrag(0) }}
+    <div className="cardmove" ref={holdRef} onPointerDown={down}
          style={(() => {
            /* **数は `cardMove.js` 1か所から来る。** CSS にも書かない */
            if (fly) {

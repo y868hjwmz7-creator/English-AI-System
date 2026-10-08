@@ -14407,11 +14407,20 @@ for (const [q2, 期待, 何] of [
       else ng('指の端末 … 戻ったときに記録が動いた', `済み ${記録} → ${記録3}`)
 
       /* ★ **出る側。** ボタンを押したときは、ちゃんと記録が動く ——
-           これが無いと「どこを押しても記録されない」形でも緑になる */
-      await page.evaluate(() => {
-        const b2 = [...document.querySelectorAll('.wordcard-answers button')]
-        if (b2[0]) b2[0].click()
-      })
+           これが無いと「どこを押しても記録されない」形でも緑になる。
+
+           ★★ **本物のタップで押す。** `el.click()` を呼ぶと
+           **指の動き(pointer)をまたいで届いてしまう**ので、
+           **実機で1つも押せなくなっていても緑のまま**だった ——
+           実際、`setPointerCapture` を入れた日に
+           **指の端末でカードの中のボタンが全部死んでいた**のに、
+           この見張りは気づかなかった(2026-10-08)。 */
+      try {
+        await page.locator('.wordcard-answers button').first().tap({ timeout: 4000 })
+      } catch (e) {
+        ng('指の端末 … カードの中のボタンを、指で押せない',
+          String(e.message).split('\n')[0].slice(0, 60))
+      }
       await page.waitForTimeout(600)
       const 記録4 = await 済み(page)
       if (記録4 > 記録3) ok('指の端末 … ボタンを押したときは、記録が動く', `済み ${記録3} → ${記録4}`)
@@ -14433,6 +14442,38 @@ for (const [q2, 期待, 何] of [
       const page = await 単語帳を開く({
         viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
       })
+      /* ★ **押したボタンに、本当に当たっているか**(2026-10-08)。
+
+           `setPointerCapture` を使うと、**そのあとの `pointerup` まで
+           入れ物へ付け替えられる**ので、ブラウザは「ボタンを押した」と
+           見なさない —— **`click` が `.cardmove` に当たり、
+           カードの中のボタンが1つも効かなくなる。**
+           **当たり先そのものを見る。** */
+      {
+        const 当たり = await page.evaluate(() => {
+          window.__hit = []
+          document.addEventListener('click', (e) => {
+            window.__hit.push(e.target.className || e.target.tagName)
+          }, true)
+          return true
+        })
+        if (当たり) {
+          /* ★ **`tap()` では再現しない**(2026-10-08 実測)。
+               あちらは touch から click を作るので、**指の付け替えの
+               影響を受けない。** 付け替えが出るのは pointer を通る押し方
+               (`click()`)である —— **捕まえられた形で測る。** */
+          try { await page.locator('.wordcard-actions button').first().click({ timeout: 4000 }) }
+          catch { /* 下で「当たっていない」として出る */ }
+          await page.waitForTimeout(200)
+          const 先 = await page.evaluate(() => window.__hit[0] ?? '(押せていない)')
+          if (/cardmove/.test(先) || 先 === '(押せていない)') {
+            ng('指の端末 … 押したボタンではなく、入れ物に当たっている',
+              `当たり先「${先}」—— カードの中のボタンが1つも効かない`)
+          } else {
+            ok('指の端末 … 押したボタンに、ちゃんと当たっている', `当たり先「${先}」`)
+          }
+        }
+      }
       /* **横の動きを、ブラウザに取られない形になっているか** */
       const 指の決まり = await page.evaluate(() => (
         window.getComputedStyle(document.querySelector('.cardmove')).touchAction))
