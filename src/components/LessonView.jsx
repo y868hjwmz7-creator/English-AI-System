@@ -64,7 +64,7 @@ import { shuffled } from '../lib/shuffle.js'
 import { SPEECH_RATES, loadRateId, rateOf, saveRateId } from '../lib/speechRate.js'
 import {
   BoltIcon, FocusIcon, NoteIcon, PenIcon, PrintIcon,
-  SortIcon, SpeakerIcon, StepsIcon, StopIcon,
+  PlayerIcon, SortIcon, SpeakerIcon, StepsIcon, StopIcon,
 } from './Icons.jsx'
 /* **一度決める設定は、右上のアイコン1つの中へ**(2026-09-29 利用者の指定)。
    絵は `SortIcon`(三本線と丸)——**すでに「設定」に使っている絵**である
@@ -1686,7 +1686,12 @@ export default function LessonView({
                       aria-label={floatOpen ? '読み上げの操作を閉じる' : '読み上げの操作を開く'}
                       aria-pressed={floatOpen}
                       onClick={() => setFloatOpen((v) => !v)}>
-                <SpeakerIcon />
+                {/* ★ **スピーカーをやめた**(2026-10-08 利用者の指定・
+                      第5.424節)。このボタンは**音を出す**ものではなく、
+                      **下の操作盤を開け閉めする**ものである ——
+                      すぐ下に本物のスピーカー(「聴く」)が並ぶので
+                      紛らわしかった。37 案から利用者が**案30**を選んだ */}
+                <PlayerIcon />
               </button>
             )}
           </>
