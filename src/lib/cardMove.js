@@ -121,9 +121,34 @@ export const keyLabel = (text, move, { keys = true } = {}) => (
  * ★ **スワイプと認める最小の横の動き**(px)。
  *
  * 短すぎると、**語をなぞって単語帳に入れる操作**や、ただのタップを
- * 判定と取り違える。長すぎると、片手で届かない。
+ * 送りと取り違える。長すぎると、片手で届かない。
+ *
+ * ★ **押せる的の大きさ(`TAP_MIN`)と同じ数にする**(2026-10-08)。
+ * もとは 56px の決め打ちで、**指を 56px 引くまで何も起きなかった。**
+ * **数は1か所から出す** —— 「指で狙える動き」はどちらも同じ話である。
  */
-export const SWIPE_MIN = 56
+export const SWIPE_MIN = TAP_MIN
+
+/**
+ * ★ **さっとはらったときは、短くても送る**(2026-10-08 利用者の指摘
+ * 「スワイプの反応が良くない」)。
+ *
+ * 指は**速く小さく**動かすほうが自然で、`SWIPE_MIN` まで引く前に
+ * 離してしまう。**速さを見れば、その短いはらいも拾える。**
+ *
+ * `SWIPE_FLICK` px 以上動いていて、`SWIPE_SPEED` px/ミリ秒 以上の速さ。
+ */
+export const SWIPE_FLICK = 20
+export const SWIPE_SPEED = 0.4
+
+/**
+ * ★ **指について動き始める距離**(px)。
+ *
+ * これを超えたら「横に引いている」と見なして、**カードを指につける。**
+ * 小さすぎるとタップでも動いてしまい、大きすぎると**引いても
+ * 何も起きない時間**ができる(それが「反応が良くない」の正体だった)。
+ */
+export const DRAG_FROM = 6
 
 /**
  * ★ **横より縦に動いていたら、スワイプではない。**
@@ -134,11 +159,16 @@ export const SWIPE_MIN = 56
 export const SWIPE_SLOPE = 1.5
 
 /**
- * ★ **ゆっくりすぎる動きは、スワイプではない**(ミリ秒)。
+ * ★ **ゆっくりでも、しっかり引いたなら送る**(2026-10-08)。
  *
- * 指を置いたまま考えて、たまたま横へずれた、を拾わないため。
+ * もとは **1 秒を超えたら送らない**ことにしていたが、
+ * **ゆっくり確かめながら引く人の操作が、黙って消えていた。**
+ * いまは「`SWIPE_MIN` 引いたか」「さっとはらったか」だけで決める。
+ *
+ * この数は**速さを出すときの割り算の下限**としてだけ残してある
+ * (0 で割らないため)。
  */
-export const SWIPE_MS = 1000
+export const SWIPE_MS = 1
 
 /**
  * 指の動きが、どの**送り**か。
@@ -158,11 +188,37 @@ export const SWIPE_MS = 1000
 export function swipeMove({ dx = 0, dy = 0, ms = 0 } = {}) {
   const x = Number(dx) || 0
   const y = Math.abs(Number(dy) || 0)
-  const t = Number(ms) || 0
-  if (Math.abs(x) < SWIPE_MIN) return null
+  const t = Math.max(Number(ms) || 0, SWIPE_MS)
+  /* **横より縦に動いていたら、画面を送っているだけ** */
   if (Math.abs(x) < y * SWIPE_SLOPE) return null
-  if (t > SWIPE_MS) return null
+  /* **しっかり引いた**(ゆっくりでもよい) */
+  const 引いた = Math.abs(x) >= SWIPE_MIN
+  /* ★ **さっとはらった**(短くても速ければ送る・2026-10-08) */
+  const はらった = Math.abs(x) >= SWIPE_FLICK && Math.abs(x) / t >= SWIPE_SPEED
+  if (!引いた && !はらった) return null
   return x > 0 ? 'next' : 'prev'
+}
+
+/**
+ * ★ **引いている最中、カードを指につける**(2026-10-08 利用者の指摘)。
+ *
+ *   > なんかスワイプの反応が良くないです
+ *
+ * **実測したら、引いている最中のズレは 0px だった** ——
+ * 指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
+ * **動かしているあいだ何も起きないものは、効いていないのと同じ**である。
+ *
+ * **横に引いていると分かってから**(`DRAG_FROM`)、そのぶんだけ動かす。
+ * **縦のほうが大きいあいだは動かさない**(画面を送っているだけなので)。
+ *
+ * @returns {number} カードをずらす px。**0 なら、まだ動かさない**
+ */
+export function dragShift({ dx = 0, dy = 0 } = {}) {
+  const x = Number(dx) || 0
+  const y = Math.abs(Number(dy) || 0)
+  if (Math.abs(x) < DRAG_FROM) return 0
+  if (Math.abs(x) < y) return 0
+  return x
 }
 
 /**

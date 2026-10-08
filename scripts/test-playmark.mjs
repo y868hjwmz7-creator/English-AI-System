@@ -141,8 +141,9 @@ import {
 /* ★ カードを送る・判定する操作(第5.417節・段階4)。
      **何にも依存しない形**に出してあるので、素の node で数字を見張れる */
 import {
-  COARSE_Q, FLY_MS, KEY_MARK, SWIPE_MIN, SWIPE_MS, SWIPE_SLOPE, TAP_MIN,
-  edgeFits, edgeSpace, flyX, isCoarse, keyLabel, keyMove, swipeMove,
+  COARSE_Q, DRAG_FROM, FLY_MS, KEY_MARK, SWIPE_FLICK, SWIPE_MIN, SWIPE_SLOPE,
+  SWIPE_SPEED, TAP_MIN,
+  dragShift, edgeFits, edgeSpace, flyX, isCoarse, keyLabel, keyMove, swipeMove,
 } from '../src/lib/cardMove.js'
 /* ★ 出会った時期(第5.414節)。**素の node で測れる形**に出してある */
 import { MET_RANGES, inMet, metLabel } from '../src/lib/metRange.js'
@@ -15508,7 +15509,7 @@ console.log('\n▶ スワイプは「送る」だけ。判定しない(第5.417�
   const 判定 = []
   for (const dx of [-400, -SWIPE_MIN * 2, -SWIPE_MIN, SWIPE_MIN, SWIPE_MIN * 2, 400]) {
     for (const dy of [0, 5, -5, SWIPE_MIN / 2]) {
-      for (const ms of [50, 300, SWIPE_MS]) {
+      for (const ms of [50, 300, 3000]) {
         const m = swipeMove({ dx, dy, ms })
         if (m && m !== 'prev' && m !== 'next') 判定.push(`${dx}/${dy}/${ms} → ${m}`)
       }
@@ -15527,14 +15528,14 @@ console.log('\n▶ スワイプは「送る」だけ。判定しない(第5.417�
     '左右で、前へと次への2通りが出る', [...送り].join(' / '))
 
   /* **境目の数を書き写さない。** `SWIPE_MIN` などから組む */
-  ok(swipeMove({ dx: SWIPE_MIN - 1, dy: 0, ms: 100 }) === null,
-    '短すぎる動きは、スワイプではない', `${SWIPE_MIN - 1}px`)
+  /* **届かない動き** —— 引きも足りず、はらってもいない
+     (`SWIPE_MIN` に届かず、速さも `SWIPE_SPEED` に届かない) */
+  ok(swipeMove({ dx: SWIPE_MIN - 1, dy: 0, ms: (SWIPE_MIN - 1) / SWIPE_SPEED + 100 }) === null,
+    '短くて、しかも遅い動きは送らない', `${SWIPE_MIN - 1}px`)
   ok(swipeMove({ dx: 0, dy: 0, ms: 100 }) === null,
     'ただのタップ(動いていない)は、何もしない')
   ok(swipeMove({ dx: SWIPE_MIN, dy: SWIPE_MIN * SWIPE_SLOPE, ms: 100 }) === null,
     '横より縦に動いていたら、画面を送っているだけ')
-  ok(swipeMove({ dx: SWIPE_MIN * 4, dy: 1, ms: SWIPE_MS + 1 }) === null,
-    'ゆっくりすぎる動きは、スワイプではない', `${SWIPE_MS + 1}ms`)
   ok(swipeMove() === null, '何も渡されなければ、何もしない')
   ok(swipeMove({ dx: SWIPE_MIN * 2, dy: SWIPE_MIN, ms: 200 }) === 'next',
     '斜めでも、横が大きければ効く')
@@ -15551,6 +15552,49 @@ console.log('\n▶ スワイプは「送る」だけ。判定しない(第5.417�
     'カードの幅より大きく流す(画面の外へ出る)', `${flyX('next')} / ${flyX('prev')}`)
   ok(FLY_MS > 0 && FLY_MS < 1000,
     '流れるのは、待たされない短さである', `${FLY_MS}ms`)
+
+  /* ★ **さっとはらったら、短くても送る**(2026-10-08 利用者の指摘
+       「なんかスワイプの反応が良くないです」)。
+
+       指は**速く小さく**動かすほうが自然で、`SWIPE_MIN` まで引く前に
+       離してしまう。**速さを見れば、その短いはらいも拾える。** */
+  ok(swipeMove({ dx: SWIPE_FLICK, dy: 0, ms: SWIPE_FLICK / SWIPE_SPEED }) === 'next',
+    'さっとはらえば、短くても送る', `${SWIPE_FLICK}px`)
+  ok(swipeMove({ dx: SWIPE_FLICK - 1, dy: 0, ms: 10 }) === null,
+    '短すぎるものは、速くても送らない(ただのタップ)', `${SWIPE_FLICK - 1}px`)
+  ok(swipeMove({ dx: SWIPE_FLICK, dy: 0, ms: SWIPE_FLICK / SWIPE_SPEED * 3 }) === null,
+    '短いまま、ゆっくりなら送らない(指が置かれてずれただけ)')
+  /* ★ **ゆっくりでも、しっかり引いたなら送る**(時間で切らない)。
+       もとは1秒を超えると**黙って消えていた** */
+  ok(swipeMove({ dx: SWIPE_MIN, dy: 0, ms: 5000 }) === 'next',
+    'ゆっくり引いても、しっかり引いたなら送る', '5 秒かけても効く')
+  /* **引く長さの下限は、押せる的と同じ数から出す**(書き写さない) */
+  ok(SWIPE_MIN === TAP_MIN, '引く長さの下限は、押せる的と同じ1か所から',
+    `${SWIPE_MIN}px`)
+
+  /* ★ **引いている最中、カードが指についてくるか**(2026-10-08)。
+
+       **実測したら、引いている最中のズレは 0px だった** ——
+       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
+       **動かしているあいだ何も起きないものは、効いていないのと同じ**。
+       どれだけずらすかは `dragShift()` 1か所で決める。 */
+  ok(dragShift({ dx: 40, dy: 0 }) === 40, '引いたぶんだけ、カードが動く(1 対 1)')
+  ok(dragShift({ dx: -40, dy: 0 }) === -40, '左へ引いても、そのぶん動く')
+  ok(dragShift({ dx: DRAG_FROM - 1, dy: 0 }) === 0,
+    'ほんの少し触れただけでは動かない(タップと分ける)', `${DRAG_FROM - 1}px`)
+  ok(dragShift({ dx: DRAG_FROM, dy: 0 }) === DRAG_FROM,
+    `${DRAG_FROM}px 引いたら、そこから指についてくる`)
+  ok(dragShift({ dx: 30, dy: 60 }) === 0,
+    '縦のほうが大きければ動かさない(画面を送っているだけ)')
+  ok(dragShift() === 0, '何も渡されなければ、動かさない')
+  /* **動く側と動かない側の両方を数える**(片方だけだと、
+     どんな動きでも動かす形・1つも動かさない形で緑になる) */
+  {
+    const 動く = [10, 40, -40, 200].filter((d) => dragShift({ dx: d, dy: 0 }) !== 0).length
+    const 動かない = [0, 1, 3].filter((d) => dragShift({ dx: d, dy: 0 }) === 0).length
+    ok(動く === 4 && 動かない === 3, '動く形と動かない形が、どちらもある',
+      `動く ${動く} / 動かない ${動かない}`)
+  }
 
   /* ★ **キーは、いままでどおり4つとも効く**(判定は ↑↓ が持つ) */
   ok(keyMove({ key: 'ArrowUp' }) === 'ok' && keyMove({ key: 'ArrowDown' }) === 'yet',
@@ -15610,12 +15654,13 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
 
   const c = 素('src/components/CardMove.jsx')
   /* **使っている形で数える**(「名前が出てくるか」で見ない・CLAUDE.md) */
-  for (const 呼ぶ of ['keyMove(', 'swipeMove(', 'edgeFits(', 'edgeSpace(', 'flyX(', 'isCoarse(']) {
+  for (const 呼ぶ of ['keyMove(', 'swipeMove(', 'dragShift(', 'edgeFits(', 'edgeSpace(',
+    'flyX(', 'isCoarse(']) {
     ok(c.includes(呼ぶ), `判定は \`${呼ぶ})\` に任せている`)
   }
   /* ★ **境目の数を、画面に書き写していない。**
        書き写すと、`cardMove.js` を直した日に片方だけ古くなる */
-  for (const 数 of [String(TAP_MIN), String(SWIPE_MIN), String(SWIPE_MS), String(FLY_MS)]) {
+  for (const 数 of [String(TAP_MIN), String(SWIPE_FLICK), String(DRAG_FROM), String(FLY_MS)]) {
     const 回 = (c.match(new RegExp(`(^|[^\\w.])${数}([^\\w]|$)`, 'g')) ?? []).length
     ok(回 === 0, `境目の数(${数})を画面に書き写していない`, `${回} か所`)
   }

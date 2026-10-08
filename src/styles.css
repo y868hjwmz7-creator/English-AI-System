@@ -11761,6 +11761,17 @@ button.wbfilter-ctl { text-align: left; }
    **測ってから直す**(CLAUDE.md「推測でいじらない。まず測る」)。 */
 .cardmove {
   position: relative;
+  /* ★ **横の動きは、こちらが受け取る**(2026-10-08 利用者の指摘
+     「スワイプの反応が良くない」)。
+
+     `auto` のままだと**ブラウザが横の動きを取っていく**ことがあり、
+     そのとき指は `pointercancel` で**黙って消える**(実測 `auto`)。
+     `pan-y` にすると、**縦に送るのはブラウザ、横はこちら**に分かれる。
+
+     `none` にはしない —— 縦に送れなくなり、長い本文が読めなくなる。 */
+  touch-action: pan-y;
+  /* 引いているあいだ、字が選ばれてしまわないように */
+  -webkit-user-select: none; user-select: none;
   display: flex; flex-direction: column; min-height: 0;
   /* ★ **`align-items` を必ず確かめる**(共通ルール・ここで踏んだ)。
      既定の `stretch` は、カードが持っている `margin: 0 auto` に負ける ——
@@ -11784,6 +11795,13 @@ button.wbfilter-ctl { text-align: left; }
    だから入れ物は**中に何が入っているかで決める** —— `:has()` で見る。
    こうすれば、入れ物を挟む前とまったく同じ振る舞いになる。 */
 .cardmove:has(> .wordcard--recall) { flex: 1 1 auto; }
+
+/* ★ **届かなかったら、その場へ戻る**(2026-10-08)。
+   戻る動きが見えるので、**「効かなかった」ことが分かる** ——
+   黙って何も起きないのが、いちばん「反応が悪い」と感じる。
+   引いている最中は画面が `transition: none` を渡すので、ここは
+   **指を離したあとだけ**効く。 */
+.cardmove { transition: transform var(--motion-tap) var(--ease-out); }
 
 /* **押せる帯。** 幅は画面が実測して `style` で渡す(決め打ちにしない)。
    **見えるのは、ごくうすい地色だけ** —— 札でも絵でもない。

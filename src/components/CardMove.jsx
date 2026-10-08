@@ -42,7 +42,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  FLY_MS, edgeFits, edgeSpace, flyX, isCoarse, keyMove, swipeMove,
+  FLY_MS, dragShift, edgeFits, edgeSpace, flyX, isCoarse, keyMove, swipeMove,
 } from '../lib/cardMove.js'
 
 /** いま字を打っているか。**打っていたら矢印キーを1つも効かせない** */
@@ -66,8 +66,10 @@ export default function CardMove({
   const holdRef = useRef(null)
   /** 片側の余白(px)。**実測した値だけを使う** */
   const [space, setSpace] = useState(0)
-  /** スワイプで判定したあと、その向きへ流す */
+  /** スワイプで送ったあと、その向きへ流す */
   const [fly, setFly] = useState('')
+  /** ★ 引いている最中の、指についていくズレ(px) */
+  const [drag, setDrag] = useState(0)
 
   /* 鳴らしている最中に呼ぶものは控えで持つ(いつも最新になる) */
   const doRef = useRef({})
@@ -123,25 +125,47 @@ export default function CardMove({
   const down = (e) => {
     if (!on || !isCoarse()) return
     /* **英文の上から始まった動きは、なぞる操作である**(第5.17節)。
-       ここで判定に取ると、語を選ぶたびにカードが飛ぶ */
+       ここで送りに取ると、語を選ぶたびにカードが飛ぶ */
     try { if (e.target?.closest?.('.etext')) return } catch { /* 下で拾う */ }
     指.current = { x: e.clientX, y: e.clientY, t: Date.now() }
+    /* ★ **指を捕まえておく**(2026-10-08)。
+         取らないと、**指がカードの外へ出た時点で動きが届かなくなる** ——
+         端のほうではらうと、途中で消えたように見える */
+    try { e.currentTarget.setPointerCapture?.(e.pointerId) } catch { /* 無くても動く */ }
   }
+
+  /* ★ **引いている最中、カードを指につける**(2026-10-08 利用者の指摘
+       「なんかスワイプの反応が良くないです」)。
+
+       **実測したら、引いている最中のズレは 0px だった** ——
+       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
+       **動かしているあいだ何も起きないものは、効いていないのと同じ**である。
+
+       **どれだけずらすかは `dragShift()` 1か所**(画面では決めない)。 */
+  const move = (e) => {
+    const from = 指.current
+    if (!from) return
+    setDrag(dragShift({ dx: e.clientX - from.x, dy: e.clientY - from.y }))
+  }
+
   const up = (e) => {
     const from = 指.current
     指.current = null
+    setDrag(0)
     if (!from) return
-    const move = swipeMove({
+    const 行き先 = swipeMove({
       dx: e.clientX - from.x, dy: e.clientY - from.y, ms: Date.now() - from.t,
     })
-    if (!move) return
+    /* **届かなかったら、その場へ戻る。** 戻る動きが見えるので、
+       「効かなかった」ことが分かる(黙って何も起きない、をやめる) */
+    if (!行き先) return
     /* ★ **その向きへ流して、すぐ送る**(2026-10-07 利用者の指定)。
          **ボタンで押したときは流さない** —— 指がボタンの上にあるので、
          動かすと次の問のボタンが指の下に来る(共通ルール)。
          **ここへ来るのは `prev` / `next` だけ**(`swipeMove` は
          判定を返さない・2026-10-08 の仕様変更) */
-    setFly(move)
-    window.setTimeout(() => { setFly(''); run(move) }, FLY_MS)
+    setFly(行き先)
+    window.setTimeout(() => { setFly(''); run(行き先) }, FLY_MS)
   }
 
   const 出す = edgeFits(space)
@@ -149,14 +173,24 @@ export default function CardMove({
 
   return (
     <div className="cardmove" ref={holdRef}
-         onPointerDown={down} onPointerUp={up}
-         onPointerCancel={() => { 指.current = null }}
-         style={fly ? {
+         onPointerDown={down} onPointerMove={move} onPointerUp={up}
+         onPointerCancel={() => { 指.current = null; setDrag(0) }}
+         style={(() => {
            /* **数は `cardMove.js` 1か所から来る。** CSS にも書かない */
-           transform: `translateX(${flyX(fly)})`,
-           opacity: 0,
-           transition: `transform ${FLY_MS}ms ease-in, opacity ${FLY_MS}ms ease-in`,
-         } : undefined}>
+           if (fly) {
+             return {
+               transform: `translateX(${flyX(fly)})`,
+               opacity: 0,
+               transition: `transform ${FLY_MS}ms ease-in, opacity ${FLY_MS}ms ease-in`,
+             }
+           }
+           /* ★ **引いている最中は、指についていく。**
+                `transition` を付けない —— 付けると指より遅れて動き、
+                **引っぱっているのに重い**と感じる */
+           if (drag) return { transform: `translateX(${drag}px)`, transition: 'none' }
+           /* **離して届かなかったときは、ここへ戻る**(戻る動きは見せる) */
+           return undefined
+         })()}>
       {children}
       {/* ★ **押せる帯は、この入れ物の中**(第5.417節)。
             窓に対して置くと、上の帯にも下のタブバーにもかかる。

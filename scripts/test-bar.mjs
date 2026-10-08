@@ -14419,6 +14419,65 @@ for (const [q2, 期待, 何] of [
       await page.close()
     }
 
+    /* ★ ── **引いている最中、カードが指についてくるか**(2026-10-08)──
+
+         > なんかスワイプの反応が良くないです
+
+       **実測したら、引いている最中のズレは 0px だった** ——
+       指を動かしても画面は1pxも動かず、離して 300ms 後にようやく飛ぶ。
+       **動かしているあいだ何も起きないものは、効いていないのと同じ**である。
+
+       ソースに `dragShift(` と書いてあるかでは見張れない ——
+       **本当に引いて、`transform` を測る**(`test:feel` と同じ考え方)。 */
+    {
+      const page = await 単語帳を開く({
+        viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+      })
+      /* **横の動きを、ブラウザに取られない形になっているか** */
+      const 指の決まり = await page.evaluate(() => (
+        window.getComputedStyle(document.querySelector('.cardmove')).touchAction))
+      if (/pan-y|none/.test(指の決まり)) {
+        ok('引いている最中 … 横の動きは、こちらが受け取る', `touch-action: ${指の決まり}`)
+      } else {
+        ng('引いている最中 … 横の動きを、ブラウザに取られる形のまま',
+          `touch-action: ${指の決まり} —— 指が \`pointercancel\` で黙って消える`)
+      }
+      const 箱 = await page.evaluate(() => {
+        const el = document.querySelector('.wordcard-answers') ?? document.querySelector('.wordcard')
+        const { x, y, width, height } = el.getBoundingClientRect()
+        return { x: x + width / 2, y: y + height / 2 }
+      })
+      const ずれ = () => page.evaluate(() => {
+        const t = window.getComputedStyle(document.querySelector('.cardmove')).transform
+        return t === 'none' ? 0 : Math.round(parseFloat(t.split(',')[4] || '0'))
+      })
+      await page.mouse.move(箱.x - SWIPE_MIN, 箱.y)
+      await page.mouse.down()
+      const 道のり = []
+      for (let i = 1; i <= 4; i += 1) {
+        await page.mouse.move(箱.x - SWIPE_MIN + (SWIPE_MIN * 2 * i) / 4, 箱.y)
+        await page.waitForTimeout(40)
+        道のり.push(await ずれ())
+      }
+      await page.mouse.up()
+      await page.waitForTimeout(700)
+      const 動いた = 道のり.filter((d) => d !== 0).length
+      const 増える = 道のり.every((d, i) => i === 0 || d >= 道のり[i - 1])
+      if (動いた === 0) {
+        ng('引いている最中 … カードが指に1pxもついてこない',
+          `ずれ ${道のり.join(',')}px —— 何も起きないものは、効いていないのと同じ`)
+      } else if (!増える) {
+        ng('引いている最中 … 指と同じ向きに動いていない', `ずれ ${道のり.join(',')}px`)
+      } else {
+        ok('引いている最中 … カードが指についてくる', `ずれ ${道のり.join(',')}px`)
+      }
+      /* **離したら、ずれは残らない**(次のカードが傾いたまま出ない) */
+      const 残り = await ずれ()
+      if (Math.abs(残り) <= 1) ok('引いている最中 … 離したら、ずれは残らない')
+      else ng('引いている最中 … 離してもカードがずれたまま', `${残り}px`)
+      await page.close()
+    }
+
     /* ── マウスの端末 … 引きずっても何も起きない ───────── */
     {
       const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
