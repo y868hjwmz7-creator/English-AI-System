@@ -14263,13 +14263,17 @@ for (const [q2, 期待, 何] of [
   {
     const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
     const ひとつめ = await いまの語(page)
+    /* ★ **待ち時間は `FLY_MS` から出す**(2026-10-08)。
+         送りは**飛んでから**入れ替わるので、決め打ちの 250ms では
+         **直っているのに赤くなる**(実際そうなった)。
+         **値を書き写さない。数は1か所から取る**(CLAUDE.md) */
     await page.click('.cardmove-edge--r')
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(FLY_MS + 250)
     const ふたつめ = await いまの語(page)
     if (ふたつめ && ふたつめ !== ひとつめ) ok('右の余白を押すと、次の語になる', `${ひとつめ} → ${ふたつめ}`)
     else ng('右の余白を押しても、語が変わらない', `${ひとつめ} / ${ふたつめ}`)
     await page.click('.cardmove-edge--l')
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(FLY_MS + 250)
     const 戻り = await いまの語(page)
     if (戻り === ひとつめ) ok('左の余白を押すと、前の語に戻る', 戻り)
     else ng('左の余白を押しても、前に戻らない', `${ひとつめ} → ${ふたつめ} → ${戻り}`)
@@ -14281,12 +14285,12 @@ for (const [q2, 期待, 何] of [
     const page = await 単語帳を開く({ viewport: { width: 1200, height: 900 } })
     const 頭 = await いまの語(page)
     await page.keyboard.press('ArrowRight')
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(FLY_MS + 250)
     const 次 = await いまの語(page)
     if (次 && 次 !== 頭) ok('→ で次の語になる', `${頭} → ${次}`)
     else ng('→ を押しても、語が変わらない', `${頭} / ${次}`)
     await page.keyboard.press('ArrowLeft')
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(FLY_MS + 250)
     const 前 = await いまの語(page)
     if (前 === 頭) ok('← で前の語に戻る', 前)
     else ng('← を押しても、前に戻らない', `${頭} → ${次} → ${前}`)
@@ -14332,7 +14336,7 @@ for (const [q2, 期待, 何] of [
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowUp')
     await page.keyboard.press('ArrowDown')
-    await page.waitForTimeout(400)
+    await page.waitForTimeout(FLY_MS + 400)
     const 後 = await いまの語(page)
     const 中身 = await page.inputValue('#__typing')
     if (後 === 頭) ok('字を打っているあいだは、矢印でカードが動かない', 頭)
@@ -14344,7 +14348,7 @@ for (const [q2, 期待, 何] of [
          「『無ければ素通り』する形の検証を書かない」) */
     await page.evaluate(() => { document.querySelector('#__typing')?.remove() })
     await page.keyboard.press('ArrowRight')
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(FLY_MS + 300)
     const 打ち終わり = await いまの語(page)
     if (打ち終わり !== 頭) ok('打つのをやめれば、矢印はまた効く', `${頭} → ${打ち終わり}`)
     else ng('打つのをやめても、矢印が効かない', '守りが外れていても同じ結果になる')
@@ -14962,13 +14966,14 @@ for (const [q2, 期待, 何] of [
     }
     /* ★ **矢印キーは、こちらでも効く** */
     const 頭 = await 文()
+    /* ★ **待ち時間は `FLY_MS` から出す** —— 送りは飛んでから入れ替わる */
     await page.keyboard.press('ArrowRight')
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(FLY_MS + 300)
     const 次 = await 文()
     if (次 !== 頭) ok('Quick Response … → で次の文になる')
     else ng('Quick Response … → を押しても、文が変わらない', 頭.slice(0, 30))
     await page.keyboard.press('ArrowLeft')
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(FLY_MS + 300)
     const 戻り = await 文()
     if (戻り === 頭) ok('Quick Response … ← で前の文に戻る')
     else ng('Quick Response … ← で前に戻らない')
