@@ -41,3 +41,11 @@ vite.shell.config.js
 scripts/__*.mjs
 vite.*.config.js
 __*.html
+
+# 手触りの検証(`npm run test:feel`)が一時的に作る骨組み
+#
+#   終わるときに消しているが、**途中で止めると残る**(実際に残った)。
+#   `__*.html` では当たらない(拡張子が `.jsx` で、`src/` の中にある)。
+#   **`src/__*.jsx` と広げない** —— `src/__screens.jsx` は本物の骨組みで、
+#   Git に入れておくものである(**違うものを巻き込まない**)。
+src/__feel.jsx
