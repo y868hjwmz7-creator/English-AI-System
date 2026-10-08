@@ -10217,26 +10217,33 @@ button.wbfilter-ctl { text-align: left; }
 
      | 何 | どう変える |
      |---|---|
-     | 上段と下段のあいだ | **うすい金の線**(`--rizap-gold-line`) |
-     | いま何問めか | **金**(総数と単位は、これまでどおり控えめ) |
-     | いま効いている印(くり返し・シャッフル) | **金**(`--pick-*` を金にそろえる) |
-     | 速さ | **金**(押せるものである、と色でも分かる) |
+     | 上段と下段のあいだ | **うすい線**(`--accent-line`) |
+     | いま何問めか | **差し色**(総数と単位は、これまでどおり控えめ) |
+     | いま効いている印(くり返し・シャッフル) | **差し色**(`--pick-*` のまま) |
+     | 速さ | **差し色**(押せるものである、と色でも分かる) |
 
-     **金は `:root` の `--rizap-gold` 1組から引く**(ここに `#d4af37` と
-     書かない・第5.380節)。**黒帯は明るい配色でも黒いまま**なので、
-     `var(--accent)` では**明るい配色のときだけ青が乗る** ——
-     色を決め打ちする帯の作法(`--player-ink`)と同じ理由で、
-     **この帯の中だけ金に決める。**
+     ★ **差し色は、その配色の `--accent` である**(2026-10-08 利用者の指定)。
 
-     ★ **`.player-rate-now:hover` より後ろにいる**ので、
-       ここで hover も書き直す(同じ細かさなら**後ろが勝つ**・共通ルール)。 */
-.player--dock {
-  /* いま効いている印。**色だけに頼らない**(うすい地色 + 金の枠 + 白い字)——
-     `.repeat-key.is-on` が読む3つを、ここで金にそろえる(第5.385節と同じ組) */
-  --pick-bg:   var(--rizap-gold-pick);
-  --pick-fg:   var(--player-ink);
-  --pick-line: var(--rizap-gold);
+       > いや、明るいモードの時は差し色は青ですよね
+
+     **金と書かない。** 明るい配色なら青、暗い配色なら金 ——
+     どちらも `--accent` 1組から来る(**色を2か所に書かない**)。
+     効いている印(`--pick-*`)も、**上書きせずに配色のものを使う** ——
+     明るい配色では青のべた塗り、暗い配色では金の透かしになる。
+
+     ★ **ただし、黒帯は明るい配色でも黒いまま**である。
+       明るい配色の青(`#2c6094`)を黒帯(`#23231f`)の上に置くと、
+       **実測で 2.4 : 1** しか出ず、数字が沈む(暗い配色の金は 7.4 : 1)。
+       **色を作り直さず、その配色の `--accent` に白を混ぜて持ち上げる**
+       (6.3 : 1)。暗い配色の金は、そのままで読めるので混ぜない ——
+       だから**配色ごとに3か所**書く(`:root` / `@media` / `[data-theme]`
+       の作法どおり)。 */
+.player--dock { --player-accent: color-mix(in srgb, var(--accent) 55%, #ffffff); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .player--dock { --player-accent: var(--accent); }
 }
+:root[data-theme="dark"] .player--dock { --player-accent: var(--accent); }
+
 /* ★ **上段と下段のあいだの、うすい線**。
      **幅は `--player-w` のまま**(`.player-head` が持っている)なので、
      線の左右の端は、下段の ⏮⏮ と ⏭⏭ の端にぴったりそろう。
@@ -10244,14 +10251,19 @@ button.wbfilter-ctl { text-align: left; }
      (別々の物を、すき間ゼロでくっつけない・共通ルール) */
 .player--dock .player-head {
   padding-bottom: var(--sp-6);
-  border-bottom: 1px solid var(--rizap-gold-line);
+  /* ★ **線は「差し色を透かしたもの」**(2026-10-08 実測)。
+       `--accent-line` をそのまま使うと、**明るい配色の枠線の色
+       (`#b9cde3`)が黒帯の上では明るすぎて**、暗い配色のうすい金より
+       ずっと目立つ —— 利用者の言う「薄いライン」にならない。
+       **差し色1つから両方を作る**(値を2つ持たない)。 */
+  border-bottom: 1px solid color-mix(in srgb, var(--player-accent) 40%, transparent);
 }
-/* **数が主**(第5.325節)。金にするのは**いま何問めか**だけで、
-   総数と単位はこれまでどおり控えめにする(2つとも金にすると、
+/* **数が主**(第5.325節)。差し色にするのは**いま何問めか**だけで、
+   総数と単位はこれまでどおり控えめにする(2つとも色を付けると、
    どちらが「いま」なのか分からなくなる) */
-.player--dock .player-at-now { color: var(--rizap-gold); }
+.player--dock .player-at-now { color: var(--player-accent); }
 /* 速さ。**押せることを色でも言う**(枠も三角も足さない・第5.318節) */
-.player--dock .player-rate-now { color: var(--rizap-gold); }
+.player--dock .player-rate-now { color: var(--player-accent); }
 .player--dock .player-rate-now:hover { color: #fff; }
 
 

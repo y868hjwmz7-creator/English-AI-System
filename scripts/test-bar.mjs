@@ -2070,65 +2070,122 @@ for (const [label, want] of Object.entries(WANT)) {
  *
  *   > 下のプレーヤーのデザインが味気ないのを少し差し色を入れて、
  *   > 上下のパーツの間に薄いラインを入れるなどして改善できませんか？
+ *   > いや、明るいモードの時は差し色は青ですよね
  *
- * **見るのは4つ。**
- *   ①上段の下に**線がある**(太さが 0 でなく、透明でもない)
- *   ②**いま何問めか**が金
- *   ③**速さ**が金
- *   ④**いま効いている印**(くり返し・シャッフル)の枠が金
+ * **見るのは5つ。**
+ *   ①上段の下に**線がある**(太さが 0 でなく、透明でもなく、下に隙間がある)
+ *   ②**いま何問めか**と**速さ**が、黒帯の上で**読める**(4.5 : 1 以上)
+ *   ③その色が、**ふつうの文字の白とは違う**(差し色になっている)
+ *   ④その**色あい**が、その配色の `--accent` と同じ(青なら青・金なら金)
+ *   ⑤**明るい配色と暗い配色で、色が変わる**
  *
- * **金の値は書き写さない**(CLAUDE.md「値を書き写さない。性質で見る」)——
- * `:root` の `--rizap-gold` を読み取って、それと突き合わせる。
+ * **ここがいちばん効く見張りである(⑤)。** 金を直に書いてしまうと、
+ * 明るい配色でも金のままになる —— そのとき**2つの配色の色が同じ**になるので、
+ * ⑤が赤くなる。**値は1つも書き写していない**(金も青も、ここには無い)。
  *
- * **明るい配色と暗い配色の、両方で測る。** 黒帯は**どちらの配色でも
- * 黒いまま**なので、`var(--accent)` と書いてしまうと
- * **明るい配色のときだけ青**が乗る(`--player-ink` を決め打ちしたのと
- * まったく同じ理由)。片方だけ測ると、そこを見落とす。
+ * ②は「黒帯は明るい配色でも黒いまま」から来る。素の青(`#2c6094`)は
+ * 実測 2.4 : 1 で沈む —— **読めるかどうかを測る**ので、
+ * どの色に変えても、沈めば赤くなる。
  * ══════════════════════════════════════════════════════════════════════ */
 {
-  const 色 = (page) => page.evaluate(() => {
+  /* ★ **色の文字列を、自分でほどかない**(2026-10-08)。
+       `color-mix()` を使うと、Chromium は `color(srgb 0.54 0.65 0.76)` を
+       返す —— `rgb(…)` のつもりで数字を拾うと、**0〜1 を 0〜255 として
+       読んでしまい**、どの色も真っ黒に見える。
+       **描かせて、その1粒を読む**(canvas)。どんな書き方でも 0〜255 で返る。 */
+  /** その色の明るさ(WCAG の相対輝度) */
+  const 明るさ = (rgb) => {
+    const f = rgb.map((v) => {
+      const x = v / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+  }
+  /** 2色のコントラスト比(1〜21) */
+  const 比 = (a, b) => {
+    const [x, y] = [明るさ(a), 明るさ(b)].sort((p, q) => q - p)
+    return Math.round(((x + 0.05) / (y + 0.05)) * 10) / 10
+  }
+  /** その色の色あい(0〜360。灰色なら null) */
+  const 色あい = (rgb) => {
+    const [r, g, b] = rgb.map((v) => v / 255)
+    const 大 = Math.max(r, g, b); const 小 = Math.min(r, g, b)
+    if (大 - 小 < 0.02) return null
+    let h = 0
+    if (大 === r) h = ((g - b) / (大 - 小)) % 6
+    else if (大 === g) h = (b - r) / (大 - 小) + 2
+    else h = (r - g) / (大 - 小) + 4
+    h *= 60
+    return Math.round(h < 0 ? h + 360 : h)
+  }
+  /** 色あいがどれだけ離れているか(0〜180) */
+  const 色の差 = (a, b) => {
+    if (a == null || b == null) return 180
+    const d = Math.abs(a - b) % 360
+    return Math.round(d > 180 ? 360 - d : d)
+  }
+
+  const 測る = (page) => page.evaluate(() => {
     const p = document.querySelector('.player-dock .player--dock')
     if (!p) return { 欠け: '黒帯が無い' }
-    /* **金そのものは `:root` から読み取る**(ここに #d4af37 と書かない)。
-       `color` で一度描かせてから読むと、どちらも `rgb(…)` でそろう */
-    const 物差し = document.createElement('span')
-    物差し.style.color = 'var(--rizap-gold)'
-    p.appendChild(物差し)
-    const 金 = getComputedStyle(物差し).color
-    物差し.remove()
-    const cs = (sel) => {
-      const el = p.querySelector(sel)
-      return el ? getComputedStyle(el) : null
+    /* **色の名前は1つも書かない。** `--accent` と `--player-ink` を
+       いったん描かせて、そこから読み取る(値を書き写さない) */
+    const 盤 = document.createElement('canvas')
+    盤.width = 1; 盤.height = 1
+    const 筆 = 盤.getContext('2d')
+    /** その色を実際に塗って、0〜255 の組で読み取る */
+    const 粒 = (c) => {
+      筆.clearRect(0, 0, 1, 1)
+      筆.fillStyle = '#000'
+      筆.fillStyle = c
+      筆.fillRect(0, 0, 1, 1)
+      const d = 筆.getImageData(0, 0, 1, 1).data
+      /* **4つめは濃さ(0〜255)。** これが 0 なら、その色は透明である ——
+         `transparent` も `color(srgb … / 0)` も、ここで同じように分かる */
+      return [d[0], d[1], d[2], d[3]]
     }
-    const 上 = cs('.player-head')
-    const 番号 = cs('.player-at-now')
-    const 速さ = cs('.player-rate-now')
-    const 印 = getComputedStyle(p).getPropertyValue('--pick-line').trim()
-    /* 印の金も、同じ物差しで測る(文字列の突き合わせにしない) */
-    const 物差し2 = document.createElement('span')
-    物差し2.style.color = 'var(--pick-line)'
-    p.appendChild(物差し2)
-    const 印の色 = getComputedStyle(物差し2).color
-    物差し2.remove()
+    const 読む = (値) => {
+      const e = document.createElement('span')
+      e.style.color = 値
+      p.appendChild(e)
+      const c = window.getComputedStyle(e).color
+      e.remove()
+      return { css: c, rgb: 粒(c) }
+    }
+    const 色で = (c) => (c == null ? null : { css: c, rgb: 粒(c) })
+    const g = (sel) => {
+      const el = p.querySelector(sel)
+      return el ? window.getComputedStyle(el) : null
+    }
+    const 上 = g('.player-head')
+    /* 黒帯の地色。**自分に地色が無ければ、親をたどる** */
+    let 地 = ''
+    for (let el = p; el; el = el.parentElement) {
+      const bg = window.getComputedStyle(el).backgroundColor
+      if (bg && !/,\s*0\)$/.test(bg) && bg !== 'transparent') { 地 = bg; break }
+    }
     return {
-      金,
+      地: 色で(地),
+      accent: 読む('var(--accent)'),
+      白: 読む('var(--player-ink)'),
       線の太さ: 上 ? parseFloat(上.borderBottomWidth) || 0 : null,
-      線の色: 上 ? 上.borderBottomColor : null,
+      線の色: 上 ? 色で(上.borderBottomColor) : null,
       線の下: 上 ? parseFloat(上.paddingBottom) || 0 : null,
-      番号: 番号 ? 番号.color : null,
-      速さ: 速さ ? 速さ.color : null,
-      印: 印の色,
-      印の宣言: 印,
+      番号: 色で(g('.player-at-now')?.color ?? null),
+      速さ: 色で(g('.player-rate-now')?.color ?? null),
+      印: 読む('var(--pick-line)'),
     }
   })
 
+  /** 配色ごとの「いま何問めか」の色。**あとで突き合わせる**(⑤) */
+  const 配色ごとの色 = []
   for (const 配色 of ['light', 'dark']) {
     const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
       { waitUntil: 'networkidle' })
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), 配色)
     await page.waitForTimeout(350)
-    const m = await 色(page)
+    const m = await 測る(page)
     await page.close()
 
     if (m.欠け) { ng(`黒帯の差し色(${配色}) … ${m.欠け}`, '見張りが素通りしている'); continue }
@@ -2136,20 +2193,46 @@ for (const [label, want] of Object.entries(WANT)) {
     /* ①線。**太さと色の両方**を見る —— どちらか片方だと、
          `transparent` にしても・0 にしても緑のままになる */
     if (!m.線の太さ) 悪い.push('上段の下に線が無い(太さ 0)')
-    else if (/^rgba\(.*,\s*0\)$/.test(m.線の色 || '')) 悪い.push(`線が透明(${m.線の色})`)
+    else if (!(m.線の色?.rgb?.[3])) 悪い.push(`線が透明(${m.線の色?.css})`)
     /* **線と押す行がくっついていない**(共通ルール「すき間ゼロでくっつけない」)*/
     if (m.線の太さ && !m.線の下) 悪い.push('線と押す行のあいだに隙間が無い')
-    /* ②③④差し色。**金そのものと突き合わせる** */
-    for (const [名, v] of [['いま何問め', m.番号], ['速さ', m.速さ], ['効いている印の枠', m.印]]) {
-      if (v == null) 悪い.push(`${名} が黒帯の中に無い`)
-      else if (v !== m.金) 悪い.push(`${名} が金ではない(${v} / 金は ${m.金})`)
+    if (!m.地) 悪い.push('黒帯の地色が読み取れない')
+
+    const 地 = m.地?.rgb ?? [0, 0, 0]
+    const 白 = m.白.rgb
+    const 色あいの基 = 色あい(m.accent.rgb)
+    for (const [名, v, 下限] of [['いま何問め', m.番号, 4.5], ['速さ', m.速さ, 4.5], ['効いている印の枠', m.印, 3]]) {
+      if (v == null) { 悪い.push(`${名} が黒帯の中に無い`); continue }
+      /* ②黒帯の上で読めるか(文字は 4.5 : 1、枠線は 3 : 1) */
+      const r = 比(v.rgb, 地)
+      if (r < 下限) 悪い.push(`${名} が黒帯の上で沈んでいる(${r} : 1 / ${下限} : 1 は要る・${v.css})`)
+      /* ③ふつうの文字の白と同じなら、差し色になっていない */
+      if (比(v.rgb, 白) < 1.2) 悪い.push(`${名} が白のまま(差し色になっていない・${v.css})`)
+      /* ④色あいが `--accent` と同じか(明るさは変えてよい) */
+      const d = 色の差(色あい(v.rgb), 色あいの基)
+      if (d > 25) 悪い.push(`${名} の色あいが --accent と違う(${d}° 離れている・${v.css} / --accent は ${m.accent.css})`)
     }
+    配色ごとの色.push([配色, m.番号.css])
+
     if (悪い.length) {
       ng(`黒帯の差し色と線(${配色} ${悪い.length} 件)`, 悪い.join('\n    '))
     } else {
       ok(`黒帯(${配色}) … 上段の下にうすい線(${m.線の太さ}px)があり、`
-        + `いま何問め・速さ・効いている印が金(${m.金})`)
+        + `いま何問め・速さ・効いている印が差し色`
+        + `(${m.番号.css} / 地の色との比 ${比(m.番号.rgb, 地)} : 1)`)
     }
+  }
+
+  /* ── ⑤ **配色で色が変わる**(ここに金や青と書かないための見張り)──── */
+  if (配色ごとの色.length < 2) {
+    ng('黒帯の差し色 … 配色をくらべられない',
+      `${配色ごとの色.length} 通りしか測れていない(見張りが素通りしている)`)
+  } else if (配色ごとの色[0][1] === 配色ごとの色[1][1]) {
+    ng('黒帯の差し色が、明るい配色でも暗い配色でも同じ',
+      `${配色ごとの色.map(([t, c]) => `${t} … ${c}`).join('\n    ')}\n    `
+      + '色を直に書いていないか(差し色は --accent から来る)')
+  } else {
+    ok(`黒帯の差し色は配色で変わる(${配色ごとの色.map(([t, c]) => `${t} ${c}`).join(' / ')})`)
   }
 }
 
