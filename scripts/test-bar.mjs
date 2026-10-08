@@ -4455,6 +4455,8 @@ export default defineConfig({
   /* 幅は**境目でないものも混ぜる**(端末の「画面表示を拡大」で 320px になる)。
      `[誰, 先頭の行き先]` */
   const ROLES = [['ゲスト', '今週の宿題', ''], ['トレーナー', '教材', '&role=trainer']]
+  /** ★ ホーム(一覧の画面)の帯の高さ。**練習中と見くらべる**(第5.417節) */
+  let ホームの帯 = null
   for (const [who, first, extra] of ROLES) for (const w of [390, 375, 360, 320]) {
     await page.setViewportSize({ width: w, height: 844 })
     await page.goto(`http://localhost:${PORT}/__bar.html?screen=tabs&view=wordbook${extra}`,
@@ -4482,18 +4484,14 @@ export default defineConfig({
       const tabs = [...document.querySelectorAll('.app-tab')].map((t) => {
         const lab = t.querySelector('.app-tab-label')
         const lr = lab.getBoundingClientRect()
-        const ls = window.getComputedStyle(lab)
         return {
           名: lab.textContent,
           高: Math.round(t.getBoundingClientRect().height),
-          /* ★ **札は目に出さない**(第5.417節・2026-10-08 利用者の指定「細くする」)。
-               **場所を取っていないこと**を測る —— 取っていたら細くなっていない */
-          見える: lr.width > 1 || lr.height > 1,
-          /* ★ **でも、読み上げには残っている。**
-               `display: none` / `visibility: hidden` にすると**言葉ごと消える** ——
-               絵だけのボタンが「ボタン」としか読まれなくなる */
-          読める: Boolean(lab.textContent.trim())
-            && ls.display !== 'none' && ls.visibility !== 'hidden',
+          切れ: lab.scrollWidth > lab.clientWidth + 1,
+          /* ★ **ホーム(一覧の画面)では、札は出たまま**(第5.417節・
+               2026-10-08 利用者の指定「ホーム画面では元の文字ありのメニュー」)。
+               細くするのは**練習中だけ**である */
+          札: lr.width > 1 && lr.height > 1,
         }
       })
       const on = document.querySelector('.app-tab.is-on')
@@ -4503,8 +4501,8 @@ export default defineConfig({
         丈: Math.round(r.height),
         名: tabs.map((t) => t.名),
         低い: tabs.filter((t) => t.高 < 44).map((t) => t.名),
-        見える: tabs.filter((t) => t.見える).map((t) => t.名),
-        読めない: tabs.filter((t) => !t.読める).map((t) => t.名),
+        切れ: tabs.filter((t) => t.切れ).map((t) => t.名),
+        札なし: tabs.filter((t) => !t.札).map((t) => t.名),
         印: on ? { 名: on.textContent, 地: cs.backgroundColor, 太さ: cs.fontWeight } : null,
         はみ出し: document.documentElement.scrollWidth > window.innerWidth,
       }
@@ -4519,12 +4517,14 @@ export default defineConfig({
         '送っても消えないことが、この帯の役目である')
     } else if (m.名.join('/') !== want.join('/')) {
       ng(`${どこ} … 行き先が違う(${m.名.join(' / ')})`, `ほしいのは ${want.join(' / ')}`)
-    } else if (m.見える.length) {
-      ng(`${どこ} … 札が場所を取っている(${m.見える.join(' / ')})`,
-        '「細くする」は、札を目から消して帯を低くすることである')
-    } else if (m.読めない.length) {
-      ng(`${どこ} … 名前が読み上げに届かない(${m.読めない.join(' / ')})`,
-        '目から消すだけにする —— 消すと、絵だけのボタンが何なのか分からなくなる')
+    } else if (m.切れ.length) {
+      ng(`${どこ} … 名前が切れている(${m.切れ.join(' / ')})`,
+        '「Quick…」では何のボタンか分からない。切らずに2行へ折り返させる')
+    } else if (m.札なし.length) {
+      /* ★ **ホームでは、札を消さない**(第5.417節・2026-10-08 利用者の指定)。
+           細くするのは練習中だけ —— ここで消えていたら、やりすぎである */
+      ng(`${どこ} … ホームなのに札が出ていない(${m.札なし.join(' / ')})`,
+        '細くするのは練習中(`.focus`)だけである')
     } else if (m.低い.length) {
       ng(`${どこ} … 押せる大きさを割っている(${m.低い.join(' / ')})`)
     } else if (!m.印 || /rgba?\(0, 0, 0, 0\)/.test(m.印.地) || m.印.太さ !== '700') {
@@ -4533,8 +4533,11 @@ export default defineConfig({
     } else if (m.はみ出し) {
       ng(`${どこ} … 横にはみ出している`)
     } else {
-      ok(`${どこ} … 4つとも出て、札は目に出さず読み上げには残る`
-        + `(帯 ${m.丈}px・印は「${m.印.名}」)`)
+      /* ★ **練習中と見くらべるために、ホームの高さを控えておく**(第5.417節)。
+           「練習中のほうが低い」は、**2つを比べないと測れない** ——
+           数を書き写すと、帯の作りを変えた日に意味を失う */
+      if (w === 390 && who === 'ゲスト') ホームの帯 = m.丈
+      ok(`${どこ} … 4つとも出て切れない(帯 ${m.丈}px・印は「${m.印.名}」)`)
     }
   }
 
@@ -4576,29 +4579,67 @@ export default defineConfig({
       const 帯 = document.querySelector('.app-tabs').getBoundingClientRect()
       return [...document.querySelectorAll('.app-tab')].map((x) => {
         const r = x.getBoundingClientRect()
-        /* ★ **絵そのもの(`svg`)を測る**(第5.403節)。
-             `.app-tab-icon` の箱ではなく —— `.icon` の `margin-right` は
-             **箱の中**に入るので、箱はまん中にあるのに**絵だけが左へ寄る** */
-        const g = x.querySelector('.app-tab-icon svg')
-        const ig = g ? g.getBoundingClientRect() : null
+        const ic = x.querySelector('.app-tab-icon').getBoundingClientRect()
+        /* ★ **部品そのものも持っておく**(第5.401節)。
+             `getComputedStyle` に渡せるのは**部品**であって、
+             測った四角(`DOMRect`)ではない —— 渡すとその場で落ちる */
         const lbEl = x.querySelector('.app-tab-label')
         const lb = lbEl.getBoundingClientRect()
+        /* ★ **字そのものの四角を測る**(第5.402節)。
+             札の箱は2行ぶん取ってあるので、**箱を測っても字の位置は分からない** */
+        const rg = document.createRange(); rg.selectNodeContents(lbEl)
+        const 字四角 = rg.getBoundingClientRect()
         /* ★ **区切りは飾り(`::before`)に移した**(第5.402節)。
-             `border-left` は場所を取るためだけに残してある */
+             `border-left` は場所を取るためだけに残してあるので、
+             **色を見ても、もう何も分からない** */
         const 飾 = window.getComputedStyle(x, '::before')
+        /* ★ **語ごとに1行になっているか**(第5.407節・2026-10-07 利用者の指定)。
+
+             > 「Quick」と「Response」の2行に折り返し、中央揃えで表示する
+             > …文字がはみ出したり「…」で省略されたりしない
+
+           **名前は空白で区切って、語ごとの箱に入れてある**(`AppTabs.jsx`)。
+           ここでは**その箱を1つずつ**測る ——
+           ・語が2つなら2行になっているか(折り返しが起きているか)
+           ・**どの語も1行に収まっているか**(語の途中で切れていないか)
+           ・はみ出していないか・「…」で消えていないか
+           **数は1つも書かない。** 語の数も行の高さも、描かれたものから読む */
+        const 語箱 = [...x.querySelectorAll('.app-tab-word')]
+        const 行高 = parseFloat(window.getComputedStyle(lbEl).lineHeight)
+        const 語 = 語箱.map((e) => {
+          const g = document.createRange(); g.selectNodeContents(e)
+          const gr = g.getBoundingClientRect()
+          return {
+            字: e.textContent,
+            行: Math.max(1, Math.round(gr.height / Math.max(1, 行高))),
+          }
+        })
         return {
-          名: lbEl.textContent.trim(),
+          名: x.textContent.trim(),
+          語,
+          /* **「…」で消していないか。** `clip` 以外なら、どこかで切っている */
+          省略: window.getComputedStyle(lbEl).textOverflow,
           幅: 丸(r.width),
+          絵: 丸(ic.top),
+          字: 丸(lb.top),
+          /* ★ **札の箱ではなく、字を数える**(第5.402節)。
+               箱は2行ぶん取ってあるので、**箱を割ると いつも 2 になり**、
+               「320px で2行が無ければ赤」が**1度も働いていなかった** */
+          行数: Math.round(字四角.height / parseFloat(window.getComputedStyle(lbEl).lineHeight)),
+          行高: parseFloat(window.getComputedStyle(lbEl).lineHeight),
+          はみ出し: lb.left < r.left - 0.5 || lb.right > r.right + 0.5,
+          /* 絵の上と、字の下。**この2つがそろっていれば、まん中にある** */
+          上: 丸(ic.top - 帯.top),
+          下: 丸(帯.bottom - 字四角.bottom),
+          /* ★ **絵そのものと、字の、横のまん中**(第5.403節)。
+               `.app-tab-icon` の箱ではなく **`svg` を測る** ——
+               `.icon` の `margin-right` は**箱の中**に入るので、
+               箱はまん中にあるのに**絵だけが左へ寄る** */
+          絵中心: (() => { const g = x.querySelector('.app-tab-icon svg')
+            return g ? 丸((g.getBoundingClientRect().left
+              + g.getBoundingClientRect().right) / 2) : null })(),
+          字中心: 丸((字四角.left + 字四角.right) / 2),
           タブ高: 丸(r.height),
-          /* 絵の、縦と横のまん中からのずれ */
-          絵中心横: ig ? 丸((ig.left + ig.right) / 2) : null,
-          タブ中心横: 丸((r.left + r.right) / 2),
-          絵上: ig ? 丸(ig.top - r.top) : null,
-          絵下: ig ? 丸(r.bottom - ig.bottom) : null,
-          絵高: ig ? 丸(ig.height) : null,
-          /* ★ **札が場所を取っていないか**(第5.417節・2026-10-08「細くする」) */
-          札: { w: 丸(lb.width), h: 丸(lb.height) },
-          帯高: 丸(帯.height),
           区切り: 飾.content === 'none' ? null : {
             高さ: 丸(parseFloat(飾.height) || 0),
             色: 飾.backgroundColor,
@@ -4608,37 +4649,23 @@ export default defineConfig({
     })
     const ちがう = (k) => new Set(m.map((x) => x[k])).size !== 1
     const 透ける = (c) => /rgba?\([^)]*,\s*0\s*\)/.test(c)
+    /* ★ **空白を含む名前の札**(第5.407節)。いまは「Quick Response」だけだが、
+         **名前を書き写さない** —— 語の数で選ぶので、増えても減ってもついてくる。
+         第5.401節の `折り返した`(字の四角の高さで数える)は、ここへ寄せた ——
+         **語の箱そのものを数えるほうが細かい**(どの語が何行かまで分かる) */
+    const 多語 = m.find((x) => x.語.length >= 2)
     const どこ = `下の行き先のそろい ${w}px`
     if (m.length !== 4) ng(`${どこ} … タブが4つではない(${m.length})`)
     else if (ちがう('幅')) {
       ng(`${どこ} … 幅がそろっていない`, m.map((x) => `${x.名} ${x.幅}`).join(' / '))
-    } else if (m.some((x) => x.絵中心横 == null)) {
-      ng(`${どこ} … 絵(svg)が描かれていない`, '測る相手が無いので、下の見張りが素通りする')
-    } else if (ちがう('絵上')) {
-      ng(`${どこ} … 絵の高さがそろっていない`,
-        m.map((x) => `${x.名} ${x.絵上}`).join(' / '))
-    } else if (m.some((x) => x.札.w > 1 || x.札.h > 1)) {
-      /* ★ **札を目から消したか**(第5.417節・2026-10-08 利用者の指定「細くする」)。
-           **場所を取っていたら、帯は細くなっていない** */
-      ng(`${どこ} … 札が場所を取っている`,
-        m.map((x) => `${x.名} ${x.札.w}×${x.札.h}`).join(' / '))
-    } else if (m.some((x) => Math.abs(x.絵中心横 - x.タブ中心横) >= 1)) {
-      /* ★ **絵が、タブの横のまん中にあるか**(第5.403節・利用者の指定)。
-
-           > 教材と単語帳の中央が相変わらずアイコンとズレてます
-
-         `.icon` は「絵のうしろに文字が続く」ための `margin-right` を
-         持っている。**絵の下に字を置く形では使われないのに場所だけ取り**、
-         絵が半分ぶん左へずれる(実測 3.8px)。これで4度目である。
-         **札を消しても、この罠は残る** —— だから測り続ける */
-      ng(`${どこ} … 絵が、タブの横のまん中からずれている`,
-        m.map((x) => `${x.名} 絵 ${x.絵中心横} / タブ ${x.タブ中心横}`).join(' / '))
-    } else if (m.some((x) => Math.abs(x.絵上 - x.絵下) > x.絵高 / 4)) {
-      /* ★ **絵が、タブの縦のまん中にあるか**(第5.402節と同じ考え方)。
-           **ものさしは絵の高さ** —— px を書き写さない */
-      ng(`${どこ} … 絵が、タブの縦のまん中からずれている`,
-        m.map((x) => `${x.名} 上 ${x.絵上} / 下 ${x.絵下}`).join(' / ')
-        + ` —— 絵の高さ ${m[0].絵高}`)
+    } else if (ちがう('絵')) {
+      ng(`${どこ} … 絵の高さがそろっていない(折り返しで上下にずれている)`,
+        m.map((x) => `${x.名} ${x.絵}`).join(' / '))
+    } else if (ちがう('字')) {
+      ng(`${どこ} … ラベルの1行目がそろっていない`,
+        m.map((x) => `${x.名} ${x.字}`).join(' / '))
+    } else if (m.some((x) => x.はみ出し)) {
+      ng(`${どこ} … ラベルが横にはみ出している`)
     } else if (m[0].区切り) {
       ng(`${どこ} … 1つめにも縦線が付いている`, 'いちばん左に、どこも分けていない線が出る')
     } else if (m.slice(1).some((x) => !x.区切り || 透ける(x.区切り.色))) {
@@ -4653,19 +4680,71 @@ export default defineConfig({
       /* **短すぎても困る。** 消えたのと変わらない */
       ng(`${どこ} … 区切りが短すぎて見えない`,
         m.slice(1).map((x) => `${x.名} ${x.区切り.高さ} / タブ ${x.タブ高}`).join(' / '))
-    } else if (m[0].帯高 > m[0].タブ高 * 1.5) {
-      /* ★ **帯は、押せる的ひとつぶんで収まっているか**(第5.417節・
-           2026-10-08 利用者の指定「細くする」)。
-           **札が戻れば、帯はタブより大きく高くなる** ——
-           数を書かず、**タブそのものと比べる** */
-      ng(`${どこ} … 帯が、押せる的のわりに高い`,
-        `帯 ${m[0].帯高} / タブ ${m[0].タブ高}`)
+    } else if (m.some((x) => x.絵中心 == null)) {
+      ng(`${どこ} … 絵(svg)が描かれていない`, '測る相手が無いので、下の見張りが素通りする')
+    } else if (m.some((x) => Math.abs(x.絵中心 - x.字中心) >= 1)) {
+      /* ★ **絵と字が、同じ縦の線の上にあるか**(第5.403節・利用者の指定)。
+
+           > 教材と単語帳の中央が相変わらずアイコンとズレてます
+
+         `.icon` は「絵のうしろに文字が続く」ための `margin-right` を
+         持っている。**絵の下に字を置く形では使われないのに場所だけ取り**、
+         絵が半分ぶん左へずれる(実測 3.8px)。これで4度目である */
+      ng(`${どこ} … 絵と字の横のまん中がそろっていない`,
+        m.map((x) => `${x.名} 絵 ${x.絵中心} / 字 ${x.字中心}`).join(' / '))
+    } else if (m.some((x) => Math.abs(x.上 - x.下) > x.行高 / 2)) {
+      /* ★ **絵と字の組が、帯のまん中にあるか**(第5.402節・利用者の指定)。
+
+           > 教材、単語帳、今日の宿題の文字が中央からズレています
+
+         札の箱は2行ぶん取ってあるので、**字を上にそろえると
+         1行の札の下に1行ぶんの空きがまるまる残る。**
+         **ものさしは行の高さの半分** —— px を書き写さない */
+      ng(`${どこ} … 絵と字の組が、帯のまん中からずれている`,
+        m.map((x) => `${x.名} 上 ${x.上} / 下 ${x.下}`).join(' / ')
+        + ` —— 行の高さ ${m[0].行高}`)
+    } else if (m.some((x) => !x.語.length)) {
+      /* ★ **語の箱が1つも無ければ、下の3本は何も測っていない**(第5.407節)。
+           `AppTabs.jsx` が語で割るのをやめた日に、**素通りさせない** */
+      ng(`${どこ} … 名前が語ごとの箱に入っていない`,
+        m.map((x) => `${x.名} ${x.語.length} 語`).join(' / '))
+    } else if (!多語) {
+      /* ★ **空白を含む名前が1つも無ければ、折り返しを測っていない**(第5.407節)。
+           ここが赤いときは、**タブの名前から空白が消えた**ということである */
+      ng(`${どこ} … 空白を含む名前が1つも無い`, '折り返しを測る相手がいない')
+    } else if (m.some((x) => x.語.some((g) => g.行 !== 1))) {
+      /* ★ **語の途中で切れていないか**(第5.407節・利用者の指定)。
+           「Quick Respo / nse」になっていたら、どの語かが2行になる。
+           **空白を含む札だけを見ない。** はじめ `多語` だけを見ていたが、
+           1語の札(スピーチ練習)でも同じことが起きる ——
+           **しかも札の高さは変わらない**(2行ぶん取ってあるので)ので、
+           手前の「絵の高さがそろっていない」には捕まらない */
+      ng(`${どこ} … 語の途中で折り返している`,
+        m.flatMap((x) => x.語.filter((g) => g.行 !== 1)
+          .map((g) => `${x.名}/${g.字}:${g.行}行`)).join(' / '))
+    /* ★ **「横にはみ出していないか」は、ここでは見ない**(第5.407節)。
+
+         足してみたが、**どうやっても自分の力では赤くならなかった。**
+         横にはみ出した行は**左端から置かれる**(`text-align: center` は
+         入りきる行しかまん中に寄せない)ので、**字のまん中が必ず右へずれ**、
+         手前の「絵と字の横のまん中がそろっていない」(第5.403節)に
+         先に当たる —— 実測で 絵 341.8 / 字 346.5(ずれ 4.7px)。
+
+         はみ出しは**すでに2本が見張っている。**
+         ①札の箱がタブからはみ出していないか(`はみ出し`・すぐ上)
+         ②絵と字の横のまん中がそろっているか(第5.403節)
+         **失敗しようのない行は、置いておくだけ害になる**(CLAUDE.md)。 */
+    } else if (m.some((x) => x.省略 !== 'clip')) {
+      /* ★ **「…」で消していないか**(第5.407節・利用者の指定) */
+      ng(`${どこ} … 名前を「…」で省略している`,
+        m.map((x) => `${x.名} ${x.省略}`).join(' / '))
     } else {
-      ok(`${どこ} … 幅・絵がそろい、札は場所を取らず、区切りは2つめから`
-        + `(帯 ${m[0].帯高} / タブ ${m[0].タブ高}`
-        + ` / 区切り ${m[1].区切り.高さ}`
-        + ` / 絵のずれ 縦 ${Math.round(Math.abs(m[0].絵上 - m[0].絵下) * 10) / 10}`
-        + ` 横 ${Math.round(Math.abs(m[0].絵中心横 - m[0].タブ中心横) * 10) / 10})`)
+      ok(`${どこ} … 幅・絵・字の1行目がそろい、区切りは2つめから・上下いっぱいでない`
+        + `(区切り ${m[1].区切り.高さ} / タブ ${m[1].タブ高}`
+        + ` / まん中からのずれ 縦 ${Math.round(Math.abs(m[0].上 - m[0].下) * 10) / 10}`
+        + ` 横 ${Math.round(Math.abs(m[0].絵中心 - m[0].字中心) * 10) / 10}`
+        + ` / 「${多語.名}」は ${多語.語.map((g) => g.字).join(' / ')} の`
+        + `${多語.語.length}行・はみ出しなし・省略なし)`)
     }
   }
 
@@ -4732,10 +4811,27 @@ export default defineConfig({
         const 押せるもの = [...document.querySelectorAll('.focus button')]
           .map((b) => b.getBoundingClientRect())
           .filter((r) => r.width > 0 && r.height > 0)
+        /* ★ **練習中は、札を目から消して細くする**(第5.417節・
+             2026-10-08 利用者の指定「トレーニング中だけ文字をなしに」)。
+             **場所を取っていないこと**と、**名前が読み上げに残っていること**を
+             同時に測る —— 消すと、絵だけのボタンが何なのか分からなくなる */
+        const 札 = [...document.querySelectorAll('.app-tab-label')].map((e) => {
+          const r = e.getBoundingClientRect()
+          const cs = window.getComputedStyle(e)
+          return {
+            出ている: r.width > 1 || r.height > 1,
+            読める: Boolean(e.textContent.trim())
+              && cs.display !== 'none' && cs.visibility !== 'hidden',
+          }
+        })
         return {
           タブ数: document.querySelectorAll('.app-tab').length,
           帯の上: 丸(帯.top), 帯の高さ: 丸(帯.height),
           練習の下: 丸(練習.bottom),
+          札が出ている: 札.filter((x) => x.出ている).length,
+          読めない: 札.filter((x) => !x.読める).length,
+          タブ高: 丸(Math.min(...[...document.querySelectorAll('.app-tab')]
+            .map((t) => t.getBoundingClientRect().height))),
           ボタンの下: 押せるもの.length
             ? 丸(Math.max(...押せるもの.map((r) => r.bottom))) : null,
         }
@@ -4744,6 +4840,21 @@ export default defineConfig({
       const すき間 = Math.round((m.帯の上 - m.練習の下) * 10) / 10
       if (m.タブ数 !== 4) {
         ng(`${どこ} … 下のメニューが4つ出ていない(${m.タブ数})`)
+      } else if (m.札が出ている) {
+        /* ★ **練習中は細くする**(第5.417節・2026-10-08 利用者の指定) */
+        ng(`${どこ} … 練習中なのに札が場所を取っている(${m.札が出ている} 枚)`,
+          '練習中だけ、札を目から消して細くする決まりである')
+      } else if (m.読めない) {
+        ng(`${どこ} … 名前が読み上げに届かない(${m.読めない} 枚)`,
+          '目から消すだけにする —— 消すと、絵だけのボタンが何なのか分からない')
+      } else if (m.タブ高 < TAP_MIN) {
+        ng(`${どこ} … 細くしすぎて、押せる大きさを割っている`,
+          `タブ ${m.タブ高}px —— ${TAP_MIN}px 以上が要る`)
+      } else if (ホームの帯 != null && m.帯の高さ >= ホームの帯) {
+        /* ★ **ホームより低いか**(第5.417節)。**2つを比べる** ——
+             数を書き写すと、帯の作りを変えた日に意味を失う */
+        ng(`${どこ} … 練習中なのに、ホームより低くなっていない`,
+          `練習中 ${m.帯の高さ} / ホーム ${ホームの帯}`)
       } else if (すき間 < 0) {
         ng(`${どこ} … 練習の画面が、メニューに被っている`,
           `練習の下 ${m.練習の下} / 帯の上 ${m.帯の上}`)
@@ -4758,8 +4869,9 @@ export default defineConfig({
         ng(`${どこ} … 答えのボタンが、メニューの下に隠れている`,
           `ボタンの下 ${m.ボタンの下} / 帯の上 ${m.帯の上}`)
       } else {
-        ok(`${どこ} … メニューが出て、被っても離れてもいない`
-          + `(すき間 ${すき間} / 帯 ${m.帯の高さ} / ボタンの下 ${m.ボタンの下})`)
+        ok(`${どこ} … メニューが出て、被っても離れてもいない。札は目に出さず`
+          + `読み上げには残る(すき間 ${すき間} / 帯 ${m.帯の高さ}`
+          + `(ホーム ${ホームの帯}) / タブ ${m.タブ高} / ボタンの下 ${m.ボタンの下})`)
       }
 
       /* ★ **押して、本当に移るか。** 見えているだけでは意味がない。

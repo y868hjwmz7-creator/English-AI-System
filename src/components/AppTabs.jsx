@@ -43,20 +43,6 @@ export default function AppTabs({ pages = [], view, onChange }) {
   const list = (pages ?? []).filter(Boolean)
   if (!list.length) return null
 
-  /* ★ **絵だけにして、帯を細くした**(第5.417節・2026-10-08 利用者の指定)。
-   *
-   *   > 下のの四つのメニューボタンは、使わないときは隠す仕様に
-   *   > できませんか？何だか煩いんですよね。
-   *
-   * 4案(細くする / 練習中は引っ込む / 数秒で引っ込む / ☰ へ寄せる)を
-   * 描いて見くらべてもらい、**「細くする」**がえらばれた。
-   * **隠さない** —— 隠れているものは、無いのと同じになりやすい
-   * (行き止まりを作らない・CLAUDE.md)。
-   *
-   * **名前は消していない。** `visually-hidden` で**目にだけ出さない**ので、
-   * 読み上げ(VoiceOver)には今までどおり「単語帳」と届く。
-   * 戻したくなったら、この1語を外すだけで元に戻る。
-   */
   return (
     <nav className="app-tabs" aria-label="行き先">
       {list.map((p) => {
@@ -91,7 +77,7 @@ export default function AppTabs({ pages = [], view, onChange }) {
                 ・語の途中では決して切れない(「Quick Respo / nse」にならない)
                 **読み上げには、語のあいだの空白をそのまま残す** ——
                 `Quick Response` と1つの名前として読まれる */}
-            <span className="app-tab-label visually-hidden">
+            <span className="app-tab-label">
               {String(p.label ?? '').split(/\s+/).filter(Boolean).map((w, i) => (
                 <Fragment key={`${w}-${i}`}>
                   {i > 0 ? ' ' : null}
