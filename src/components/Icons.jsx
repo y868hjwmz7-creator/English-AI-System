@@ -466,19 +466,35 @@ export function HintIcon({ className = 'icon' }) {
  *  聞き流しだけ矢印1本のまま残っていた)。
  *
  * 上を右へ・下を左へ。上下は 180 度まわすと重なる。
- * 線は 1.6、穂先だけ塗りつぶし(シャッフルの絵とも同じ描き方)。
+ *
+ * ★ **角は丸めない**(第5.419節・2026-10-08 利用者の指定・写真つき)。
+ *
+ *   > 繰り返しとシャッフルの矢印が丸いのがデザインを損ねている気がします。
+ *   > 添付のようなものに変更です。
+ *
+ * もとは角を 2.2 の弧で丸め、線の端も `round` にしていた。
+ * **直角で折り、端も角のまま**(`square` / `miter`)にする ——
+ * 穂先の三角と同じ性格になり、絵がしまる。
+ *
+ * **太さ・端の形は、シャッフルとまったく同じ1組**にそろえる
+ * (となりに並ぶので、片方だけ違うとそこだけ浮く)。
  */
+/** 線の太さ。**くり返しとシャッフルで同じ1か所から引く**(第5.419節) */
+const 線 = 1.8
+/** 角と端の形。**丸めない**(第5.419節・利用者の指定) */
+const 角 = { strokeLinecap: 'square', strokeLinejoin: 'miter' }
+
 function RepeatLoop() {
   return (
     <>
-      <path d="M3.2 8.6V7.8a2.2 2.2 0 0 1 2.2-2.2h7.2"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12.4 3.9 15.6 5.6 12.4 7.3z" fill="currentColor" />
-      <path d="M16.8 8.6v.8a2.2 2.2 0 0 1-2.2 2.2H7.4"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7.6 9.9 4.4 11.6 7.6 13.3z" fill="currentColor" />
+      {/* 上の筋 … 左端で直角に下りる → 右へ → 穂先 */}
+      <path d="M4 9V6.2h9.2"
+            fill="none" stroke="currentColor" strokeWidth={線} {...角} />
+      <path d="M13 3.4 17.2 6.2 13 9z" fill="currentColor" />
+      {/* 下の筋 … 上を 180 度まわすと、ちょうど重なる */}
+      <path d="M16 11v2.8H6.8"
+            fill="none" stroke="currentColor" strokeWidth={線} {...角} />
+      <path d="M7 11 2.8 13.8 7 16.6z" fill="currentColor" />
     </>
   )
 }
@@ -576,23 +592,21 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
  * **2本の矢印が交差する**、いちばん普通のシャッフルの記号である。
  * 上の筋は左上から右下へ、下の筋は左下から右上へ。
  *
- * **線は 1.6・穂先は塗りつぶし** —— `RepeatRangeIcon`(くり返し)と
- * **まったく同じ太さ・同じ描き方**にそろえてある(第5.324節)。
- * となりに並ぶので、片方だけ太いと**そこだけ浮く。**
+ * ★ **角は丸めない**(第5.419節・2026-10-08 利用者の指定・写真つき)。
+ * **太さも端の形も、くり返しの輪とまったく同じ1組**から引く
+ * (`線` / `角`・すぐ上)—— となりに並ぶので、片方だけ違うと浮く。
  */
 export function ShuffleIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      {/* 左上 → 右下 */}
-      <path d="M2.4 6.4h3l6.8 7.2h2.6"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M14.4 11.9 17.6 13.6 14.4 15.3z" fill="currentColor" />
+      {/* 左上 → 右下。穂先は筋と同じ斜め(45度)を向く */}
+      <path d="M2.6 6.4h3.2L14.1 13.9"
+            fill="none" stroke="currentColor" strokeWidth={線} {...角} />
+      <path d="M16.6 16.6 16 12.1 12.1 16z" fill="currentColor" />
       {/* 左下 → 右上 */}
-      <path d="M2.4 13.6h3l6.8-7.2h2.6"
-            fill="none" stroke="currentColor" strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M14.4 4.7 17.6 6.4 14.4 8.1z" fill="currentColor" />
+      <path d="M2.6 13.6h3.2L14.1 6.1"
+            fill="none" stroke="currentColor" strokeWidth={線} {...角} />
+      <path d="M16.6 3.4 16 7.9 12.1 4z" fill="currentColor" />
     </svg>
   )
 }
