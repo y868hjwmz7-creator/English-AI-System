@@ -2172,6 +2172,22 @@ for (const [label, want] of Object.entries(WANT)) {
       accent: 読む('var(--accent)'),
       白: 読む('var(--player-ink)'),
       線の太さ: 上 ? parseFloat(上.borderBottomWidth) || 0 : null,
+      /* ★ **線は、上段と押す行のまん中に見えるか**(第5.420節)。
+           上段の文字から線までより、線から丸までが**狭くない**こと ——
+           狭いと、線が押す行のほうへ寄って見える。
+           **数は書かない**(どちらも実測して比べるだけ) */
+      文字から線: (() => {
+        const 文字 = p.querySelector('.player-at')
+        const h = p.querySelector('.player-head')
+        if (!文字 || !h) return null
+        return Math.round(h.getBoundingClientRect().bottom - 文字.getBoundingClientRect().bottom)
+      })(),
+      線から丸: (() => {
+        const h = p.querySelector('.player-head')
+        const 丸 = p.querySelector('.player-big')
+        if (!h || !丸) return null
+        return Math.round(丸.getBoundingClientRect().top - h.getBoundingClientRect().bottom)
+      })(),
       線の色: 上 ? 色で(上.borderBottomColor) : null,
       線の下: 上 ? parseFloat(上.paddingBottom) || 0 : null,
       番号: 色で(g('.player-at-now')?.color ?? null),
@@ -2217,6 +2233,11 @@ for (const [label, want] of Object.entries(WANT)) {
     else if (!(m.線の色?.rgb?.[3])) 悪い.push(`線が透明(${m.線の色?.css})`)
     /* **線と押す行がくっついていない**(共通ルール「すき間ゼロでくっつけない」)*/
     if (m.線の太さ && !m.線の下) 悪い.push('線と押す行のあいだに隙間が無い')
+    /* ★ 線が、上段と押す行のまん中に見えるか(第5.420節) */
+    if (m.文字から線 == null || m.線から丸 == null) 悪い.push('線の上下を測れない')
+    else if (m.線から丸 < m.文字から線) {
+      悪い.push(`線が押す行へ寄って見える(文字から線 ${m.文字から線}px / 線から丸 ${m.線から丸}px)`)
+    }
     if (!m.地) 悪い.push('黒帯の地色が読み取れない')
 
     const 地 = m.地?.rgb ?? [0, 0, 0]
@@ -2245,7 +2266,8 @@ for (const [label, want] of Object.entries(WANT)) {
     if (悪い.length) {
       ng(`黒帯の差し色と線(${配色} ${悪い.length} 件)`, 悪い.join('\n    '))
     } else {
-      ok(`黒帯(${配色}) … 上段の下にうすい線(${m.線の太さ}px)があり、`
+      ok(`黒帯(${配色}) … 上段の下にうすい線(${m.線の太さ}px。`
+        + `文字から ${m.文字から線}px / 丸まで ${m.線から丸}px)があり、`
         + `いま何問め・速さ・効いている印が差し色`
         + `(${m.番号.css} / 地の色との比 ${比(m.番号.rgb, 地)} : 1)`)
     }
