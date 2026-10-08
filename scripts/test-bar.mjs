@@ -3445,6 +3445,39 @@ export default defineConfig({
         + `「${look.名}」「${look2.名}」ともメニューと同じ絵`)
     }
 
+    /* ── ★ **RIZAP のマークと ☰ は、端から同じだけ内側にいる**
+           (2026-10-08 実機・利用者の指定・第5.422節)
+
+             > 右上の RIZAP のロゴをもう少し内側に寄せられないですか?
+             > 左のハンバーガーと左端の距離感とバランスを合わせてください
+
+           **☰ は押せるので、絵のまわりに押しやすい余白を持っている。**
+           ロゴは押せないので余白が無く、放っておくと**ロゴだけが外**に出る。
+
+           **数は書かない。** 左右をそれぞれ実測して、**同じかどうか**
+           だけを見る —— ☰ のボタンの大きさを変えた日も付いてくる。 */
+    {
+      const 端 = await page.evaluate(() => {
+        const bar = document.querySelector('.app-topbar')
+        const 絵 = bar?.querySelector('.nav-burger svg')
+        const logo = bar?.querySelector('.rizap-logo')
+        if (!bar || !絵 || !logo) return null
+        const B = bar.getBoundingClientRect()
+        return {
+          左: Math.round((絵.getBoundingClientRect().left - B.left) * 10) / 10,
+          右: Math.round((B.right - logo.getBoundingClientRect().right) * 10) / 10,
+        }
+      })
+      if (!端) {
+        ng(`上の帯 ${w}px … ☰ かマークが出ていない`, '見張りが素通りしている')
+      } else if (Math.abs(端.左 - 端.右) > 1) {
+        ng(`上の帯 ${w}px … ☰ とマークの端からの距離が違う`,
+          `☰ の絵 ${端.左}px / マーク ${端.右}px`)
+      } else {
+        ok(`上の帯 ${w}px … ☰ の絵とマークが、端から同じだけ内側(${端.左}px)`)
+      }
+    }
+
     /* **ホームへ戻してから測る**(第5.200節で足した)。
        すぐ上の絵くらべで**単語帳へ移っている**が、単語帳は
        「開いた瞬間に1問目」(第5.167節)で集中モードに入り、
