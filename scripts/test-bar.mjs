@@ -11816,15 +11816,24 @@ for (const W of [1280, 794, 453, 390, 320]) {
          「左のハンバーガーに入れるのをやめてください。右上のメニューに」)。
          第5.414節では ☰ の中だったので、そちらを開いていた */
     if (got.紙 === null) {
-      /* **先に、開いているシートを閉じる。** 本棚のシートが上に重なったまま
-         だと「出しかた」が開かない(2026-10-09 に踏んだ) */
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(300)
-      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
-      await page.waitForTimeout(800)
+      /* ★ **Escape で閉じない**(2026-10-09 に踏んだ)。
+           段 / 組の欄は**本棚のシートの中**にいるので、閉じると
+           そのあとの「組をえらべない」まで一緒に赤くなる。
+           **開けたものは、読んだあとに開け直す** */
+      await page.evaluate(() => {
+        const b = [...document.querySelectorAll('.rscope-sort')].pop()
+        b?.click()
+      })
+      await page.waitForTimeout(900)
       got = await 読む()
-      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await page.evaluate(() => {
+        const b = [...document.querySelectorAll('.rscope-sort')].pop()
+        b?.click()
+      })
       await page.waitForTimeout(300)
+      /* **本棚のシートを開け直す** —— 段 / 組の欄は、その中にいる */
+      await 本棚をひらく(page)
+      await page.waitForTimeout(400)
     }
     return got
   }
@@ -11960,13 +11969,16 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* ★ **紙に出す道具は、右上の「出しかた」の中**(2026-10-09 利用者の指定)。
          第5.414節では ☰ の中だったので、そちらを開いていた */
     if (n === null) {
-      /* **先に、開いているシートを閉じる**(上に重なっていると開かない) */
-      await qp.keyboard.press('Escape')
-      await qp.waitForTimeout(300)
-      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
-      await qp.waitForTimeout(800)
+      await qp.evaluate(() => {
+        const b = [...document.querySelectorAll('.rscope-sort')].pop()
+        b?.click()
+      })
+      await qp.waitForTimeout(900)
       n = await 拾う()
-      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+      await qp.evaluate(() => {
+        const b = [...document.querySelectorAll('.rscope-sort')].pop()
+        b?.click()
+      })
       await qp.waitForTimeout(300)
     }
     return n
