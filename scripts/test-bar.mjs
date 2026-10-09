@@ -16211,7 +16211,15 @@ for (const [q2, 期待, 何] of [
        **「わざと消してあるもの」を測ると、直っていても赤くなる。**
        選んでいる札(`.chip--on`)も外す —— あちらの線は金(`--accent-line`)で、
        `--border` を1度も通らない(2026-10-09 実測) */
-  for (const [名, sel] of [['ボタン', '.btn'], ['札', '.chiprow > .chip:not(.chip--on)']]) {
+  for (const [名, sel, 画面] of [
+    ['ボタン', '.btn', null],
+    /* ★ **札は、開かないと描かれない。**
+         `?screen=search` の札は畳みの箱の中にあり、`open=1` を渡すまで
+         1つも出ない —— **「無ければ素通り」する検証を書かない**(CLAUDE.md)。
+         赤チェックで、壊していないのに赤いまま残って気づいた */
+    ['札', '.chiprow > .chip:not(.chip--on)', 'search&open=1'],
+  ]) {
+    if (画面) await 開く(画面)
     const m = await 読む(sel)
     if (!m) ng(`押せるもの … ${名}が描かれていない`)
     else if (!m.辺.length) ng(`押せるもの … ${名}に、幅のある辺が1つも無い`)
