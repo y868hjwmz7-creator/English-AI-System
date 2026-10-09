@@ -44,9 +44,12 @@ import { shelfList } from '../src/data/shelves.js'
 import { INDUSTRY_GROUPS } from '../src/data/industries.js'
 /** 棚は何冊あるか。**いまの分野の数から出す** */
 const 棚の冊数 = () => shelfList().length
-/** ★ 「出しかた」に並ぶ札の数。**どの一覧も、持ち主から読む**(第5.414節) */
-const 札はいくつ = () => PICKS.length + SIZES.length + 2
-  + QUIZ_FORMS.length + LEARN_STAGES.length + plainOrders(WORD_ORDERS).length
+/** ★ 「出しかた」に並ぶ札の数。**どの一覧も、持ち主から読む**(第5.414節)。
+   ★ **問数とスイッチ2つは、下の帯へ出た**(第5.437節)——
+   札として並んでいるのは「何を出す」「訊き方」「段階」「並べ方」と、
+   帯の中の**「そろそろ忘れる頃」1つ**だけである */
+const 札はいくつ = () => PICKS.length + QUIZ_FORMS.length
+  + LEARN_STAGES.length + plainOrders(WORD_ORDERS).length + 1
 /** 組の呼び名(お仕事 / 生活-趣味)。**1か所から配る** */
 const 組の呼び名 = () => INDUSTRY_GROUPS.map((g) => g.label)
 /* **冊の数を書き写さない**(冊を足した日に、ここだけ古い数が残る) */
@@ -81,7 +84,7 @@ import { repeatLabel, repeatSay } from '../src/lib/repeatLabel.js'
 import { shuffleSay } from '../src/lib/shuffleSay.js'
 /* ★ **札の数は、一覧から出す。書き写さない**(第5.414節・段階3) */
 import {
-  PICKS, SIZES, pickName, plainOrders, sizePickLabel,
+  DUE_LABEL, PICKS, SIZES, pickLead, pickName, plainOrders, sizePickLabel,
 } from '../src/lib/reviewScope.js'
 /* ★ **カードを送る・判定する操作の境目は `cardMove.js` 1か所**(第5.417節)。
      **数を書き写さない** —— 44px / 56px を見張りに書くと、
@@ -6773,12 +6776,13 @@ export default defineConfig({
       ng(`復習の範囲 ${w}px … 札に数が出ていない(${開.数を出している} 個)`,
         '「苦手が8問ある」と見えて初めて、何を出すか選べる')
     /* ★ **数は一覧から出す。書き写さない**(第5.414節・CLAUDE.md)。
-         何を出す4 + 問数3 + スイッチ2 + 訊き方4 + 段階4 + 並べ方 */
+         何を出す4 + 訊き方4 + 段階4 + 並べ方 + そろそろ忘れる頃1 */
     } else if (開.札の数 !== 札はいくつ()) {
       ng(`復習の範囲 ${w}px … 札が ${札はいくつ()} 個`
-        + `(何を出す${PICKS.length} + 問数${SIZES.length} + スイッチ2`
-        + ` + 訊き方${QUIZ_FORMS.length} + 段階${LEARN_STAGES.length}`
-        + ` + 並べ方${plainOrders(WORD_ORDERS).length})ではない`, `${開.札の数} 個`)
+        + `(何を出す${PICKS.length} + 訊き方${QUIZ_FORMS.length}`
+        + ` + 段階${LEARN_STAGES.length}`
+        + ` + 並べ方${plainOrders(WORD_ORDERS).length} + そろそろ忘れる頃1)ではない`,
+      `${開.札の数} 個`)
     /* ★ **「詳しくしぼる」は、はじめ畳んである**(利用者の指定)。
          **開いた姿と比べる** —— 畳んでも同じ数なら、畳めていない */
     } else if (!畳んだまま?.詳しく) {
@@ -6998,9 +7002,16 @@ export default defineConfig({
      「仕組みが分かりにくい」への答えである。
      **畳んでいても見えている**ので、吹き出しを開かずに測る */
   const one = await 測る(390, '', false)
-  /* **文言は `scopeLead()` 1か所**(第5.245節で言い直した)。
-     「今日出すぶんから出します」→「今日が復習の日のものから出します」 */
-  if (!one.閉.説明.includes('今日が復習の日のものから出します')) {
+  /* ★ **文言を書き写さない**(第5.437節で、期限が札から出て言い回しが変わった)。
+     **`pickLead()` が作れるもののどれか**であることを見る ——
+     画面が1か所から出していれば、必ずこのどれかに当たる */
+  const 言える = []
+  for (const p of PICKS) {
+    for (const sc of ['all', 'due']) {
+      for (const u of ['語', '問']) 言える.push(pickLead(p.id, u, sc))
+    }
+  }
+  if (!言える.some((t) => one.閉.説明.includes(t))) {
     ng('復習の範囲 … 押す前の説明が出ていない', one.閉.説明)
   } else ok('復習の範囲 … 畳んだままでも、何が出るのかを1行で言う')
 
@@ -12694,16 +12705,20 @@ for (const W of [1280, 794, 453, 390, 320]) {
   await page.reload({ waitUntil: 'networkidle' })
   await page.waitForSelector('.rscope', { timeout: 8000 })
 
-  /* **範囲を「ぜんぶ」へ広げる。** 既定の「今日の復習」では
-     先取りが 0 件で、**断りの行がそもそも描かれない**
-     (それでは、畳んだかどうかを測ったことにならない) */
+  /* **範囲を広げる。** 期限で絞っていると先取りが 0 件になり、
+     **断りの行がそもそも描かれない**(それでは、畳んだかどうかを
+     測ったことにならない)。
+     ★ **期限はスイッチになった**(第5.437節)。札の「ぜんぶ」だけでは
+     足りないので、**「そろそろ忘れる頃」も切る** ——
+     名前は `DUE_LABEL` 1か所から読む(書き写さない) */
   await page.click('.rscope-go .btn--small')
   await page.waitForTimeout(200)
-  await page.evaluate(() => {
+  await page.evaluate((どの) => {
     const 札 = [...document.querySelectorAll('.rscope-chip')]
-      .find((b) => b.textContent.trim().startsWith('ぜんぶ'))
-    札?.click()
-  })
+    札.find((b) => b.textContent.trim().startsWith('ぜんぶ'))?.click()
+    const 期限 = 札.find((b) => b.textContent.trim().startsWith(どの))
+    if (期限 && 期限.getAttribute('aria-pressed') === 'true') 期限.click()
+  }, DUE_LABEL)
   await page.keyboard.press('Escape')
   await page.waitForTimeout(200)
 

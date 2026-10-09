@@ -78,6 +78,12 @@ import WordRadio from './WordRadio.jsx'
 import { MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
 /* ★ **出しかたの3つ**(第5.437節)。単語帳と同じ部品を使う(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
+/* **吹き出しの入れ物は、すでにあるものを使う**(新しい箱を作らない) */
+import SettingsSheet from './SettingsSheet.jsx'
+/* ★ **一度きりの説明**(第5.438節)。言葉も鍵も `tipOnce.js` 1か所 */
+import {
+  RETIRE_LABEL, RETIRE_LEAD, RETIRE_TIP, tipClose, tipOpen,
+} from '../lib/tipOnce.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
@@ -400,6 +406,10 @@ export default function QrReview({
   /* **聞き流し**(2026-09 利用者の指定「Quick Responseにも聞き流しを作ってくれ」)。
      答える練習ではないので、**箱も次に出す日も1ミリも動かさない**
      (単語帳とまったく同じ決まり。`WordRadio` の中でも呼んでいない) */
+  /* ★ **「覚えた にする」の、初めての説明**(第5.438節)。
+     出すかどうかは `tipOnce.js` が覚えている(`localStorage`) */
+  const [askTip, setAskTip] = useState(false)
+  const retireRef = useRef(null)
   const [radio, setRadio] = useState(null)   // 読む文。null なら出さない
   const [tracks, setTracks] = useState([])   // 曲(無ければ音楽は流れない)
   /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
@@ -851,7 +861,19 @@ export default function QrReview({
     return ((i + d) % n + n) % n
   })
 
-  /** **もう出さない**(間違えて溜めた文・すっかり言えるようになった文) */
+  /**
+   * ★ **「覚えた にする」を押したとき**(第5.438節)。
+   *
+   * **初めてのときだけ吹き出しで訊く。**「もう表示しない」をえらんだ
+   * 端末では、そのまま入れる(**押し直させない**)。
+   * **判断は `tipOnce.js` 1か所** —— ここで `localStorage` を触らない。
+   */
+  const askRetire = () => {
+    if (tipOpen(RETIRE_TIP)) { setAskTip(true); return }
+    retire()
+  }
+
+  /** **「覚えた」に入れる**(間違えて溜めた文・すっかり言えるようになった文) */
   const retire = async () => {
     const card = run[at]
     await markQr(card, 'known', { learnerId })
@@ -1432,10 +1454,60 @@ export default function QrReview({
                  2026-10-09 利用者の指定)。操作の行は、出しかたの3つと
                  「聴く」で埋まった */
             corner={(
-              <button type="button" className="btn btn--ghost btn--small qr-retire"
-                      onClick={retire}>
-                もう出さない
-              </button>
+              <>
+                {/* ★ **字を「覚えた にする」に、見た目を札と同じ金の枠に**
+                     (第5.438節・2026-10-09 利用者の指定・案A + B)。
+
+                     > 「もう出さない」は「覚えた」に入れられることを
+                     > 分かりやすくしたい
+
+                     **行き先が字に入っている**ので、説明が要らない。
+                     **「覚えた」の札とまったく同じ見た目**(`chip--on`)なので、
+                     どこへ入るのかが目でも分かる。
+
+                     ついでに、**もとの「もう出さない」は字のほうが
+                     正しくなかった** —— 30 日たてばまた出る作りだった
+                     (いまは第5.438節で、自分で選ばないかぎり出ない)。
+                     **言葉は `tipOnce.js` 1か所**(書き写さない) */}
+                <button type="button" ref={retireRef}
+                        className="btn btn--small qr-retire chip--on"
+                        onClick={askRetire}>
+                  {RETIRE_LABEL}
+                </button>
+                {/* ★ **初めてのときだけ、吹き出しで言う**(第5.438節)。
+                     > 初めての時だけ吹き出しで「覚えたに入れます」の説明が
+                     > 出ますが、もう表示しないを選べばその後は表示されない
+                     **二度目からは、押した人はもう知っている** */}
+                {askTip && (
+                  <SettingsSheet
+                    anchorEl={retireRef.current}
+                    onClose={() => { setAskTip(false); retireRef.current?.focus() }}
+                    title={RETIRE_LABEL}
+                  >
+                    <p className="card-hint qr-retire-lead">{RETIRE_LEAD}</p>
+                    <div className="btn-row qr-retire-go">
+                      <button type="button" className="btn btn--primary"
+                              onClick={() => { setAskTip(false); retire() }}>
+                        {RETIRE_LABEL}
+                      </button>
+                      <button type="button" className="btn btn--quiet"
+                              onClick={() => setAskTip(false)}>
+                        やめる
+                      </button>
+                    </div>
+                    {/* **「もう表示しない」は、えらぶもの。** 押すと覚えて、
+                        そのまま1回ぶんを進める(押し直させない) */}
+                    <button type="button" className="btn btn--small btn--ghost"
+                            onClick={() => {
+                              tipClose(RETIRE_TIP)
+                              setAskTip(false)
+                              retire()
+                            }}>
+                      もう表示しない
+                    </button>
+                  </SettingsSheet>
+                )}
+              </>
             )}
             /* ★ **出しかたの3つ**(第5.437節)。単語帳とまったく同じ部品 */
             knobs={(

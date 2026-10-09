@@ -41,6 +41,7 @@ import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
 import PracticeKnobs from './components/PracticeKnobs.jsx'
+import { RETIRE_LABEL } from './lib/tipOnce.js'
 import FrameParts from './components/FrameParts.jsx'
 import BookShelf from './components/BookShelf.jsx'
 import BookPick from './components/BookPick.jsx'
@@ -1641,9 +1642,11 @@ const qrScreen = (plain) => (
       <QrCard pair={q.get('say') === '1' ? QR_SAY_PAIR : QR_PAIR}
               no={2} onAnswer={() => {}} showFrame={plain}
               hintOn={plain} onHint={() => {}}
+              /* ★ **字も見た目も、本物と1文字も違えない**(第5.438節)。
+                   「覚えた」の札とまったく同じ金の枠(`chip--on`)である */
               corner={plain ? (
-                <button type="button" className="btn btn--ghost btn--small qr-retire">
-                  もう出さない
+                <button type="button" className="btn btn--small qr-retire chip--on">
+                  {RETIRE_LABEL}
                 </button>
               ) : null}
               knobs={plain ? (
@@ -1851,6 +1854,17 @@ const QRRADIO = (
       { en: 'I will take care of it.', ja: '私が引き受けます。' },
       { en: 'Could you clarify what you mean?', ja: 'どういう意味か教えていただけますか。' },
       { en: 'We appreciate the quick turnaround.', ja: '早いご対応に感謝します。' },
+      /* ★ **一覧の最大が 30 になった**(第5.437節・「5問から選べ」)。
+           25 本では、30 をえらんでも 25 本のままになり、
+           **絞りを外しても緑**になる(「無ければ素通り」・CLAUDE.md)。
+           **いちばん大きい数より多く**しておく */
+      { en: 'Let us circle back on this next week.', ja: '来週あらためて相談しましょう。' },
+      { en: 'I am afraid that will not work.', ja: '申し訳ありませんが、それは難しいです。' },
+      { en: 'Could you walk me through the numbers?', ja: '数字を順に説明していただけますか。' },
+      { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
+      { en: 'Thanks for flagging that.', ja: '指摘してくださってありがとうございます。' },
+      { en: 'Let me double-check and get back to you.', ja: '確認して折り返します。' },
+      { en: 'That works on my end.', ja: 'こちらは問題ありません。' },
     ]}
     /* **曲を2つ以上入れておく**(第5.194節・2026-09 利用者の指定
        「複数登録した曲から選べるようにしてください」)。

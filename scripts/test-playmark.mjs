@@ -149,7 +149,7 @@ import { MET_RANGES, inMet, metLabel } from '../src/lib/metRange.js'
 import { FILTER_KEYS } from '../src/lib/wordbookFilter.js'
 /* ★ 覚え具合の4段階(第5.406節)。**素の node で測れる形**に出してある */
 import {
-  DONE_BOX, LEARN_STAGES, stageLabel, stageLead, stageOf, stagePool, stageTally,
+  DONE_BOX, LEARN_STAGES, defaultPool, stageLabel, stageLead, stageOf, stagePool, stageTally,
 } from '../src/lib/learnStage.js'
 import {
   lastLearner, openLearner, rememberLearner, watchLearner,
@@ -224,6 +224,8 @@ import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
 /* **何本かを同時に走らせる**(第5.307節)。何にも依存していないので素の node で走る */
 import { runPool } from '../src/lib/runPool.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+/* ★ **一度きりの説明**(第5.438節)。鍵も言葉も `tipOnce.js` 1か所 */
+import { RETIRE_TIP, tipClose, tipOpen } from '../src/lib/tipOnce.js'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -16154,6 +16156,81 @@ console.log('\n▶ 繰り返すと、シャッフル(第5.436節)')
     /* **読み直さない**(読み直すと `start()` が走って池から組み直す) */
     ok(!/reload\(\)/.test(中身), `${名} … 「もう一度」は、読み直さない`)
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **「覚えた にする」**(第5.438節・2026-10-09 利用者の指定)
+
+     > 「もう出さない」は「覚えた」に飛ばされると思うのですが(略)
+     > 「覚えた」に入れられることを分かりやすくしたい
+     > 初めての時だけ吹き出しで「覚えたに入れます」の説明が出ますが、
+     > もう表示しないを選べばその後は表示されない仕様にしたいです
+     > 「覚えた」に入れたものはシンプルに自分で選ばない限りは
+     > もう出てこないようにしましょう
+   ══════════════════════════════════════════════════════════════════ */
+console.log('\n▶ 覚えた にする(第5.438節)')
+{
+  const readD = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  /* ── ① 「覚えた」は、自分で選ばないかぎり出てこない ───────────
+     **出る側と出ない側の両方**(片方だけだと、
+     「いつも出す」「一度も出さない」のどちらに書き換えても緑) */
+  const 卒業 = { box: DONE_BOX, status: 'learning' }   // 25回押して卒業したもの
+  const 押した = { box: DONE_BOX, status: 'known' }    // 「覚えた にする」を押したもの
+  const 古い = { box: 0, status: 'known' }             // 箱が付く前に押したもの
+  const まだ = { box: 0 }
+  const 途中 = { box: 2 }
+  const 並び = [卒業, 押した, 古い, まだ, 途中]
+  ok(defaultPool(並び).length === 2,
+    '覚えた … えらんでいないときは、「覚えた」のものを1つも出さない',
+    `${defaultPool(並び).length} 件`)
+  /* **卒業したものも出さない。** ここが第5.438節で塞いだ穴 ——
+     `status` だけを見ていたので、箱6の卒業組が 30 日後に戻ってきていた */
+  ok(!defaultPool(並び).includes(卒業),
+    '覚えた … 卒業したもの(箱は6・status は learning)も出さない')
+  ok(!defaultPool(並び).includes(古い),
+    '覚えた … 箱が付く前に押した古いものも出さない')
+  /* **自分でえらべば出る**(行き止まりを作らない) */
+  ok(stagePool(並び, 'done').length === 2,
+    '覚えた … 「覚えた」をえらべば出てくる', `${stagePool(並び, 'done').length} 件`)
+
+  /* ── ② 一度きりの説明 ────────────────────────────────────
+     **端末の覚えもの(`localStorage`)を偽物に差し替えて測る** ——
+     素の node には無いので、無いままだと「いつも出す」しか測れない */
+  const 箱 = new Map()
+  globalThis.localStorage = {
+    getItem: (k) => (箱.has(k) ? 箱.get(k) : null),
+    setItem: (k, v) => 箱.set(k, String(v)),
+    removeItem: (k) => 箱.delete(k),
+  }
+  ok(tipOpen(RETIRE_TIP), '説明 … まだ見ていなければ、出す')
+  tipClose(RETIRE_TIP)
+  ok(!tipOpen(RETIRE_TIP), '説明 … 「もう表示しない」をえらんだら、出さない')
+  /* **ほかの説明は巻き込まない**(鍵が1つにまとまっていない形を弾く) */
+  ok(tipOpen('ほかの説明'), '説明 … ほかの説明までは消さない')
+  delete globalThis.localStorage
+
+  /* ── ③ 画面 ───────────────────────────────────────────── */
+  const qr = 落とす(readD('src/components/QrReview.jsx'))
+  /* **言葉を書き写していない**(`tipOnce.js` 1か所から来る) */
+  ok(/RETIRE_LABEL/.test(qr) && !/もう出さない/.test(qr),
+    '画面 … 字は `RETIRE_LABEL` から出し、「もう出さない」は残っていない')
+  ok(/qr-retire[^"]*chip--on|chip--on[^"]*qr-retire/.test(qr),
+    '画面 … 「覚えた」の札とまったく同じ見た目(`chip--on`)を着せている')
+  /* **初めてかどうかの判断は `tipOnce.js` 1か所。**
+     画面はほかの覚えもの(並べ方・Unit・ヒント)で `localStorage` を
+     触るので、**`askRetire` の中だけ**を見る ——
+     広く見ると、関係ない行に当たって赤くなる */
+  const 訊く = qr.match(/const askRetire = [\s\S]{0,300}?\n  \}/)?.[0] ?? ''
+  ok(/tipOpen\(RETIRE_TIP\)/.test(訊く) && !/localStorage/.test(訊く),
+    '画面 … 初めてかどうかは `tipOnce.js` が決める(画面は端末を触らない)',
+    訊く.split('\n')[0].trim())
+  /* **「もう表示しない」は、覚えてそのまま進む**(押し直させない) */
+  ok(/tipClose\(RETIRE_TIP\)[\s\S]{0,160}?retire\(\)/.test(qr),
+    '画面 … 「もう表示しない」を押したら、覚えてそのまま入れる')
+  /* **やめる道がある**(行き止まりを作らない) */
+  ok(/やめる/.test(qr), '画面 … 吹き出しから「やめる」で戻れる')
 }
 
 console.log(ng
