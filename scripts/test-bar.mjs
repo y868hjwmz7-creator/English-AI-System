@@ -6672,17 +6672,20 @@ export default defineConfig({
           札の言葉: chips.map((c) => c.textContent.trim()).join('/'),
           見出し: [...pop.querySelectorAll('.rscope-head')]
             .map((e) => e.textContent.trim()).join('/'),
-          /* **「繰り返す」が、個数の札と同じ行にいるか**(利用者の指定
-             「一度に出す個数の横に」)。別の行に落ちていたら赤くする */
-          /* ★ **スイッチは問数の「すぐ下」**(第5.414節)。
-               もとは同じ行だったが、シャッフルと2つになったので下の行へ */
+          /* ★ **問数とスイッチ2つは、下に貼り付く帯の中で同じ行**
+               (第5.437節・2026-10-09 利用者の指定)。
+               > 「何問ずつ」「シャッフル」「繰り返し」が
+               > 常にどこかに表示されているのがベストです
+
+               もとは「問数の札のすぐ下の行」だった(第5.414節)。
+               **描いて測る** —— 3つの上端がそろっていること */
           繰り返すが個数と同じ行: (() => {
-            const sw = pop.querySelector('.rscope-switches')
-            const row = pop.querySelector('[aria-labelledby="rscope-many"]')
-            if (!sw || !row) return false
-            const a = row.getBoundingClientRect()
-            const b = sw.getBoundingClientRect()
-            return b.top >= a.bottom - 1 && b.top - a.bottom < 24
+            const 行 = pop.querySelector('.rscope-bar-row')
+            const 数 = pop.querySelector('.rscope-size')
+            const sw = [...pop.querySelectorAll('.rscope-sw')]
+            if (!行 || !数 || sw.length < 2) return false
+            const 上 = (e) => Math.round(e.getBoundingClientRect().top)
+            return sw.every((b) => Math.abs(上(b) - 上(数)) <= 1)
           })(),
           低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
           押せない札: chips.filter((c) => c.disabled).length,
@@ -6813,11 +6816,10 @@ export default defineConfig({
     } else if (!開.見出し.includes('何を出す') || !開.見出し.includes('訊き方')
       || !開.見出し.includes('段階')) {
       ng(`復習の範囲 ${w}px … 何を出す・訊き方・段階の見出しが出ていない`, 開.見出し)
-    /* **繰り返すは「一度に出す個数の横」**(利用者の指定)。
-       別の行に落ちていたら、言われたとおりに置けていない */
+    /* ★ **問数・ランダム・くり返すは、帯の中で同じ行**(第5.437節) */
     } else if (!開.繰り返すが個数と同じ行) {
-      ng(`復習の範囲 ${w}px … スイッチが問数のすぐ下にない`,
-        '利用者の指定は「そのすぐ下に「シャッフル」「繰り返す」」である')
+      ng(`復習の範囲 ${w}px … 問数とスイッチ2つが、帯の同じ行にいない`,
+        '利用者の指定は「何問ずつ・シャッフル・繰り返しが常に見えている」である')
     /* **吹き出しが画面からはみ出さない。** はみ出すと、
        いちばん下の札に永久に手が届かない(語の意味の吹き出しと同じ話) */
     } else if (!開.画面内) {
