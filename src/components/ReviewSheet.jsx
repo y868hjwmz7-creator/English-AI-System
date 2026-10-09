@@ -37,13 +37,13 @@
  *   中の `<ol>` には振り直させない(指定は `styles.css` 1か所)。
  *   こうすれば**教材の紙は1ドットも変わらない**(あちらに包みは無い)。
  *
- * 【巻末にレクチャーを入れる】(2026-09 利用者の指定)
+ * 【巻末のレクチャーは廃止した】(2026-10-09 利用者の指定)
  *
- *   > 単語帳の巻末とか間、どこでもよいけど、このレクチャーを入れて
- *   > ただの単語帳ではなく、使いこなすことをイメージできる単語帳にしたい。
+ *   > 巻末にレクチャーも不必要、かつ設定も必要ありません。
  *
- *   中身は `FramesSheet`。**Quick Response 帳には出さない** ——
- *   言われたのは単語帳である(**言われた場所だけを直す**)。
+ *   2026-09 に入れた `FramesSheet`(66 型のレクチャー)を、紙から外した。
+ *   **型の資料そのものは残っている** —— トレーナー向けの
+ *   `docs/sentence-frames.pdf` と、素人向けの `npm run slides` である。
  *
  * 【どのページの下にも、題とページ数を出す】(2026-09 実機・利用者の指定)
  *
@@ -64,9 +64,8 @@
 import { useLayoutEffect } from 'react'
 import { SHEET_ID } from '../lib/printSheet.js'
 import { cssString } from '../lib/reviewSheet.js'
-import FramesSheet from './FramesSheet.jsx'
 
-export default function ReviewSheet({ title, note, lead, sections, frames = false }) {
+export default function ReviewSheet({ title, note, lead, sections }) {
   const list = Array.isArray(sections) ? sections.filter((s) => s?.pairs?.length) : []
   const count = list.reduce((n, s) => n + s.pairs.length, 0)
 
@@ -135,7 +134,6 @@ export default function ReviewSheet({ title, note, lead, sections, frames = fals
       </div>
 
       {/* 巻末のレクチャー。**単語帳だけ**(Quick Response 帳には渡さない) */}
-      {frames && <FramesSheet />}
     </div>
   )
 }

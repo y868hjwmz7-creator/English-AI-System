@@ -113,10 +113,8 @@ import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import {
-  loadSheetExample, loadSheetFrames, saveSheetExample, saveSheetFrames,
   sheetNote, sheetTitle, wordSheetPairs, wordSheetSections,
 } from '../lib/reviewSheet.js'
-import { frameCount } from '../data/sentenceFrames.js'
 
 /**
  * 画面の切り替え(2026-08 利用者の指定・0027)。
@@ -438,10 +436,8 @@ export default function Wordbook({
   const [printing, setPrinting] = useState(false)
   /* 紙に例文を載せるか(2026-09 利用者の指定「例文をつける、つけないも選べる」)。
      **覚える。** 鍵の名前は `reviewSheet.js` が持つ(画面に書かない) */
-  const [sheetEx, setSheetEx] = useState(loadSheetExample)
   /* 巻末の「英文の型」のレクチャーをつけるか。**既定はつける**(利用者の指定)。
      型は 66 あり**5ページほど増える**ので、断る道も残す */
-  const [sheetFrames, setSheetFrames] = useState(loadSheetFrames)
   /* **出題の形は覚える**(2026-09)。「おまかせ」は外した ——
      この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
      名前が嘘になっていた(経緯は `wordQuiz.js` の頭) */
@@ -1019,14 +1015,14 @@ export default function Wordbook({
    *
    * 対に直すのは `wordSheetPairs()` 1か所(`reviewSheet.js`)。
    */
-  const sheetPairs = wordSheetPairs(shownRows, { example: sheetEx })
+  /* ★ **例文は必ずつける**(2026-10-09 利用者の指定
+     「単語帳に例文は必須なので設定で指定する機能は不必要です」)。
+     例文は**出会った文**なので、新しくは作らない = 0円である */
+  const sheetPairs = wordSheetPairs(shownRows, { example: true })
   /* **品詞ごとに分けて、小見出しを付ける**(2026-09 利用者の指定)。
      分けるのは `wordSheetSections()` 1か所 —— ここで `pos === '名詞'` と
      書くと、**基礎単語(`n` / `v`)で必ず抜ける** */
   const sheetSections = wordSheetSections(sheetPairs)
-  /* 例文の載る語の数。**押す前に出す** —— 例文の有無で紙の枚数が変わるので、
-     「つけたのに1語も載らない」を黙って起こさない */
-  const sheetExCount = sheetPairs.filter((p) => p.ex).length
   usePrintSheet(printing, () => setPrinting(false))
 
   /**
@@ -1820,11 +1816,18 @@ export default function Wordbook({
     </button>
   )
 
-  /* ★ **紙に出すものは ☰ の中へ**(第5.414節・段階3・利用者の指定
-       「印刷 / PDFで保存」「例文をつける」「巻末に型のレクチャー」は
-       ☰メニューへ移す)。**機能は1つも消していない** ——
-       「出しかた」のシートが 32 個になっていたので、
-       **めったに押さないものを外へ出した**だけである */
+  /* ★ **紙に出すのは、右上の「出しかた」の中**(2026-10-09 利用者の指定)。
+
+       > Quick Responseや単語帳のPDF/印刷の機能を左のハンバーガーに
+       > 入れるのをやめてください。右上のメニューに入れてください。
+
+       第5.414節で左の ☰ へ出していたが、**左の☰は「どこへ行くか」**で
+       あって「いまの画面で何をするか」ではない。
+
+       ★ **「例文をつける」と「巻末に型のレクチャー」は、欄ごと廃止した**
+       (同じ日の指定「単語帳に例文は必須なので設定で指定する機能は
+       不必要です」「巻末にレクチャーも不必要、かつ設定も必要ありません」)。
+       **例文はいつもつく。** 巻末のレクチャーは刷らない */
   const paperBox = (
     <div className="wb-tools">
       {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
@@ -1833,26 +1836,6 @@ export default function Wordbook({
               onClick={() => setPrinting(true)}>
         <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
       </button>
-      {/* **例文をつける / つけない**。例文は**出会った文**なので、
-          **新しくは作らない = 0円**。何語に載るのかを、押す前に出す */}
-      <label className="wb-sheetex">
-        <input type="checkbox" checked={sheetEx}
-               onChange={(e) => {
-                 setSheetEx(e.target.checked)
-                 saveSheetExample(e.target.checked)
-               }} />
-        例文をつける({sheetExCount} 語)
-      </label>
-      {/* **巻末に「英文の型」のレクチャーを入れる**。何型ぶん増えるのかを
-          `frameCount()` から取る(画面で数え直さない) */}
-      <label className="wb-sheetex">
-        <input type="checkbox" checked={sheetFrames}
-               onChange={(e) => {
-                 setSheetFrames(e.target.checked)
-                 saveSheetFrames(e.target.checked)
-               }} />
-        巻末に型のレクチャー({frameCount()} 型)
-      </label>
     </div>
   )
 
@@ -2309,8 +2292,12 @@ export default function Wordbook({
                   {onMenu ? (
                     <button type="button" className="nav-icon-btn focus-burger"
                             aria-label="メニューを開く"
-                            /* ★ **紙の道具を、☰ の中へ渡す**(第5.414節) */
-                            onClick={() => onMenu(paperBox)}>
+                            /* ★ **左の ☰ には、道具を1つも渡さない**
+                                 (2026-10-09 利用者の指定「とにかく、左の
+                                 ハンバーガーメニューに余計なものを追加
+                                 しないでください」)。渡す口そのものを
+                                 無くしてある(`AppNav` に `tools` は無い) */
+                            onClick={onMenu}>
                       <MenuIcon />
                     </button>
                   ) : (
@@ -2364,6 +2351,8 @@ export default function Wordbook({
                     repeat={repeat}
                     onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
                     onStart={start}
+                    /* ★ **紙に出すのは、ここ(右上)の中**(2026-10-09) */
+                    tools={paperBox}
                   >
                     <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
                   </ReviewScope>
@@ -2897,9 +2886,6 @@ export default function Wordbook({
           })}
           lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
           sections={sheetSections}
-          /* **巻末に「英文の型」のレクチャーを入れる**(2026-09 利用者の指定)。
-             ただの単語帳ではなく、**覚えた語を文にするところまで**見える紙にする */
-          frames={sheetFrames}
         />
       )}
     </section>

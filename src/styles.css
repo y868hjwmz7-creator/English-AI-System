@@ -10918,6 +10918,15 @@ button.wbfilter-ctl { text-align: left; }
 .rscope-more-btn { flex: 0 0 auto; }
 /* 開いたら矢印を下へ。**動きを減らす人には動かさない** */
 .rscope-more-arrow { transition: transform .15s ease; }
+
+/* ★ **いまの画面の道具**(2026-10-09 利用者の指定・印刷 / PDF)。
+   「詳しくしぼる」とまったく同じ切り分け方にそろえる ——
+   **同じ役目のものを、2通りの形で見せない** */
+.rscope-tools {
+  display: flex; flex-direction: column; gap: var(--sp-8);
+  margin-top: var(--sp-12); padding-top: var(--sp-12);
+  border-top: 1px solid var(--border);
+}
 .rscope-more-arrow.is-open { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) {
   .rscope-more-arrow { transition: none; }
@@ -12048,26 +12057,20 @@ button.wbfilter-ctl { text-align: left; }
    ならない)。流すあいだの長さは、画面が `style` で渡す
    (`FLY_MS` 1か所・`cardMove.js`)。 */
 
-/* **押せる帯。** 幅は画面が実測して `style` で渡す(決め打ちにしない)。
-   **見えるのは、ごくうすい地色だけ** —— 札でも絵でもない。
-   答えのカードより目立ってはいけない */
+/* **押せる帯。** 置き場所も幅も、画面が実測して `style` で渡す
+   (決め打ちにしない)。**何も描かない** —— 下の節のとおり */
 .cardmove-edge {
   position: absolute; top: 0; bottom: 0; z-index: 1;
   padding: 0; border: 0; background: none;
-  /* **押している最中だけ、うっすら光る。** ふだんは何も描かない ——
-     「余計な説明書きを置かない」と同じ考え方で、**押せば分かる**。
-
-     ★ **長さは `--motion-tap` から取る**(第5.371節)。
-     生のミリ秒を書くと `motion.js` と二重になり、片方だけ古くなる
-     (`npm run test:feel` が見張っている・CLAUDE.md
-     「呼び名・色・幅を2か所に書かない」) */
-  border-radius: var(--r-12);
-  transition: background-color var(--motion-tap) var(--ease-out);
 }
-.cardmove-edge--l { left: 0; }
-.cardmove-edge--r { right: 0; }
-.cardmove-edge:hover,
-.cardmove-edge:active { background: var(--accent-soft); }
+/* ★ **押しても、色を変えない**(2026-10-09 利用者の指定)。
+
+     > クリックできる範囲が色が変わってしまいます。変わらないように
+
+   もとは押しているあいだだけ地色を出していたが、**広い画面では
+   その面積が大きく、カードより目立っていた。**
+   送ったことは**中身が飛ぶ**ことで分かるので、ここで言う必要が無い。
+   **左右の置き場所と幅は、画面が実測して `style` で渡す**(決め打ちにしない) */
 /* **キーで来た人にも、どこが押せるか見せる**(色だけに頼らない) */
 .cardmove-edge:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -12093,7 +12096,10 @@ button.wbfilter-ctl { text-align: left; }
      書くと2か所になる */
 .cardmove.is-fly > :not(.cardmove-edge) { overflow: hidden; }
 .cardmove.is-fly .move-stage {
-  transform: translateX(var(--fly-x));
+  /* ★ **横は送り、上下は判定**(2026-10-09 利用者の指定)。
+       **値は画面が `style` で渡す**(`flyX()` / `flyY()` 1か所)。
+       既定の `0` を書いておく —— 片方しか渡らない形でも崩れない */
+  transform: translate(var(--fly-x, 0), var(--fly-y, 0));
   opacity: 0;
   transition: transform var(--fly-ms) var(--ease-in),
               opacity var(--fly-ms) var(--ease-in);

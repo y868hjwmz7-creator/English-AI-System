@@ -44,7 +44,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
 } from 'react'
-import { FLY_MS, TAP_MIN, edgeFits, edgeSpace, flyX, keyMove } from '../lib/cardMove.js'
+import { FLY_MS, TAP_MIN, edgeBand, edgeFits, flies, flyX, flyY, keyMove } from '../lib/cardMove.js'
 
 /**
  * ★ **送る道を、中のボタンへ渡す**(2026-10-08)。
@@ -77,8 +77,8 @@ export default function CardMove({
   children,
 }) {
   const holdRef = useRef(null)
-  /** 片側の余白(px)。**実測した値だけを使う** */
-  const [space, setSpace] = useState(0)
+  /** 空いている幅と、その置き場所(px)。**実測した値だけを使う** */
+  const [space, setSpace] = useState({ left: 0, right: 0, 左: 0, 右: 0 })
   /** 送ったあと、その向きへ流す */
   const [fly, setFly] = useState('')
 
@@ -100,15 +100,19 @@ export default function CardMove({
   }, [])
 
   /**
-   * ★ **送る道は、ここ1本**(2026-10-08)。
+   * ★ **送る道は、ここ1本**(2026-10-08 / 2026-10-09)。
    *
-   * **送り(`prev` / `next`)だけ流して消す**(利用者の指定「飛ばす 600ms」)。
-   * **判定(`ok` / `yet`)は流さない** —— 指がボタンの上にあるので、
-   * 動かすと次の問のボタンが指の下に来る(共通ルール)。
+   * **4つとも流して消す**(利用者の指定「飛ばす 600ms」)。
+   * 送り(`prev` / `next`)は**横**、判定(`ok` / `yet`)は**上下**へ
+   * —— 向きは `cardMove.js` の `flyX()` / `flyY()` 1か所が持つ。
+   *
+   * **飛ぶのは線と線のあいだの中身だけ**(第5.417節)なので、
+   * ボタンも題も進み具合の帯も 1px も動かない
+   * (共通ルール「押しても、まわりの物が動かない」を破っていない)。
    */
   const go = useCallback((move) => {
     if (!on || !move) return
-    if (move !== 'prev' && move !== 'next') { run(move); return }
+    if (!flies(move)) { run(move); return }
     if (!doRef.current[move]) return
     /* **流している最中は、受け取らない**(二重に送らない) */
     if (流し中.current) return
@@ -126,9 +130,19 @@ export default function CardMove({
     if (!hold) return undefined
     const 測る = () => {
       const card = hold.firstElementChild
-      if (!card) { setSpace(0); return }
-      setSpace(edgeSpace(hold.getBoundingClientRect().width,
-        card.getBoundingClientRect().width))
+      if (!card) { setSpace({ left: 0, right: 0, hold: 0 }); return }
+      /* ★ **空いているところいっぱいに広げる**(2026-10-09 利用者の指定)。
+           外の入れ物は**本体(`.app-body`)** —— 窓まで広げると、
+           左の柱(`.app-nav`)の上まで帯が伸びる。
+           **柱は本体の外**なので、ここなら1ミリも重ならない。
+           本体が見つからない形(集中モードを重ねたとき)は、窓そのもの */
+      const 外 = hold.closest('.app-body') ?? document.documentElement
+      const o = 外.getBoundingClientRect()
+      const c = card.getBoundingClientRect()
+      const h = hold.getBoundingClientRect()
+      const 幅 = edgeBand(o, c)
+      /* **置き場所は、入れ物からの距離で渡す**(`style` に渡すだけ) */
+      setSpace({ ...幅, 左: Math.round(c.left - h.left - 幅.left), 右: Math.round(c.right - h.left) })
     }
     測る()
     /* **窓の幅が変わったら測り直す。** 決め打ちの数で判断しない */
@@ -159,8 +173,8 @@ export default function CardMove({
     return () => window.removeEventListener('keydown', 聞く)
   }, [on, go])
 
-  const 出す = edgeFits(space)
-  const 幅 = `${space}px`
+  const 左出す = edgeFits(space.left)
+  const 右出す = edgeFits(space.right)
 
   return (
     <CardMoveCtx.Provider value={on ? go : null}>
@@ -176,19 +190,21 @@ export default function CardMove({
           CSS にも画面にも書き写さない。 */}
       <div className={`cardmove${fly ? ' is-fly' : ''}`} ref={holdRef}
            style={fly
-             ? { '--fly-x': flyX(fly), '--fly-ms': `${FLY_MS}ms` }
+             ? { '--fly-x': flyX(fly), '--fly-y': flyY(fly), '--fly-ms': `${FLY_MS}ms` }
              : undefined}>
         {children}
         {/* ★ **押せる帯は、この入れ物の中**(第5.417節)。
               窓に対して置くと、上の帯にも下のタブバーにもかかる。
               **幅が取れないときは、描かない** */}
-        {出す && onPrev && (
+        {左出す && onPrev && (
           <button type="button" className="cardmove-edge cardmove-edge--l"
-                  style={{ width: 幅 }} aria-label="前へ" onClick={() => go('prev')} />
+                  style={{ left: `${space.左}px`, width: `${space.left}px` }}
+                  aria-label="前へ" onClick={() => go('prev')} />
         )}
-        {出す && onNext && (
+        {右出す && onNext && (
           <button type="button" className="cardmove-edge cardmove-edge--r"
-                  style={{ width: 幅 }} aria-label="次へ" onClick={() => go('next')} />
+                  style={{ left: `${space.右}px`, width: `${space.right}px` }}
+                  aria-label="次へ" onClick={() => go('next')} />
         )}
       </div>
     </CardMoveCtx.Provider>

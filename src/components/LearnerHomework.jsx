@@ -44,6 +44,7 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { audioTextOf } from '../lib/audioPlaylist.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { DownloadIcon, PrintIcon, ScreenIcon } from './Icons.jsx'
+import { OPEN_MATERIAL } from '../lib/openLabel.js'
 /* **音声のダウンロード**(2026-09 利用者の指定「各ゲストのアカウント内でも
    教材の音声がダウンロードできるようにしてください」)。
    段取りも文言も、トレーナーの「教材」とまったく同じものを使う ——
@@ -655,7 +656,7 @@ export default function LearnerHomework({ me = null, onPracticeWords = null }) {
                                      **待たない** —— 開くほうを1ミリも遅らせない */
                                 if (keepsAheadNow()) keepMaterialOffline(a.material).catch(() => {})
                               }}>
-                        <ScreenIcon />大きく表示する
+                        <ScreenIcon />{OPEN_MATERIAL}
                       </button>
                     </div>
                     {/* **押した場所のすぐ下に出す**(CLAUDE.md)。

@@ -4796,7 +4796,13 @@ console.log('\n── 文法解説を作る欄(第5.210節)──')
   const read2 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
   const noC = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/.*$/gm, '')
   const app = noC(read2('src/App.jsx'))
-  ok(/<BasicsCourse me=\{profile\}/.test(app), '30日講座 … 画面から開ける')
+  /* ★ **「30日講座」は「講座」の下の階層になった**(第5.432節・
+       2026-10-09 利用者の指定)。画面は `Courses` を開き、
+       その中の1つが `BasicsCourse` である。
+       **道を2本たどる** —— 片方だけ見ると、つながっていなくても緑になる */
+  const courses = noC(read2('src/components/Courses.jsx'))
+  ok(/<Courses /.test(app), '講座 … 画面から開ける')
+  ok(/<BasicsCourse /.test(courses), '30日講座 … 講座の中から開ける')
   ok(/id: 'course'/.test(app), '30日講座 … メニューに出ている')
   /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
      複数行になった(2026-09・ホーム)。`&& { id:` を1行の形で探していたので、
@@ -5338,9 +5344,11 @@ console.log('\n── 文法解説を作る欄(第5.210節)──')
     ok(!/HOME_ID/.test(
       appSrc.slice(appSrc.indexOf('const TAB_IDS'), appSrc.indexOf('const TAB_IDS') + 400),
     ), 'ホーム … 下の帯には足さない(☰ から戻る)')
-    /* **説明も `pages` が持つ。** 呼び名と説明を2か所に分けない */
-    ok((appSrc.match(/\n\s+desc: '/g) ?? []).length >= 8,
-      'ホーム … 1行の説明は `pages` が持つ(呼び名と2か所に分けない)')
+    /* ★ **カードの説明文は、全部やめた**(2026-10-08 利用者の指定
+         「各カードの説明文も不要です」)。
+         **1つでも戻ったら赤くする** —— 「余計な説明書きを置かない」 */
+    ok((appSrc.match(/\n\s+desc: '/g) ?? []).length === 0,
+      'ホーム … カードの説明文は1つも持っていない')
 
     /* ── 解答の読み上げ(2026-09 利用者の指定)────────────────
      *
@@ -7246,11 +7254,15 @@ console.log('\nスピーチ練習(0054)')
   /* **新しく作らない = 0円。** 窓口を1回も呼ばない */
   ok(!/lookupWord|generateSection|supabase|import\.meta\.env/.test(readD('src/lib/reviewSheet.js')),
     '紙の例文 … 例文を新しく作らない(窓口を1回も呼ばない・0円)')
-  /* **既定は「つける」。** この指定の眼目である */
-  ok(sheet.loadSheetExample() === true, '紙の例文 … 既定は「つける」')
-  /* **鍵の名前は1か所。** 画面に書かない */
-  ok(!/eas\.sheetExample/.test(readD('src/components/Wordbook.jsx')),
-    '紙の例文 … 覚える鍵の名前を、画面に書かない')
+  /* ★ **例文は必ずつく**(2026-10-09 利用者の指定「単語帳に例文は必須
+       なので設定で指定する機能は不必要です」)。
+       **選ぶ道は、欄も鍵も残っていない** —— 片方だけ残すと、
+       「設定を消したのに off のまま刷られる」が起きる */
+  ok(typeof sheet.loadSheetExample !== 'function'
+    && typeof sheet.saveSheetExample !== 'function',
+  '紙の例文 … 選ぶ仕組みは、1つも残っていない')
+  ok(!/eas\.sheetExample|sheetEx\b/.test(readD('src/components/Wordbook.jsx')),
+    '紙の例文 … 画面にも、覚える鍵にも残っていない')
 
   /* ── ④ 巻末のレクチャー ───────────────────────────── */
   ok(frames.FRAME_SECTIONS.length === 3 && frames.frameCount() >= 60,
@@ -7288,35 +7300,32 @@ console.log('\nスピーチ練習(0054)')
       '巻末のレクチャー … 型と例文が、docs/sentence-frames.html と食い違わない',
       miss.slice(0, 3).join(' / '))
   }
-  /* **型を画面に書き写さない**(資料を直したときに、紙だけ古くなる) */
-  {
-    const fs2 = noNote(readD('src/components/FramesSheet.jsx'))
-    ok(/from '\.\.\/data\/sentenceFrames\.js'/.test(fs2),
-      '巻末のレクチャー … 型は sentenceFrames.js から読む(書き写さない)')
-    ok(!/S allows|keeps 人 from/.test(fs2),
-      '巻末のレクチャー … 画面の中に型を書かない')
-  }
-  /* **語の番号と見分けが付かなくなるので、型には番号を振らない** */
-  ok(!/qrsheet-list/.test(noNote(readD('src/components/FramesSheet.jsx'))),
-    '巻末のレクチャー … 語の一覧(通し番号つき)の指定に乗せない')
+  /* ★ **紙に刷る部品は、消してある**(2026-10-09 利用者の指定)。
+       **型そのものは残っている** —— トレーナー向けの
+       `docs/sentence-frames.pdf` と、素人向けの `npm run slides` が使う。
+       **消したのは「単語帳の巻末に刷る」ことだけ**である */
+  ok(!existsSync(new URL('../src/components/FramesSheet.jsx', import.meta.url)),
+    '巻末のレクチャー … 紙に刷る部品ごと消えている')
 
   /* ── ⑤ 画面が本当に呼んでいるか ───────────────────── */
   {
     const wb = readD('src/components/Wordbook.jsx')
     ok(/= wordSheetSections\(sheetPairs\)/.test(wb),
       '単語帳の紙 … 画面が wordSheetSections() を通している')
-    ok(/wordSheetPairs\(shownRows, \{ example: sheetEx \}\)/.test(wb),
-      '単語帳の紙 … 例文をつけるかを、対の作り方へ渡している')
-    ok(/sections=\{sheetSections\}/.test(wb) && /frames=\{sheetFrames\}/.test(wb),
-      '単語帳の紙 … 節と、巻末のレクチャーを渡している')
-    /* **既定は「つける」**(利用者の指定は「入れて」である)。
-       ただし 66 型は5ページほどになるので、**断る道も残す** */
-    ok(sheet.loadSheetFrames() === true, '巻末のレクチャー … 既定は「つける」')
-    ok(!/eas\.sheetFrames/.test(wb),
-      '巻末のレクチャー … 覚える鍵の名前を、画面に書かない')
-    /* **何型ぶん増えるのかを、押す前に出す**(画面で数え直さない) */
-    ok(/\{frameCount\(\)\} 型/.test(wb),
-      '巻末のレクチャー … 押す前に、型の数を出す')
+    ok(/wordSheetPairs\(shownRows, \{ example: true \}\)/.test(wb),
+      '単語帳の紙 … 例文は必ずつける(選ばせない)')
+    ok(/sections=\{sheetSections\}/.test(wb),
+      '単語帳の紙 … 節を渡している')
+    /* ★ **巻末のレクチャーは廃止した**(2026-10-09 利用者の指定
+         「巻末にレクチャーも不必要、かつ設定も必要ありません」)。
+         **紙からも、覚える鍵からも、紙の部品からも消えている** */
+    ok(typeof sheet.loadSheetFrames !== 'function',
+      '巻末のレクチャー … 覚える仕組みは、1つも残っていない')
+    ok(!/frames|frameCount/.test(wb),
+      '巻末のレクチャー … 画面からも消えている')
+    ok(!/frames|FramesSheet/.test(readD('src/components/ReviewSheet.jsx')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')),
+    '巻末のレクチャー … 紙の部品からも消えている')
     /* **画面で品詞を書き分けない**(基礎単語の `v` で必ず抜ける) */
     ok(!/pos === '名詞'|pos === '動詞'/.test(noNote(wb)),
       '単語帳の紙 … 画面の中で品詞を名指ししない')
@@ -7328,7 +7337,7 @@ console.log('\nスピーチ練習(0054)')
     /* **骨組みは本物と1文字も違えない**(CLAUDE.md)。
        ここが食い違うと、`npm run test:bar` は何も守らない */
     const sc = readD('src/__screens.jsx')
-    ok(/sections=\{wordSheetSections\(wordSheetPairs\(SHEET_ROWS, \{ example \}\)\)\}/.test(sc),
+    ok(/sections=\{wordSheetSections\(wordSheetPairs\(SHEET_ROWS, \{ example: true \}\)\)\}/.test(sc),
       '骨組み … 本物と同じ道で節を作っている')
   }
 }
@@ -8644,22 +8653,26 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '数えられなかった冊に `0 語` と書かない(0 と null を取り違えない)')
 
   // ── ③ 移した道具 ────────────────────────────────────────
-  /* ★ **道具は「出しかた」から出て、☰ の中へ移った**(第5.414節・段階3・
-       利用者の指定「印刷 / PDFで保存」「例文をつける」「巻末に型のレクチャー」
-       は☰メニューへ移す)。**「出しかた」はもう預からない** */
-  ok(!/tools = null,/.test(scope) && !/ほかの道具/.test(scope),
-    '「出しかた」からは、ほかの道具が外れている(シートを軽くする)')
-  ok(/tools = null,/.test(nav) && /className="app-nav-tools"/.test(nav),
-    '☰ が、いまの画面の道具を預かれる(渡さなければ段ごと出ない)')
-  /* **行き先の一覧の「上」に置く** —— 下に置くと、行き先が増えるほど
-     流れて見つからない(共通ルール「押すものを一覧の末尾に置かない」) */
-  ok(/app-nav-tools[\s\S]{0,400}?<ul className="app-nav-list">/.test(nav),
-    '☰ の道具は、行き先の一覧より上にある')
+  /* ★ **道具は、右上の「出しかた」へ戻した**(2026-10-09 利用者の指定)。
+
+       > Quick Responseや単語帳のPDF/印刷の機能を左のハンバーガーに
+       > 入れるのをやめてください。右上のメニューに入れてください。
+       > とにかく、左のハンバーガーメニューに余計なものを追加しないでください。
+
+     第5.414節では ☰ の中にあった。**左の ☰ は「どこへ行くか」**であって、
+     「いまの画面で何をするか」ではない。
+     **受け口そのものを無くす** —— 文章の決まりだけでは、また増える */
+  ok(/tools = null,/.test(scope),
+    '「出しかた」が、いまの画面の道具を預かる(渡さなければ段ごと出ない)')
+  ok(!/tools/.test(nav) && !/app-nav-tools/.test(nav),
+    '左の ☰ には、道具の受け口そのものが無い')
+  ok(!/app-nav-tools|app-nav-toolhead/.test(noNote(readD('src/App.jsx'))),
+    '左の ☰ へ道具を渡している画面も、1つも無い')
   /* **作る形(`const paperBox =`)は数えない。使う形だけを数える** ——
      数え方が1つだと、置き場所を1つ減らしても緑のままになる */
   const uses = (src, name) => (src.match(new RegExp(name, 'g')) ?? []).length - 1
   ok(/const paperBox = \(/.test(wb) && uses(wb, 'paperBox') >= 2,
-    '単語帳の紙に出すが、始める前と ☰ の両方にある(1か所から描く)')
+    '単語帳の紙に出すが、始める前と「出しかた」の両方にある(1か所から描く)')
   ok(/const paperBox = \(/.test(qr) && uses(qr, 'paperBox') >= 2,
     'Quick Response も同じ(黙って落とさない)')
   /* ★ **聞き流しは上の帯に一本化**(第5.414節・利用者の指定)。
@@ -8748,16 +8761,17 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
      **どれか1つに付け忘れても緑のまま**になる */
   ok(/onMenu = null,/.test(wb) && (wb.match(/focus-burger/g) ?? []).length === 2,
     '単語帳の2つの帯(復習と、終わりの1枚)が、どちらも ☰ になる')
-  ok(/onMenu = null,/.test(qr) && /onMenu=\{onMenu \? \(\) => onMenu\(paperBox\) : null\}/.test(qr),
+  ok(/onMenu = null,/.test(qr) && /onMenu=\{onMenu\}/.test(qr),
     'Quick Response も ☰ を受け取って、集中モードへ渡している')
   ok(/onMenu = null,/.test(radio) && /onMenu=\{onMenu\}/.test(radio),
     '聞き流しも ☰ を受け取っている(利用者の指定)')
   /* **聞き流しには、単語帳と Quick Response の両方から入る。**
      片方だけ渡すと、そちらからは ☰ が出ない */
-  /* ★ **道具を連れて渡す**(第5.414節)。`onMenu(paperBox)` の形になった */
-  ok((wb.match(/onMenu=\{onMenu\}|onMenu\(paperBox\)/g) ?? []).length >= 2
-    && (qr.match(/onMenu=\{onMenu\}|onMenu\(paperBox\)/g) ?? []).length >= 2,
-    '聞き流しへ、単語帳からも Quick Response からも ☰ が渡る')
+  /* ★ **道具は連れて行かない**(2026-10-09)。`onMenu` は、そのまま渡す */
+  ok((wb.match(/onMenu=\{onMenu\}/g) ?? []).length >= 1
+    && (qr.match(/onMenu=\{onMenu\}/g) ?? []).length >= 1
+    && !/onMenu\(paperBox\)/.test(wb) && !/onMenu\(paperBox\)/.test(qr),
+  '☰ には、道具を連れて行かない(渡すのは「開く」だけ)')
 
   // ── ② 教材の中の集中モードは ✕ のまま ────────────────────
   for (const f of ['FocusReader', 'StepFocus', 'QuickResponse', 'SpeechPractice']) {
@@ -8800,7 +8814,7 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '集中モードから開くときは、柱ではなく引き出しにする')
 
   // ── ⑥ PC の柱をたたまない ───────────────────────────────
-  ok(/if \(focusMenu\) \{ setFocusMenu\(false\); setFocusTools\(null\); return \}/.test(app)
+  ok(/if \(focusMenu\) \{ setFocusMenu\(false\); return \}/.test(app)
     && /setNavOpen\(false\)/.test(app),
     'かぶせたメニューを閉じても、PC の柱はたたまない(覚えた設定を壊さない)')
   ok((app.match(/onMenu=\{openFocusMenu\}/g) ?? []).length === 2,
@@ -15653,8 +15667,10 @@ console.log('\n▶ 送ったら、その向きへ飛ばす(第5.417節・2026-10
   ok(!/(width|height|margin|padding|left|top|right|bottom)\s*:/.test(中),
     '場所も大きさも動かさない(まわりの物が動かない)')
   /* **長さも向きも、画面から渡される**(CSS に数を書かない) */
-  ok(/var\(--fly-x\)/.test(中) && /var\(--fly-ms\)/.test(中),
-    '飛ぶ向きと長さは、画面が渡したものを読んでいる')
+  /* ★ **判定は上下へ飛ぶ**(2026-10-09 利用者の指定)。
+       横(`--fly-x`)と上下(`--fly-y`)の**両方**を読んでいること */
+  ok(/var\(--fly-x/.test(中) && /var\(--fly-y/.test(中) && /var\(--fly-ms\)/.test(中),
+    '飛ぶ向き(横と上下)と長さは、画面が渡したものを読んでいる')
   ok(!new RegExp(`(^|[^\\d.])${FLY_MS}(?![\\d.])`).test(中),
     `飛ぶ長さ(${FLY_MS})を CSS に書き写していない`)
   /* ★ **飛んでいるあいだだけ、カードの外へ出さない。**
@@ -15788,7 +15804,10 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
 
   const c = 素('src/components/CardMove.jsx')
   /* **使っている形で数える**(「名前が出てくるか」で見ない・CLAUDE.md) */
-  for (const 呼ぶ of ['keyMove(', 'edgeFits(', 'edgeSpace(', 'flyX(']) {
+  /* ★ **`edgeSpace(` → `edgeBand(`**(2026-10-09)。
+       押せる帯を「空いているところいっぱい」に広げたので、
+       **左右を別々に出す**ようになった(`cardMove.js` 1か所) */
+  for (const 呼ぶ of ['keyMove(', 'edgeFits(', 'edgeBand(', 'flyX(', 'flyY(']) {
     ok(c.includes(呼ぶ), `判定は \`${呼ぶ})\` に任せている`)
   }
   /* ★ **スワイプの算段を、画面の側に残していない** */

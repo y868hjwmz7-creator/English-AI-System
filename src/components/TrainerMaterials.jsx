@@ -8,6 +8,7 @@
  *   教材づくりに週9時間かかり、この仕組みは回らない。
  */
 import { useEffect, useRef, useState } from 'react'
+import { OPEN_MATERIAL } from '../lib/openLabel.js'
 import Loading from './Loading.jsx'
 import MaterialForm from './MaterialForm.jsx'
 import { parseMaterialTitle } from '../lib/format.js'
@@ -1279,7 +1280,7 @@ export default function TrainerMaterials({
                   共有は、すでに教材が決まってからの操作である。 */}
               <button type="button" className="btn btn--primary"
                       onClick={() => setLessonOf(m)}>
-                <ScreenIcon />セッションで使う(大きく表示)
+                <ScreenIcon />{OPEN_MATERIAL}
               </button>
 
               {/* ── めったに押さない3つ(2026-09 利用者の指定)──────────

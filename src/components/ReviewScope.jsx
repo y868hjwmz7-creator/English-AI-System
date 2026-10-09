@@ -90,6 +90,18 @@ export default function ReviewScope({
   /** シャッフル / 繰り返す。**スイッチ2つ** */
   shuffle = true, onShuffle = null,
   repeat = false, onRepeat = null,
+  /**
+   * ★ **いまの画面の道具**(2026-10-09 利用者の指定)。
+   *
+   *   > Quick Responseや単語帳のPDF/印刷の機能を左のハンバーガーに
+   *   > 入れるのをやめてください。右上のメニューに入れてください。
+   *   > とにかく、左のハンバーガーメニューに余計なものを追加しないでください。
+   *
+   * 第5.414節で ☰ の中へ出していたが、**左の☰は「どこへ行くか」**であって
+   * 「いまの画面で何をするか」ではない。**ここ(右上)に置く。**
+   * **渡されなければ、その段ごと出ない**(効かない操作を見せない)。
+   */
+  tools = null,
 }) {
   const today = todayKey()
   const counts = pickCounts(rows, today)
@@ -275,6 +287,10 @@ export default function ReviewScope({
           )}
 
           {children}
+
+          {/* ★ **いまの画面の道具**(2026-10-09 利用者の指定)。
+                いちばん下に置く —— 押す回数がいちばん少ない */}
+          {tools && <div className="rscope-tools">{tools}</div>}
         </div>
       )}
     </div>

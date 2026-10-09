@@ -23,6 +23,7 @@
  *   `?role=learner&who=g1` … ゲスト自身が開いている
  */
 import { useEffect, useState } from 'react'
+import { OPEN_MATERIAL } from './lib/openLabel.js'
 import { createRoot } from 'react-dom/client'
 import { applyTips, loadTips } from './lib/tips.js'
 import LessonView from './components/LessonView.jsx'
@@ -1251,7 +1252,7 @@ function ToolsScreen() {
             (`.card-tools + .btn-row`)、本物の 0px を素通りさせていた。
             **骨組みが本物と食い違うと、検証は何も守らない** */}
         <button type="button" className="btn btn--primary">
-          <ScreenIcon />セッションで使う(大きく表示)
+          <ScreenIcon />{OPEN_MATERIAL}
         </button>
         {/* めったに押さない3つ。**絵のまま**(言葉にすると1行に入らない) */}
         <div className="material-foot">
@@ -2338,17 +2339,16 @@ const SHEET_ROWS = [
   { word_norm: 'postpone', display: 'postpone', meaning_ja: '延期する', pos: '動詞' },
 ]
 
-/* **例文の有無は、本物と同じ道で切り替える**(`?ex=off`)。
+/* **例文は必ずつく**(2026-10-09 利用者の指定)。
    骨組みだけ別の組み立てにすると、**本物を壊しても緑のまま**になる
    (CLAUDE.md「骨組みは、本物と1文字も違えない」) */
-const SheetBody = ({ example = true, frames = true }) => (
+const SheetBody = () => (
   <div className="app">
     <ReviewSheet
       title={sheetTitle({ owner: 'Airi さん', book: 'shelf', shelves: ['business'] })}
       note={sheetNote({ count: 5, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
       lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
-      sections={wordSheetSections(wordSheetPairs(SHEET_ROWS, { example }))}
-      frames={frames}
+      sections={wordSheetSections(wordSheetPairs(SHEET_ROWS, { example: true }))}
     />
   </div>
 )
@@ -2359,7 +2359,7 @@ function SheetScreen() {
      **印が無いと1つも当たらない。** ここで自前に付けると、
      付け方を2通り持つことになる(CLAUDE.md) */
   useEffect(() => markPrint(document.getElementById(SHEET_ID)), [])
-  return <SheetBody example={q.get('ex') !== 'off'} frames={q.get('frames') !== 'off'} />
+  return <SheetBody />
 }
 
 const SPEECH = (

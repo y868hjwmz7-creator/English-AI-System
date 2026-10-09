@@ -240,9 +240,7 @@ export function wordSheetSections(pairs, { byPos = true } = {}) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
- * **例文をつける / つけないを選べる**(2026-09 利用者の指定)
- *
- *   > また、例文をつける、つけないも選べるようにしたい。
+ * **例文は、必ずつく**(2026-10-09 利用者の指定)
  *
  * 【材料は新しく作らない = 0円】
  *   例文は **`word_reviews.seen_in`(出会った文・0018)**である。
@@ -252,49 +250,18 @@ export function wordSheetSections(pairs, { byPos = true } = {}) {
  * 【**無い語は、行ごと出さない**】
  *   手で入れた語・基礎単語・棚から来た語には出会った文が無い。
  *   空の行を並べると、紙が間延びするだけである。
- *
- * 【覚える】
- *   毎回選ぶものではない(**一度決める設定は覚える**・CLAUDE.md)。
- *   **鍵の名前は、ここ1か所が持つ** —— 画面に書くと、
- *   置く場所の数だけ食い違う(`BASIC_TIER_KEY` と同じ作法)。
  * ══════════════════════════════════════════════════════════════════════ */
 
-export const SHEET_EXAMPLE_KEY = 'eas.sheetExample'
+/* ★ **どちらの設定も、欄ごと廃止した**(2026-10-09 利用者の指定)。
 
-/** 覚えている「例文をつけるか」。**既定は「つける」**(この指定の眼目である) */
-export function loadSheetExample() {
-  try {
-    return window.localStorage.getItem(SHEET_EXAMPLE_KEY) !== 'off'
-  } catch { return true }
-}
+     > 単語帳に例文は必須なので設定で指定する機能は不必要です。
+     > また、巻末にレクチャーも不必要、かつ設定も必要ありません。
 
-export function saveSheetExample(on) {
-  try {
-    window.localStorage.setItem(SHEET_EXAMPLE_KEY, on ? 'on' : 'off')
-  } catch { /* 端末が断ることがある。覚えられないだけで、刷れる */ }
-}
+   **例文はいつもつく**(`wordSheetPairs(…, { example: true })`)。
+   **巻末のレクチャーは刷らない**(`ReviewSheet` から外した)。
 
-/* ══════════════════════════════════════════════════════════════════════
- * **巻末のレクチャーも、つけない選べる**
- *
- * 利用者の指定は「入れて」なので **既定は「つける」。**
- * ただし型は 66 あり、**刷ると5ページほど増える**(実測)。
- * 20 語だけ刷りたい日に毎回5ページ付いてくるのでは、紙がもったいない。
- *
- * **消すのではなく、選べるようにする**(指定は満たしたまま、断る道を残す)。
- * ══════════════════════════════════════════════════════════════════════ */
+   覚える鍵(`eas.sheetExample` / `eas.sheetFrames`)も、読む人がいなく
+   なったので消してある —— **端末に残った値は、誰も読まない。**
+   **型の資料そのものは残っている** —— トレーナー向けの
+   `docs/sentence-frames.pdf` と、素人向けの `npm run slides` である。 */
 
-export const SHEET_FRAMES_KEY = 'eas.sheetFrames'
-
-/** 覚えている「巻末のレクチャーをつけるか」。**既定は「つける」** */
-export function loadSheetFrames() {
-  try {
-    return window.localStorage.getItem(SHEET_FRAMES_KEY) !== 'off'
-  } catch { return true }
-}
-
-export function saveSheetFrames(on) {
-  try {
-    window.localStorage.setItem(SHEET_FRAMES_KEY, on ? 'on' : 'off')
-  } catch { /* 端末が断ることがある。覚えられないだけで、刷れる */ }
-}
