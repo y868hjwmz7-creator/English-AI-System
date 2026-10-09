@@ -64,6 +64,8 @@ import { WHOLE_PLAY_CORE, wholePlayText } from '../src/lib/wholePlay.js'
 /* **1文ずつ鳴らすボタンの文字は `speakLabel.js` 1か所**(第5.297節)。
    **ここに `'聞く'` と書き写さない** —— 書き写すと、画面を戻しても緑になる */
 import { SPEAK_LISTEN, SPEAK_STOP } from '../src/lib/speakLabel.js'
+/* ★ **「覚えた にする」の言葉は `tipOnce.js` 1か所**(第5.438節) */
+import { RETIRE_LABEL } from '../src/lib/tipOnce.js'
 /** 1文ずつ鳴らすボタンかどうか。**頭で見る**(「全体を聞く」は頭が違うので混ざらない) */
 const 聴くの形 = `^(${SPEAK_LISTEN}|${SPEAK_STOP})`
 /* 本文(記事・会話)の演習。**一覧を書き写さない** ——
@@ -6648,7 +6650,9 @@ export default defineConfig({
             .map((e) => e.textContent.trim()).join('/'),
           しぼる欄: pop.querySelectorAll('.wbfilter-row').length,
           詳しく: !!pop.querySelector('.rscope-more-btn'),
-          始める: (pop.querySelector('.rscope-go .btn--primary')?.textContent ?? '').trim(),
+          /* ★ **始めるは、下に貼り付く帯の中**(第5.437節)。
+             `.rscope-go` はシートの外(始める前の画面)だけになった */
+          始める: (pop.querySelector('.rscope-start')?.textContent ?? '').trim(),
         }
       })
       const more = await page.$('.rscope-more-btn')
@@ -6794,8 +6798,11 @@ export default defineConfig({
         + ` → 開いて札 ${開.札の数}`)
     /* ★ **いちばん下に「◯問で始める」**(利用者の指定)。
          押す前に出題数が分かること */
-    } else if (!/\d+ .で始める|ありません/.test(畳んだまま.始める)) {
-      ng(`復習の範囲 ${w}px … シートの下に「◯問で始める」が無い`,
+    /* ★ **字は「この出しかたで始める(◯ 問)」**(第5.437節)。
+         **言葉を書き写さない** —— 「始める」と、押す前に数が見えること */
+    } else if (!/始める[\s\S]*\d/.test(畳んだまま.始める)
+      && !/ありません/.test(畳んだまま.始める)) {
+      ng(`復習の範囲 ${w}px … 帯に「始める(◯ 問)」が無い`,
         畳んだまま.始める || '(無い)')
     /* **「おまかせ」は消した**(2026-09 実機・利用者の指定)。
        この人の単語帳はほとんどが箱0で、**ずっと4択**にしかならず、
@@ -15925,15 +15932,19 @@ for (const [q2, 期待, 何] of [
       ng('Quick Response … 上の行か、答えの行が描かれていない')
     } else {
       const 字 = m.上.子.map((c) => c.字)
-      const どこ = 字.findIndex((t) => t.includes('もう出さない'))
-      if (どこ < 0) {
-        ng('Quick Response … 「もう出さない」が上の行にいない', 字.join(' / '))
-      } else if (どこ !== 字.length - 1) {
-        ng('Quick Response … 「もう出さない」が、上の行のいちばん右にいない', 字.join(' / '))
-      } else {
-        ok('Quick Response … 「もう出さない」は「聴く」「リピート」の右にある',
-          字.join(' / '))
-      }
+      /* ★ **「覚えた にする」は、見出しの行へ移った**(第5.438節)。
+           上の行の右端にいるのは**「聴く」**である(第5.437節・利用者の指定
+           「聴くボタンを右端にしてください」)。
+           **言葉は `RETIRE_LABEL` / `SPEAK_LISTEN` 1か所から読む** */
+      const 隅 = await page.evaluate(() =>
+        (document.querySelector('.qr-corner')?.textContent ?? '').trim())
+      if (!隅.includes(RETIRE_LABEL)) {
+        ng('Quick Response … 「覚えた にする」が見出しの行にいない', 隅 || '(無い)')
+      } else ok(`Quick Response … 「覚えた にする」は見出しの行にある(${隅})`)
+      const 右端 = 字[字.length - 1] ?? ''
+      if (!右端.includes(SPEAK_LISTEN)) {
+        ng('Quick Response … 上の行のいちばん右が「聴く」ではない', 字.join(' / '))
+      } else ok('Quick Response … 上の行のいちばん右は「聴く」', 字.join(' / '))
       /* ★ **上下の行が、同じ帯にそろっているか**(「バランスよく」の中身) */
       if (Math.abs(m.上.x - m.下.x) <= 1 && Math.abs(m.上.右 - m.下.右) <= 1) {
         ok('Quick Response … 上の行と答えの行が、同じ幅にそろっている',
