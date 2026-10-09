@@ -9943,9 +9943,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
     return got
   }
 
+  /* ★ **例文はいつもつく。巻末のレクチャーは廃止した**
+       (2026-10-09 利用者の指定)。`?ex=off` / `?frames=off` は無くなった */
   const 既定 = await 測る('')
-  const 例文なし = await 測る('&ex=off')
-  const 型なし = await 測る('&frames=off')
 
   const 欲しい小見出し = ['名詞', '動詞', '熟語・言い回し', '品詞の記録なし']
   const 見出しが合う = 欲しい小見出し.every((w, i) => 既定.小見出し[i]?.startsWith(w))
@@ -9981,31 +9981,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
        2本とも訳を持たせると、**空の訳を出す形に書き換えても緑のまま**になる */
     ng('紙 … 例文の訳の出し方が意図どおりでない',
       `訳あり ${既定.例文.filter((e) => e.訳).length} / 2 本中 1 本`)
-  } else if (例文なし.例文の数 !== 0) {
-    /* **「つけない」を選んだら、本当に消えるか。**
-       ここを見ないと、**いつでも出す形に書き換えても緑のまま**になる */
-    ng('紙 … 「例文をつけない」を選んでも、例文が残っている',
-      `${例文なし.例文の数} 行`)
-  } else if (例文なし.小見出し.length !== 4) {
-    /* 例文をやめても、**品詞の小見出しは残る**(別の話である) */
-    ng('紙 … 例文をやめると、小見出しまで消える', 例文なし.小見出し.join(' / '))
-  } else if (!既定.レクチャー) {
-    ng('紙 … 巻末の「英文の型」のレクチャーが出ていない')
-  } else if (既定.型の数 < 60) {
-    /* **型を減らさない。** `sentenceFrames.js` の 66 型がそのまま並ぶ */
-    ng('紙 … 巻末のレクチャーの型が足りない', `${既定.型の数} 型`)
-  } else if (!既定.型の並び?.同じ行 || !(既定.型の並び.例X > 既定.型の並び.型X)) {
-    /* **型が左、例文が右。** 語の一覧と同じ向きにそろえる */
-    ng('紙 … 巻末のレクチャーが「左が型・右が例文」で並んでいない',
-      JSON.stringify(既定.型の並び))
-  } else if (既定.改ページ !== 'page') {
-    /* **新しい紙から始める。** 語の一覧の余りに続けると、
-       最後の品詞の続きのように見える */
-    ng('紙 … 巻末のレクチャーが、新しい紙から始まっていない', 既定.改ページ)
-  } else if (型なし.レクチャー) {
-    ng('紙 … レクチャーを出さない指定が効いていない')
-  } else if (型なし.小見出し.length !== 4) {
-    ng('紙 … レクチャーをやめると、語の一覧まで消える')
+  } else if (既定.レクチャー) {
+    /* ★ **巻末のレクチャーは廃止した**(2026-10-09 利用者の指定
+         「巻末にレクチャーも不必要、かつ設定も必要ありません」)。
+         **出ていたら赤** —— 戻ってきたことに気づける */
+    ng('紙 … 廃止した巻末のレクチャーが、まだ刷られている', `${既定.型の数} 型`)
   } else if (既定.はみ出し) {
     ng('紙 … 横にはみ出している')
   } else {
@@ -11832,14 +11812,14 @@ for (const W of [1280, 794, 453, 390, 320]) {
    */
   const 数 = async () => {
     let got = await 読む()
-    /* ★ **紙に出す道具は ☰ の中へ移った**(第5.414節・段階3・
-         利用者の指定「印刷 / PDFで保存 … は☰メニューへ移す」)。
-         もとは「出しかた」の中にあったので、そちらを開いていた */
+    /* ★ **紙に出す道具は、右上の「出しかた」の中**(2026-10-09 利用者の指定
+         「左のハンバーガーに入れるのをやめてください。右上のメニューに」)。
+         第5.414節では ☰ の中だったので、そちらを開いていた */
     if (got.紙 === null) {
-      await page.evaluate(() => { document.querySelector('.focus-burger')?.click() })
+      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await page.waitForTimeout(500)
       got = await 読む()
-      await page.evaluate(() => { document.querySelector('.nav-scrim')?.click() })
+      await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await page.waitForTimeout(300)
     }
     return got
@@ -11973,13 +11953,13 @@ for (const W of [1280, 794, 453, 390, 320]) {
       return null
     })
     let n = await 拾う()
-    /* ★ **紙に出す道具は ☰ の中へ移った**(第5.414節・段階3)。
-         もとは「出しかた」の中にあったので、そちらを開いていた */
+    /* ★ **紙に出す道具は、右上の「出しかた」の中**(2026-10-09 利用者の指定)。
+         第5.414節では ☰ の中だったので、そちらを開いていた */
     if (n === null) {
-      await qp.evaluate(() => { document.querySelector('.focus-burger')?.click() })
+      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await qp.waitForTimeout(500)
       n = await 拾う()
-      await qp.evaluate(() => { document.querySelector('.nav-scrim')?.click() })
+      await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await qp.waitForTimeout(300)
     }
     return n
@@ -15126,7 +15106,7 @@ for (const [q2, 期待, 何] of [
           return { x, y, w: width, h: height, 見える: el.checkVisibility() }
         }
         return {
-          入れ物: 箱('.cardmove'), カード: 箱('.wordcard'),
+          入れ物: 箱('.cardmove'), カード: 箱('.wordcard'), 本体: 箱('.app-body'),
           左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
           上の帯: 箱('.focus-top'), タブ: 箱('.app-tabs'),
         }
@@ -15139,13 +15119,23 @@ for (const [q2, 期待, 何] of [
           const 狭い = Math.min(m.左.w, m.右.w)
           if (狭い >= TAP_MIN) ok(`${名} … 押せる大きさで出ている`, `${Math.round(狭い)}px`)
           else ng(`${名} … 帯が ${Math.round(狭い)}px しかない`, `${TAP_MIN}px 以上が要る`)
-          /* ★ **紙の入れ物の中にいるか**(利用者の指定
-               「上部バーの部分は余白としてとらえない」) */
+          /* ★ **縦は入れ物の中、横は空いているところいっぱい**
+               (2026-10-09 利用者の指定「クリックできる範囲も画面幅
+               いっぱいに広げてください」)。
+               **縦だけを見る** —— 上の帯や下のタブにかからないのは
+               縦の話であって、横に広がるのは困らない(利用者の指定
+               「上部バーの部分は余白としてとらえない」はそのまま効く) */
           const 外 = [['左', m.左], ['右', m.右]].filter(([, b]) => (
-            b.y < m.入れ物.y - 0.5 || b.y + b.h > m.入れ物.y + m.入れ物.h + 0.5
-            || b.x < m.入れ物.x - 0.5 || b.x + b.w > m.入れ物.x + m.入れ物.w + 0.5))
-          if (外.length) ng(`${名} … 押せる帯が、紙の入れ物からはみ出している`, JSON.stringify(外))
-          else ok(`${名} … 押せる帯は、紙の入れ物の中にある(上の帯にかからない)`)
+            b.y < m.入れ物.y - 0.5 || b.y + b.h > m.入れ物.y + m.入れ物.h + 0.5))
+          if (外.length) ng(`${名} … 押せる帯が、縦に入れ物からはみ出している`, JSON.stringify(外))
+          else ok(`${名} … 押せる帯の縦は、紙の入れ物の中にある(上の帯にかからない)`)
+          /* **横は、本体(`.app-body`)より外へは出ない** —— 出ると左の柱に重なる */
+          const 本体 = m.本体
+          const 横はみ = 本体 && [['左', m.左], ['右', m.右]].filter(([, b]) => (
+            b.x < 本体.x - 0.5 || b.x + b.w > 本体.x + 本体.w + 0.5))
+          if (横はみ && 横はみ.length) {
+            ng(`${名} … 押せる帯が、本体より外へ出ている`, JSON.stringify(横はみ))
+          } else ok(`${名} … 押せる帯の横は、空いているところに収まっている`)
           /* ★ **カードの上に乗っていないか** —— 乗ると、
                語をなぞる操作も、答えのボタンも押せなくなる */
           const かぶり = [['左', m.左], ['右', m.右]].filter(([, b]) => (
@@ -15209,14 +15199,17 @@ for (const [q2, 期待, 何] of [
     const 何問目 = () => page.evaluate(() => (
       document.querySelector('.drill-count, .drillhead-count')?.textContent?.trim() ?? ''))
     const 前の数 = await 何問目()
+    /* ★ **判定も流してから効く**(2026-10-09 利用者の指定「上か下に飛んで」)。
+         **待ちは `FLY_MS` から出す** —— 400ms の決め打ちのままだと、
+         飛んでいる最中に測って「判定されない」と出る(実際にそうなった) */
     await page.keyboard.press('ArrowDown')
-    await page.waitForTimeout(400)
+    await page.waitForTimeout(FLY_MS + 250)
     const 後の数 = await 何問目()
     const 後の語 = await いまの語(page)
     if (後の語 !== 前) ok('↓(まだ)で判定され、次の語になる', `${前} → ${後の語}`)
     else ng('↓ を押しても、判定されない', `${前} / ${後の語} / 数 ${前の数} → ${後の数}`)
     await page.keyboard.press('ArrowUp')
-    await page.waitForTimeout(400)
+    await page.waitForTimeout(FLY_MS + 250)
     const 上の語 = await いまの語(page)
     if (上の語 !== 後の語) ok('↑(覚えかけ)でも判定され、次の語になる', `${後の語} → ${上の語}`)
     else ng('↑ を押しても、判定されない', `${後の語} / ${上の語}`)
@@ -15836,6 +15829,7 @@ for (const [q2, 期待, 何] of [
       return {
         入れ物: 箱('.cardmove'), カード: 箱('.qr-card'),
         左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
+        本体: 箱('.app-body'),
         隅が残っている: !!document.querySelector('.qr-card-corner'),
         /* ★ **上の行(聴く・リピート・もう出さない)と、下の答えの行** */
         上: 行('.qr-peek'), 下: 行('.qr-answers'),
@@ -15844,16 +15838,22 @@ for (const [q2, 期待, 何] of [
     })
     if (!m.入れ物) ng('Quick Response … カードが `CardMove` に包まれていない')
     else {
-      const 余白 = Math.floor((m.入れ物.w - m.カード.w) / 2)
+      /* ★ **余白は、本体(`.app-body`)まで数える**(2026-10-09 利用者の指定)。
+           もとはカードの入れ物の中しか見ていなかったので、Quick Response は
+           **カードが幅いっぱいで、帯が1度も出なかった**
+           (利用者の指摘「余白のクリックも効きません」)。
+           **幅は1ドットも変えていない** —— 数える相手を広げただけである */
+      const 余白 = m.本体
+        ? Math.floor(Math.min(m.カード.x - m.本体.x, (m.本体.x + m.本体.w) - (m.カード.x + m.カード.w)))
+        : Math.floor((m.入れ物.w - m.カード.w) / 2)
       if (余白 >= TAP_MIN) {
-        /* **幅を絞る日が来たら、こちらが働く**(そのときは出ていないと赤) */
         if (m.左?.見える && m.右?.見える) ok('Quick Response … 余白が取れたので、押せる帯が出る', `${余白}px`)
         else ng('Quick Response … 余白が取れているのに、押せる帯が出ない', `${余白}px`)
       } else if (m.左 || m.右) {
         ng('Quick Response … 余白が無いのに、押せる帯を出している', `${余白}px`)
       } else {
         ok('Quick Response … 余白が取れないので、押せる帯を出さない',
-          `入れ物 ${Math.round(m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
+          `本体 ${Math.round(m.本体?.w ?? m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
       }
     }
     /* ★ **「もう出さない」は「聴く」「リピート」と同じ行の右端**
