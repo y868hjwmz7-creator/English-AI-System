@@ -6684,8 +6684,18 @@ export default defineConfig({
             const 数 = pop.querySelector('.rscope-size')
             const sw = [...pop.querySelectorAll('.rscope-sw')]
             if (!行 || !数 || sw.length < 2) return false
-            const 上 = (e) => Math.round(e.getBoundingClientRect().top)
-            return sw.every((b) => Math.abs(上(b) - 上(数)) <= 1)
+            /* ★ **上端ではなく「同じ行にいるか」で見る**(2026-10-09)。
+               行は `align-items: center` なので、**背の高さが違うと
+               上端はそろわない** —— 広い画面(吹き出し)でだけ赤くなり、
+               **仕組みは1ミリも壊れていないのに**読み違えるところだった。
+               見たいのは「横に並んでいること」なので、
+               **縦に重なっているか**を測る */
+            const 箱 = (e) => e.getBoundingClientRect()
+            const a = 箱(数)
+            return sw.every((b) => {
+              const r = 箱(b)
+              return Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top) > 4
+            })
           })(),
           低い札: Math.min(...chips.map((c) => Math.round(c.getBoundingClientRect().height))),
           押せない札: chips.filter((c) => c.disabled).length,
