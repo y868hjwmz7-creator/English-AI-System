@@ -11816,8 +11816,12 @@ for (const W of [1280, 794, 453, 390, 320]) {
          「左のハンバーガーに入れるのをやめてください。右上のメニューに」)。
          第5.414節では ☰ の中だったので、そちらを開いていた */
     if (got.紙 === null) {
+      /* **先に、開いているシートを閉じる。** 本棚のシートが上に重なったまま
+         だと「出しかた」が開かない(2026-10-09 に踏んだ) */
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
       await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(800)
       got = await 読む()
       await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await page.waitForTimeout(300)
@@ -11956,8 +11960,11 @@ for (const W of [1280, 794, 453, 390, 320]) {
     /* ★ **紙に出す道具は、右上の「出しかた」の中**(2026-10-09 利用者の指定)。
          第5.414節では ☰ の中だったので、そちらを開いていた */
     if (n === null) {
+      /* **先に、開いているシートを閉じる**(上に重なっていると開かない) */
+      await qp.keyboard.press('Escape')
+      await qp.waitForTimeout(300)
       await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
-      await qp.waitForTimeout(500)
+      await qp.waitForTimeout(800)
       n = await 拾う()
       await qp.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
       await qp.waitForTimeout(300)
@@ -15106,7 +15113,9 @@ for (const [q2, 期待, 何] of [
           return { x, y, w: width, h: height, 見える: el.checkVisibility() }
         }
         return {
-          入れ物: 箱('.cardmove'), カード: 箱('.wordcard'), 本体: 箱('.app-body'),
+          入れ物: 箱('.cardmove'), カード: 箱('.wordcard'),
+          /* **本体が無い形では、画面そのものが相手**(`CardMove` と同じ落とし方) */
+          本体: 箱('.app-body') ?? 箱('html'),
           左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
           上の帯: 箱('.focus-top'), タブ: 箱('.app-tabs'),
         }
@@ -15829,7 +15838,7 @@ for (const [q2, 期待, 何] of [
       return {
         入れ物: 箱('.cardmove'), カード: 箱('.qr-card'),
         左: 箱('.cardmove-edge--l'), 右: 箱('.cardmove-edge--r'),
-        本体: 箱('.app-body'),
+        本体: 箱('.app-body'), 画面: 箱('html'),
         隅が残っている: !!document.querySelector('.qr-card-corner'),
         /* ★ **上の行(聴く・リピート・もう出さない)と、下の答えの行** */
         上: 行('.qr-peek'), 下: 行('.qr-answers'),
@@ -15843,8 +15852,12 @@ for (const [q2, 期待, 何] of [
            **カードが幅いっぱいで、帯が1度も出なかった**
            (利用者の指摘「余白のクリックも効きません」)。
            **幅は1ドットも変えていない** —— 数える相手を広げただけである */
-      const 余白 = m.本体
-        ? Math.floor(Math.min(m.カード.x - m.本体.x, (m.本体.x + m.本体.w) - (m.カード.x + m.カード.w)))
+      /* **本体が無い形では、画面そのものが相手**
+         —— `CardMove` も `.app-body` が無ければ `documentElement` に落ちる。
+         **落とし方を2通り持たない**(CLAUDE.md) */
+      const 外 = m.本体 ?? m.画面
+      const 余白 = 外
+        ? Math.floor(Math.min(m.カード.x - 外.x, (外.x + 外.w) - (m.カード.x + m.カード.w)))
         : Math.floor((m.入れ物.w - m.カード.w) / 2)
       if (余白 >= TAP_MIN) {
         if (m.左?.見える && m.右?.見える) ok('Quick Response … 余白が取れたので、押せる帯が出る', `${余白}px`)
@@ -15853,7 +15866,7 @@ for (const [q2, 期待, 何] of [
         ng('Quick Response … 余白が無いのに、押せる帯を出している', `${余白}px`)
       } else {
         ok('Quick Response … 余白が取れないので、押せる帯を出さない',
-          `本体 ${Math.round(m.本体?.w ?? m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
+          `外 ${Math.round((m.本体 ?? m.画面)?.w ?? m.入れ物.w)}px / カード ${Math.round(m.カード.w)}px`)
       }
     }
     /* ★ **「もう出さない」は「聴く」「リピート」と同じ行の右端**
