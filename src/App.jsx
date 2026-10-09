@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AdminDashboard from './components/AdminDashboard.jsx'
 import LearnerHomework from './components/LearnerHomework.jsx'
-import BasicsCourse from './components/BasicsCourse.jsx'
+import Courses from './components/Courses.jsx'
 import SignIn from './components/SignIn.jsx'
 import TrainerLearners from './components/TrainerLearners.jsx'
 import TrainerMaterials from './components/TrainerMaterials.jsx'
@@ -660,12 +660,6 @@ export default function App() {
       id: 'assign', label: 'アサインする', icon: ShareIcon,
       group: 'guest',
     },
-    // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
-    // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
-    (!isSupabaseConfigured || isOwner) && {
-      id: 'admin', label: '集計', icon: ChartIcon,
-      group: 'guest',
-    },
     (!isSupabaseConfigured || !isTrainer) && {
       id: 'homework', label: '今週の宿題', icon: TaskIcon,
       group: 'study',
@@ -679,10 +673,6 @@ export default function App() {
        > ゲストの画面から基礎英文法講座と基本単語を取り除いてください。
        > これは、トレーナー側から指定したゲストにのみ映るようにしてください
        判断は `basicsOn`(= `showsBasics()`)1か所。**既定は出さない** */
-    (!isSupabaseConfigured || (!isTrainer && basicsOn)) && {
-      id: 'course', label: '30日講座', icon: StepsIcon,
-      group: 'study',
-    },
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
     {
@@ -717,6 +707,22 @@ export default function App() {
       id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon,
       group: 'study',
     },
+    /* ★ **「30日講座」→「講座」。30日はその中へ**(2026-10-09 利用者の指定・
+         第5.432節)。
+         > 「30日講座」は「講座」に変えましょう。30日講座はその下の階層に
+         > 置きます。ここには動画なども置いて、場合においては有料コンテンツも
+         **「30日講座」は中身の名前であって、置き場の名前ではない。**
+         棚(`Courses`)にして、中に講座を並べる。中身は `Courses.jsx` が持つ */
+    (!isSupabaseConfigured || (!isTrainer && basicsOn)) && {
+      id: 'course', label: '講座', icon: StepsIcon,
+      group: 'study',
+    },
+    // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
+    // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
+    (!isSupabaseConfigured || isOwner) && {
+      id: 'admin', label: '集計', icon: ChartIcon,
+      group: 'guest',
+    },
     /* **音楽**(0049・2026-09 利用者の指定「自作の音楽が流れるように」)。
        曲を入れるのも消すのも**トレーナーと管理者だけ**なので、
        ゲストには出さない —— ゲストは**聞き流しのときに聴くだけ**である
@@ -726,9 +732,15 @@ export default function App() {
        2026-09-23 利用者の指定「業種別の単語帳も『アサイン』内に移しましょう」)。
        出す欄(`AssignShelf`)のすぐ近くになり、
        **「作って、出す」が1つの画面で済む。** 行き先は1つ減った */
+    /* ★ **「音楽」は「設定」の中へ**(2026-10-09 利用者の指定・第5.432節)。
+         > 音楽は「設定」内に移動したいです
+       **一覧から消さない。** 消すと、上の帯が名前も絵も引けなくなる
+       (`nowPage`)。**`inSettings` の印を付けるだけ**にして、
+       メニューとホームの箱が、その印を見て飛ばす ——
+       **行き先の一覧を2つ持たない**(CLAUDE.md)。 */
     (!isSupabaseConfigured || isTrainer) && {
       id: 'bgm', label: '音楽', icon: MusicIcon,
-      group: 'study',
+      group: 'study', inSettings: true,
     },
     // 「学習の記録」は外した(2026-08 の設計変更)。
     // **やったことは、こちらが裏で数える**(0022・`src/lib/practice.js`)。
@@ -832,13 +844,17 @@ export default function App() {
      `markJobSeen()`(お知らせを出した印)とは別物である。 */
   const jobBadge = job?.state === 'running' ? 'running'
     : (job?.state === 'done' ? 'done' : null)
+  /* ★ **「設定」の中にあるものは、メニューにもホームにも並べない**
+       (第5.432節)。一覧(`pages`)からは消さない —— 上の帯が名前と絵を
+       引けなくなる。**印を見て飛ばすのは、この1か所だけ**である */
+  const 並べる = pages.filter((p) => !p.inSettings)
   const navItems = jobBadge
-    ? pages.map((p) => (p.id === 'materials'
+    ? 並べる.map((p) => (p.id === 'materials'
       ? { ...p,
         badge: jobBadge,
         badgeTitle: `${p.label} — ${job.title}${jobBadge === 'done' ? 'の下書きができました' : 'を作っています'}` }
       : p))
-    : pages
+    : 並べる
   /* いま見ている画面。**名前も絵も、ここから引く**(2026-09 利用者の指定
      「今いるページを示す項目の横にサイドバーと同じアイコンを」)。
      `pages` はメニューが見ているのと同じ一覧なので、**画面を足しても
@@ -903,6 +919,11 @@ export default function App() {
              **数えられなければ `null`** が渡り、あちらは行ごと出さない */
         clipsKept={clipsKept}
         onClipsClear={async () => { await clipClear(); setClipsKept(await clipCount()) }}
+        /* ★ **「音楽」の画面は、設定の中からだけ開く**(第5.432節)。
+             **トレーナー以外には `pages` に無い**ので、そのときは渡さない ——
+             あちらは受け取らなければ行ごと出さない(効かない操作を見せない) */
+        onMusicRoom={pages.some((p) => p.id === 'bgm')
+          ? () => { setView('bgm'); setNavOpen(false) } : null}
         buddy={buddy} onBuddy={(v) => setBuddy(saveBuddyKind(v))}
         /* ★ 相棒(第5.373節)。**覚えたうえで、いま描かれている相棒にも知らせる** */
       />
@@ -1170,7 +1191,7 @@ export default function App() {
                 ここにも自動で並ぶ**(行き先の一覧を2つ持たない)。
                 役割で並ぶものが変わるのも、そのまま効く */}
             {view === HOME_ID ? (
-              <AppHome pages={pages} onPick={setView} />
+              <AppHome pages={並べる} onPick={setView} />
             ) : view === 'materials' ? (
               profile ? <TrainerMaterials me={profile} askCreate={askCreate}
                                           askOpenId={askOpenId} />
@@ -1207,7 +1228,9 @@ export default function App() {
                 }}
               />
             ) : view === 'course' ? (
-              <BasicsCourse me={profile} />
+              /* ★ **棚になった**(第5.432節)。中に講座が並び、選ぶと開く。
+                   **行き先は1つのまま** —— メニューには「講座」しか無い */
+              <Courses me={profile} />
             ) : view === 'wordbook' ? (
               <Wordbook /* **コロケーション基本動詞の冊**(2026-09 利用者の指定)。
                             出すのは**自分の単語帳**だけ —— トレーナーが

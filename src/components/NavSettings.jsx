@@ -44,6 +44,9 @@
 import { SortIcon } from './Icons.jsx'
 /* **ボタンの色は `btnTone.js` 1か所**(第5.242節)。ここで色名を書かない */
 import { TONE_SIDE } from '../lib/btnTone.js'
+
+/** ★ 曲を入れる画面の呼び名。**「音楽」と別の名前にする**(第5.432節) */
+const MUSIC_ROOM = '曲を入れる'
 /* ★ **相棒をえらぶ**(第5.381節)。**一覧は `buddyKind.js` 1か所**で、
      ここでは並べるだけ —— 増やす日に、この画面は1行も直らない */
 import { BUDDY_PICKS, buddyShown } from '../lib/buddyKind.js'
@@ -136,6 +139,20 @@ export default function NavSettings({
   clipsKept = null, onClipsClear,
   /** いま選ばれている相棒と、選び直し(**値は呼ぶ側が持つ**) */
   buddy, onBuddy,
+  /**
+   * ★ **曲を入れる画面を開く**(2026-10-09 利用者の指定・第5.432節)。
+   *
+   *   > 音楽は「設定」内に移動したいです
+   *
+   * メニューの行き先から外して、ここへ移した。**曲を入れるのは
+   * トレーナーだけ**なので、渡されないときは行ごと出さない
+   * (効かない操作を見せない・CLAUDE.md)。
+   *
+   * **呼び名は「音楽」にしない。** すぐ上に、鳴らすかどうかの
+   * 「音楽」の行がもう在る —— **違うものに同じ名前を付けない**
+   * (共通ルール)。こちらは**何を鳴らすか**(曲を入れる)である。
+   */
+  onMusicRoom = null,
 }) {
   return (
     <details className="nav-settings">
@@ -277,6 +294,19 @@ export default function NavSettings({
             いま何本待っているかは、上の帯がいつも出している。 */}
         {showPrepare && (
           <Pick label="教材の支度" options={PREPARES} value={prepare} onChange={onPrepare} />
+        )}
+
+        {/* ★ **曲を入れる画面へ**(第5.432節)。**設定の中にしか入口が無い**ので、
+              押せば移る1行にしてある。すぐ上の3つ(音楽・曲・大きさ)が
+              「どう鳴らすか」で、こちらが「何を鳴らすか」である */}
+        {onMusicRoom && (
+          <div className="nav-setting">
+            <span className="nav-setting-label">{MUSIC_ROOM}</span>
+            <button type="button" className={`btn btn--small ${TONE_SIDE}`}
+                    onClick={onMusicRoom}>
+              ひらく
+            </button>
+          </div>
         )}
 
         {/* ★ **オフラインで鳴らせる音声**(第5.372節・2026-10-04 利用者)。

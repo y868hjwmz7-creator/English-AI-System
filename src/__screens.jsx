@@ -2583,6 +2583,8 @@ function NavFootScreen() {
         clipsKept={12} onClipsClear={() => {}}
         /* ★ 相棒(第5.381節)。**本物と同じ形で描く** */
         buddy={buddyNow} onBuddy={setBuddyNow}
+        /* ★ 曲を入れる(第5.432節)。**渡さないと行ごと出ず、測れない** */
+        onMusicRoom={() => {}}
       />
       {/* **いちばん下は自分の欄**(第5.189節・利用者の指定
           「位置を Hisato Nakajima の要素の上にしてください」) */}

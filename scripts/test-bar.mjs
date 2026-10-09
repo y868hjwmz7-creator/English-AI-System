@@ -69,7 +69,7 @@ import { EXERCISE_TYPES } from '../src/data/exerciseTypes.js'
 
 const PASSAGE_TYPES = EXERCISE_TYPES.filter((t) => t.isPassage).map((t) => t.id)
 /* 「細かい指定」の欄の呼び名(第5.232節)。**書き写さない** */
-import { subjectLabel } from '../src/data/materialKinds.js'
+import { kindLabel, subjectLabel } from '../src/data/materialKinds.js'
 /* **余りの決まりは `fitRow.js` 1か所**(第5.316節)。**書き写さない** ——
    8 と書くと、値を変えた日に見張りだけが古くなる */
 import { FIT_SLACK } from '../src/lib/fitRow.js'
@@ -2989,6 +2989,70 @@ for (const [label, want] of Object.entries(WANT)) {
       ng('ホーム … 広い画面で2列になっている', '利用者の指定は「720で左寄せ一列」')
     } else {
       ok(`ホーム(広い画面)… 1列のまま、書いてある ${書いてある}px で止まる`)
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **メニューの並びと、「設定」へ移したもの**(第5.432節・2026-10-09)
+
+     > 教材、ゲスト管理、教材アサイン、単語帳、Quick Response、スピーチ、
+     > 講座、集計、の順にして、音楽は「設定」内に移動したいです
+     > 「30日講座」は「講座」に変えましょう
+     > 「テスト」と「テスト対策」が紛らわしいので「テスト」を
+     > 「チェックテスト」に名前を変えてください
+
+   **並びは利用者が決めたものなので、ここに書く。**
+   `pages` から読み取ると、並べ替えた日に期待も一緒に動いて
+   **緑のまま**になる(第5.337節「見張りが、自分と同じ出どころを見ている」。
+   「設定」の中身の一覧を手で並べてあるのと、まったく同じ理由である)。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  /** 利用者が決めた並び。**ゲスト向けの「今週の宿題」も、消さずに数える** */
+  const WANT_ORDER = ['home', 'materials', 'learners', 'assign', 'homework',
+    'wordbook', 'qr', 'pronunciation', 'course', 'admin', 'bgm']
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+  const 塊 = app.slice(app.indexOf('const pages = ['), app.indexOf('].filter(Boolean)'))
+  const 並び = [...塊.matchAll(/\bid: (?:HOME_ID|'([a-z]+)')/g)]
+    .map((m) => m[1] ?? 'home')
+  if (並び.join(',') !== WANT_ORDER.join(',')) {
+    ng('メニュー … 並びが利用者の指定どおりでない',
+      `いま ${並び.join(' / ')}\n    ほしい ${WANT_ORDER.join(' / ')}`)
+  } else if (!/id: 'bgm',[\s\S]{0,120}?inSettings: true/.test(塊)) {
+    /* **「設定」の中へ移した印。** 一覧からは消さない ——
+       消すと上の帯が名前も絵も引けなくなる(第5.432節) */
+    ng('メニュー … 「音楽」が「設定」の中に移っていない',
+      '`inSettings: true` が付いていない')
+  } else if (/inSettings: true/.test(塊.replace(/id: 'bgm',[\s\S]{0,120}?inSettings: true/, ''))) {
+    ng('メニュー … 「設定」の中へ移したものが、音楽のほかにもある',
+      '移したものが増えたら、この見張りに書き足す')
+  } else if (!/const 並べる = pages\.filter\(\(p\) => !p\.inSettings\)/.test(app)) {
+    ng('メニュー … 「設定」の中のものを飛ばす場所が、1か所になっていない')
+  } else if (!/navItems = jobBadge[\s\S]{0,400}?: 並べる/.test(app)
+    || !/<AppHome pages=\{並べる\}/.test(app)) {
+    /* **メニューとホームの両方**が、その1か所を通っているか。
+       片方だけだと、もう片方に音楽が残る(「出る」と「出ない」の両方) */
+    ng('メニュー … メニューとホームの両方が、同じ一覧を見ていない')
+  } else {
+    ok(`メニュー … 並びは ${並び.join(' / ')}。`
+      + '「音楽」だけが「設定」の中で、メニューもホームも同じ一覧を見る')
+  }
+
+  /* ── 「チェックテスト」と「テスト対策」が、見分けられるか ───────
+       **文字を書き写さない。** 2つの呼び名を突き合わせて、
+       **どちらも、もう片方を含まない**ことだけを見る ——
+       「テスト」に戻すと「テスト対策」に含まれてしまい、赤くなる */
+  {
+    const a = kindLabel('test')
+    const b = kindLabel('exam')
+    if (!a || !b) {
+      ng('教材の種類 … 「テスト」か「テスト対策」の呼び名が無い', `${a} / ${b}`)
+    } else if (a.includes(b) || b.includes(a)) {
+      ng('教材の種類 … 2つの呼び名が、片方にもう片方を含んでいる',
+        `「${a}」と「${b}」。利用者の指定は「紛らわしいので名前を変えて」`)
+    } else {
+      ok(`教材の種類 … 「${a}」と「${b}」は、どちらも相手を含まない`)
     }
   }
 }
@@ -8422,7 +8486,7 @@ export default defineConfig({
       }
     })
     await page.close()
-    const 名 = `30日講座(${w}px)`
+    const 名 = `30日講座の中身(${w}px)`
     if (got.日数 !== 30) {
       ng(`${名} … 30日そろっていない`, String(got.日数))
     } else if (got.段.length !== 2 || !got.段[0].includes('基本360語')) {
@@ -8451,17 +8515,25 @@ export default defineConfig({
   {
     const src = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    if (!/<BasicsCourse me=\{profile\} \/>/.test(src)) {
-      ng('30日講座 … メニューから開けない')
-    /* **改行をまたげる形で見る。** `pages` の行は説明(`desc`)が付いて
-       複数行になった(2026-09・ホーム)。1行の形で探していたので、
-       **中身は1文字も変わっていないのに赤くなった** */
+    /* ★ **あいだに「講座」の棚が入った**(第5.432節)。
+         `App.jsx` → `Courses` → `BasicsCourse` と**2段をたどる** ——
+         どちらか片方だけ見ると、棚が中身を描いていなくても緑になる */
+    const 棚 = readFileSync(new URL('../src/components/Courses.jsx', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
+    if (!/<Courses me=\{profile\} \/>/.test(src)) {
+      ng('講座 … メニューから開けない')
+    } else if (!/<BasicsCourse me=\{me\} \/>/.test(棚)) {
+      ng('講座 … 棚の中から 30日講座 が開けない',
+        '`Courses.jsx` が `BasicsCourse` を描いていない(第5.432節)')
+    /* **改行をまたげる形で見る。** `pages` の行は複数行になっている。
+       **呼び名は書き写さない** —— 見ているのは「誰に出すか」であって
+       名前ではない(名前を書くと、変えた日に赤くなる・CLAUDE.md) */
     /* **トレーナーに出さない、かつ指定したゲストにだけ出す**(0055)。
        > これは、トレーナー側から指定したゲストにのみ映るようにしてください */
-    } else if (!/!isTrainer && basicsOn\)\) && \{\s*id: 'course', label: '30日講座'/.test(src)) {
-      ng('30日講座 … ゲスト専用 / 指定したゲストだけ、になっていない')
+    } else if (!/!isTrainer && basicsOn\)\) && \{\s*id: 'course'/.test(src)) {
+      ng('講座 … ゲスト専用 / 指定したゲストだけ、になっていない')
     } else {
-      ok('30日講座 … 指定したゲストのメニューから開ける')
+      ok('講座 … 指定したゲストのメニューから開け、棚の中に 30日講座 がある')
     }
   }
 
@@ -12769,8 +12841,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
    ④押せる大きさ(40px)か ⑤開くと**7つとも**出るか ⑥はみ出さないか
    ══════════════════════════════════════════════════════════════ */
 {
-  /* **11ある**(第5.257節で「音楽」が3つに割れ、
-     第5.372節で「オフラインの音声」、第5.373節で「相棒」が増えた)。
+  /* **12ある**(第5.257節で「音楽」が3つに割れ、
+     第5.372節で「オフラインの音声」、第5.373節で「相棒」、
+     第5.432節で「曲を入れる」が増えた)。
      **一度入れたものを勝手に減らさない**(共通ルール)。
 
      ★ **この一覧は、画面から読み取らない。** 読み取ると、
@@ -12778,7 +12851,8 @@ for (const W of [1280, 794, 453, 390, 320]) {
        (第5.337節で踏んだ「見張りが、自分と同じ出どころを見ている」)。
        だから**手で並べる。足した日には、必ず一度赤くなる。** */
   const WANT_SET = ['配色', '色づかい', '説明の文', '相棒', '押したときの音',
-    '英語の音声', '音楽', '曲', '音楽の大きさ', '教材の支度', 'オフラインの音声']
+    '英語の音声', '音楽', '曲', '音楽の大きさ', '曲を入れる',
+    '教材の支度', 'オフラインの音声']
   for (const W of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width: W, height: 900 } })
     page.setDefaultTimeout(8000)
