@@ -16112,6 +16112,136 @@ for (const [q2, 期待, 何] of [
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   ★ **入れ物は「面」で分け、押せるものは「線」で示す**
+     (第5.433節・2026-10-09 利用者の指定)
+
+     > 基本的にボタンや弱点タグなどの枠線は消さずに、メニューも含め、
+     > 箱など、入れ物の枠線を消すのが良いと思っています。
+
+   **線を消しただけにすると、カードが消える。**
+   いまカードと地の明暗差は 1.15 : 1 しかなく、
+   **輪郭は 1px の線だけ**が作っていた(測って確かめた)。
+   だから地を沈め、カードを持ち上げてある。
+
+   ここで見るのは4つ。
+
+     ① 入れ物(`.card`)の線が、**本当に透明になっているか**
+     ② 押せるもの(`.btn` / `.chip`)の線は、**残っているか**
+     ③ 線が透明なら、**地とカードの明暗差が足りているか**
+        —— ここが戻ると、入れ物がまるごと見えなくなる
+     ④ **紙では線が戻っているか**(面の差はインクに出ない)
+
+   **値を書き写していない。** 色は画面から読み取り、
+   明暗差は読み取った2色から計算する。
+   ════════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  console.log('\n── 入れ物は面、押せるものは線(第5.433節) ──')
+
+  /** 暗い配色で開く。**配色を決め打ちしないと、ヘッドレスの既定で変わる** */
+  const 開く = async (q) => {
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=${q}`,
+      { waitUntil: 'networkidle' })
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    await page.waitForTimeout(200)
+  }
+  /** その部品の「幅のある辺の色」と、後ろに透けている地の色を読み取る */
+  const 読む = (sel) => page.evaluate((s) => {
+    const el = document.querySelector(s)
+    if (!el) return null
+    const cs = window.getComputedStyle(el)
+    const 辺 = ['Top', 'Right', 'Bottom', 'Left']
+      .map((d) => ({ w: parseFloat(cs[`border${d}Width`]) || 0, c: cs[`border${d}Color`] }))
+      .filter((x) => x.w > 0)
+    /* **後ろの地は、透けていない親までさかのぼって取る** ——
+       入れ物の親は地色を持たないことが多い */
+    const 透き = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return 0
+      const p = m[1].split(',').map(Number); return p.length > 3 ? p[3] : 1 }
+    let 後ろ = el.parentElement
+    while (後ろ && 透き(window.getComputedStyle(後ろ).backgroundColor) < 0.02) 後ろ = 後ろ.parentElement
+    return {
+      辺,
+      地: cs.backgroundColor,
+      後ろ: 後ろ ? window.getComputedStyle(後ろ).backgroundColor : null,
+    }
+  }, sel)
+  const 不透明 = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return 0
+    const p = m[1].split(',').map(Number); return p.length > 3 ? p[3] : 1 }
+  const 明るさ = (c) => {
+    const m = /rgba?\(([^)]+)\)/.exec(c || '')
+    if (!m) return null
+    const [r, g, b] = m[1].split(',').map(Number)
+    const f = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+  }
+  const 明暗差 = (a, b) => {
+    const [x, y] = [明るさ(a), 明るさ(b)].sort((p, q) => q - p)
+    return (x + 0.05) / (y + 0.05)
+  }
+
+  await 開く('tools')
+
+  /* ① 入れ物 —— 線は場所を取ったまま、色だけ透明になっている */
+  {
+    const m = await 読む('.card')
+    if (!m) ng('入れ物 … カードが描かれていない')
+    else if (!m.辺.length) {
+      ng('入れ物 … カードに、幅のある辺が1つも無い',
+        '幅ごと消すと、押しどころがずれる(色だけ透明にする)')
+    } else if (m.辺.some((x) => 不透明(x.c) > 0.02)) {
+      ng('入れ物 … カードに、まだ見える線がある',
+        m.辺.map((x) => x.c).join(' / '))
+    } else ok('入れ物 … カードの線は、場所だけ残して透明になっている')
+
+    /* ③ 線が無いぶん、**面の差で分かれているか** */
+    if (m && m.後ろ) {
+      const r = 明暗差(m.地, m.後ろ)
+      if (r < 1.25) {
+        ng('入れ物 … カードと地が近すぎて、カードが消える',
+          `${r.toFixed(2)} : 1(線が無いので、1.25 : 1 は要る)`)
+      } else ok(`入れ物 … カードと地が、面で分かれている(${r.toFixed(2)} : 1)`)
+    } else ng('入れ物 … カードの後ろの地が読み取れない')
+  }
+
+  /* ② 押せるもの —— 線が残っている */
+  for (const [名, sel] of [['ボタン', '.btn'], ['札', '.chip']]) {
+    const m = await 読む(sel)
+    if (!m) ng(`押せるもの … ${名}が描かれていない`)
+    else if (!m.辺.length) ng(`押せるもの … ${名}に、幅のある辺が1つも無い`)
+    else if (m.辺.every((x) => 不透明(x.c) <= 0.02)) {
+      ng(`押せるもの … ${名}の線まで消えている`,
+        '押せるものの線は残す(第5.433節・利用者の指定)')
+    } else ok(`押せるもの … ${名}には線が残っている`)
+  }
+
+  /* 下の帯も入れ物。**上の線は透明** */
+  await 開く('tabs')
+  {
+    const m = await 読む('.app-tabs')
+    if (!m) ng('入れ物 … 下の帯が描かれていない')
+    else if (!m.辺.length) ng('入れ物 … 下の帯に、幅のある辺が1つも無い')
+    else if (m.辺.some((x) => 不透明(x.c) > 0.02)) {
+      ng('入れ物 … 下の帯に、まだ見える線がある', m.辺.map((x) => x.c).join(' / '))
+    } else ok('入れ物 … 下の帯の線も透明になっている')
+  }
+
+  /* ④ 紙では戻す —— **面のわずかな差は、インクに出ない** */
+  await 開く('sheet')
+  {
+    const v = await page.evaluate(() => {
+      const el = document.querySelector('.lesson-sheet, .focus-paper')
+      return el ? window.getComputedStyle(el).getPropertyValue('--box-line').trim() : null
+    })
+    if (v === null) ng('紙 … 紙が描かれていない')
+    else if (!v || v === 'transparent' || /^rgba\([^)]*,\s*0\s*\)$/.test(v)) {
+      ng('紙 … 紙の上でも入れ物の線が消えている',
+        `--box-line: ${v || '(空)'} —— 面の差はインクに出ない`)
+    } else ok(`紙 … 紙では入れ物の線が戻っている(${v})`)
+  }
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

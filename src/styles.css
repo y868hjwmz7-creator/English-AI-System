@@ -11,7 +11,7 @@
      ・地 → カード → その中の面 で、**目に見える段**を作る
      ・前は #f7f6f3 → #fcfcfb で、地とカードの差が 5 しかなかった
      ・枠線も一段強くして、カードの輪郭が分かるようにする */
-  --surface-0: #eaecef;   /* 画面の背景。いちばん濃い */
+  --surface-0: #dde1e7;   /* 画面の背景。いちばん濃い */
   --surface-1: #ffffff;   /* カードの背景 */
   --surface-2: #f0f2f4;   /* カードの中の面・札 */
   /* カタマリごとの訳の帯(0021)。**うすい緑**(2026-08 利用者の指定)。
@@ -25,14 +25,32 @@
   --btn-bg:   #ffffff;
   --quiet-bg: #e4e7ea;   /* 「まだ」「共有する」など、一段うしろのボタン */
   --on-accent: #ffffff;  /* 青の塗りつぶしの上に乗る文字 */
+  /* ★ **線は2種類ある**(第5.433節・2026-10-09 利用者の指定)。
+
+       > 基本的にボタンや弱点タグなどの枠線は消さずに、メニューも含め、
+       > 箱など、入れ物の枠線を消すのが良いと思っています。
+
+       | 何 | どれを使うか |
+       |---|---|
+       | **押せるもの**(ボタン・タグ・入力欄) | `--border` |
+       | **入れ物**(カード・箱・メニューの行・上下の帯) | `--box-line` |
+       | **わざと引く区切り**(表の行・一覧の行) | `--border` のまま |
+
+       **入れ物は線をやめ、地色の差で分ける。** 線を消しただけにすると
+       ぼんやりするので、`--surface-0` を一段沈めてある(下の暗い配色の節)。
+       **線が残っているもの = 触れるもの**、と読めるようにするのが狙いである。
+
+       **紙と印刷では `--box-line` を戻す** —— 面のわずかな差は
+       **インクに出ない**(このファイルのいちばん下の「紙」の節)。 */
   --border:    #d5d9de;
+  --box-line:  transparent;
   /* ★ **下の帯(`.app-tabs`)の線と影**(第5.401節・2026-10-06 利用者の指定)。
        **1組だけ置く** —— 上端の境目にも、タブのあいだの縦の区切りにも、
        同じ1つを使う(色を2か所に書かない)。
 
        明るい配色では**薄いグレー**(本文との区別が分かる程度)。
        影は**ごく控えめ** —— 線と影を同時に強く使うと、境目がぼやける */
-  --tabs-line:   var(--border);
+  --tabs-line:   var(--box-line);
   --tabs-shadow: 0 -1px 4px rgb(36 41 47 / 8%);
   /* ★ **下の帯が要る場所の高さ**(第5.405節)。本文の下余白と、
        練習の画面(集中モード)の下端が、**この1つの数から決まる** */
@@ -115,7 +133,7 @@
   --buddy-blend: multiply;
 
   --rizap-gold:      #d4af37;   /* 文字・線・アイコン */
-  --rizap-gold-soft: #2a2316;   /* 選んでいるものの、うすい地色 */
+  --rizap-gold-soft: #342d20;   /* 選んでいるものの、うすい地色 */
   --rizap-gold-line: #5a4a22;   /* その枠線 */
   --rizap-gold-on:   #15130d;   /* 金のべた塗りの上に乗る文字 */
   /* ★ **選んでいるものの、透かした金**(第5.383 → 第5.385節)。
@@ -166,25 +184,25 @@
        `npm run test:paper` が、ずれていないかを突き合わせる
        (`:root` で `var(--surface-1)` と書くと**明るい側の値**を拾うので、
         ここは同じ値を書き、見張りで食い違いを捕まえる形にしてある)。 */
-  --pd-paper:        #1c1c1a;   /* = 暗い配色の --surface-1(カードと同じ) */
+  --pd-paper:        #262624;   /* = 暗い配色の --surface-1(カードと同じ) */
   --pd-ink:          #ffffff;   /* = 暗い配色の --text-primary */
   --pd-ink-soft:     #cfcec4;   /* = --text-secondary */
   --pd-ink-faint:    #9a998f;   /* = --text-muted */
-  --pd-rule:         #46463f;   /* = --border */
+  --pd-rule:         #5a5950;   /* = --border */
 
-  --pd-surface-0:    #2b2b28;   /* 紙の上で「浮いた面」。ボタンの地 */
-  --pd-surface-1:    #232321;
-  --pd-surface-2:    #2b2b28;
-  --pd-btn-bg:       #2b2b28;
-  --pd-quiet-bg:     #35352f;
+  --pd-surface-0:    #353532;   /* 紙の上で「浮いた面」。ボタンの地 */
+  --pd-surface-1:    #2d2d2b;
+  --pd-surface-2:    #353532;
+  --pd-btn-bg:       #353532;
+  --pd-quiet-bg:     #3f3f39;
   --pd-on-accent:    #15130d;   /* 金のべた塗りの上に乗る文字 */
 
   --pd-danger:       #e8807c;
   --pd-warn:         #dcbb7e;
 
-  --pd-qa-bg:        #212120;
-  --pd-qa-line:      #46463f;
-  --pd-qa-stripe:    #202020;   /* 1段落おきの地色。紙よりほんの少しだけ暗い */
+  --pd-qa-bg:        #2b2b2a;
+  --pd-qa-line:      #5a5950;
+  --pd-qa-stripe:    #2a2a2a;   /* 1段落おきの地色。紙よりほんの少しだけ暗い */
   --pd-qa-answer:    #272725;
   --pd-chunk-fg:     #9db89a;   /* カタマリごとの訳。セージの明るい側 */
 
@@ -200,7 +218,7 @@
        決め打ちで並べると、紙の色を変えた日に**ここだけ前の紙に合ったまま**
        残る(実際、赤みのある紙に合わせた値が残っていた)。
        混ぜる先を紙にしておけば、紙を変えても**ひとりでについてくる。** */
-  --pd-answer:       #7fc49b;   --pd-answer-bg:    color-mix(in srgb, #7fc49b 12%, #1c1c1a);
+  --pd-answer:       #7fc49b;   --pd-answer-bg:    color-mix(in srgb, #7fc49b 12%, #262624);
   /* ★ **訳は、色を持たせない**(2026-10-08 実機・利用者の指定・第5.428節)
 
        > ダークモードの解答の色の種類が多く、少しうるさく感じます。
@@ -409,24 +427,30 @@
     /* ★ 面の段差をはっきりさせる(2026-08「全体的に見にくい」)
        ・地 → カード → その中の面 で、**目に見える段**を作る
        ・前は 0x13 → 0x1a → 0x26 で、地とカードの差が 7 しかなかった
-       ・枠線も一段強くして、カードの輪郭が分かるようにする */
-    --surface-0: #0c0c0b;   /* ページの地。いちばん暗く */
+       ・**いまは、ここだけがカードの輪郭を作っている**(第5.433節)——
+         入れ物の枠線をやめたので、地を #0c0c0b から #070706 へ沈め、
+         カードを #1c1c1a から #262624 へ持ち上げた(明暗差 1.15 → 1.33)。
+         **この2つを近づけると、カードが消える** */
+    --surface-0: #070706;   /* ページの地。いちばん暗く */
     /* ★ **紙の外も、アプリの地と同じ黒**(第5.393節・2026-10-06) */
     --lesson-around: var(--surface-0);
-    --surface-1: #1c1c1a;   /* カード */
-    --surface-2: #2b2b28;   /* カードの中の面・札 */
+    --surface-1: #262624;   /* カード */
+    --surface-2: #353532;   /* カードの中の面・札 */
     --chunk-fg: #8faa94;
-    --btn-bg:   #303030;
-    --quiet-bg: #454541;
+    --btn-bg:   #3a3a3a;
+    --quiet-bg: #4f4f4b;
     /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
     --on-accent: var(--rizap-gold-on);
-    --border:    #46463f;
-    /* ★ **暗い配色の下の帯**(第5.401節)。線は**地より少し明るい** ——
-         帯(`--surface-1` #1c1c1a)の上に #46463f なので、
-         強すぎず、それでいて本文(#0c0c0b)との境目が見える。
-         **影は出さない** —— 黒い影は黒い地にそのまま沈み、
+    /* ★ **押せるもの(ボタン・タグ・入力欄)の線**(第5.433節)。
+         入れ物が明るくなったぶん、線も上げてある
+         —— カードの上で 2.15 : 1(前は 1.79 : 1)*/
+    --border:    #5a5950;
+    /* ★ **暗い配色の下の帯**(第5.401節 → 第5.433節で線をやめた)。
+         帯は**入れ物**なので、線ではなく**地色の差**で分ける
+         (`--box-line` は透明。帯は `--surface-1`、本文は `--surface-0`)。
+         **影も出さない** —— 黒い影は黒い地にそのまま沈み、
          「明るい配色のために置いた影」が、ここでは何も分けていなかった */
-    --tabs-line:   var(--border);
+    --tabs-line:   var(--box-line);
     --tabs-shadow: none;
   
     --text-primary:   #ffffff;
@@ -488,19 +512,19 @@
 
   /* ★ 面の段差をはっきりさせる。**上の @media と同じ値にする。**
      1か所でも抜けると、そこを選んだときだけ色が食い違う */
-  --surface-0: #0c0c0b;
+  --surface-0: #070706;
   /* ★ **紙の外も、アプリの地と同じ黒**(第5.393節・2026-10-06) */
   --lesson-around: var(--surface-0);
-  --surface-1: #1c1c1a;
-  --surface-2: #2b2b28;
+  --surface-1: #262624;
+  --surface-2: #353532;
   --chunk-fg: #8faa94;
-  --btn-bg:   #303030;
-  --quiet-bg: #454541;
+  --btn-bg:   #3a3a3a;
+  --quiet-bg: #4f4f4b;
   /* 金のべた塗りの上は、**黒に近い文字**にする(第5.380節) */
   --on-accent: var(--rizap-gold-on);
-  --border:    #46463f;
+  --border:    #5a5950;
   /* ★ 下の帯(第5.401節)。**`@media` の側とまったく同じ** */
-  --tabs-line:   var(--border);
+  --tabs-line:   var(--box-line);
   --tabs-shadow: none;
 
   --text-primary:   #ffffff;
@@ -703,7 +727,7 @@ a { color: var(--accent); }
   padding: var(--sp-10) var(--sp-12);
   text-align: left;
   background: var(--surface-1);
-  border: 1px solid var(--border);
+  border: 1px solid var(--box-line);
   border-radius: var(--r-12);
   color: var(--text-primary);
   cursor: pointer;
@@ -802,7 +826,7 @@ a { color: var(--accent); }
   display: flex; align-items: center; gap: var(--sp-10);
   min-height: 56px; padding: 8px 12px;
   padding-top: max(8px, env(safe-area-inset-top));
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--box-line);
   /* **白**(2026-09 利用者の指定「全てのページで共通して上部バーを白く」)。
      下の行き先の帯(`.app-tabs`)と**同じ地色**である —— 上下の帯が
      同じ面になり、そのあいだが本文だと目で分かる */
@@ -1066,7 +1090,7 @@ body:has(.app-tabs) .focus.radio {
   flex: 0 0 auto;
   display: flex; flex-direction: column;
   width: var(--nav-w);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--box-line);
   background: var(--surface-1);
 }
 /* PC。**画面を押し出して並ぶ。** 貼り付いて、本体だけが動く */
@@ -1525,7 +1549,7 @@ input, select, textarea {
 /* ---------------- カード ---------------- */
 
 .card {
-  background: var(--surface-1); border: 1px solid var(--border);
+  background: var(--surface-1); border: 1px solid var(--box-line);
   border-radius: var(--radius); padding: 20px;
   /* **紙の上に置いた紙**に見える程度。縁だけだと、地の色と近いときに
      どこまでが1枚なのか分かりにくかった */
@@ -1546,7 +1570,7 @@ input, select, textarea {
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
 @media (max-width: 780px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 
-.stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.stat { background: var(--surface-1); border: 1px solid var(--box-line); border-radius: var(--radius); padding: 14px 16px; }
 .stat-label { margin: 0; color: var(--text-secondary); font-size: var(--fs-12); }
 .stat-value { margin: 2px 0 0; font-size: var(--fs-26); font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
 .stat-unit { margin-left: 3px; font-size: var(--fs-14); font-weight: 500; color: var(--text-secondary); }
@@ -1609,7 +1633,7 @@ input, select, textarea {
    足すのは「どちらの道で作るか」の2択と、そのすぐ下の断り書きだけ。 */
 .voice-remake {
   margin: 8px 0 4px; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface-2);
 }
 .voice-mode { display: flex; flex-wrap: wrap; gap: var(--sp-8); margin-top: 10px; }
@@ -1624,7 +1648,7 @@ input, select, textarea {
    —— どちらも「押す前に中身と金額を読む」ための箱である */
 .material-fill {
   margin: 8px 0 4px; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface-2);
 }
 
@@ -1913,7 +1937,7 @@ audio { width: 100%; margin-top: 4px; }
   position: fixed; z-index: 200;
   max-width: min(19rem, calc(100vw - 16px));
   padding: 8px 12px;
-  border: 1px solid var(--border); border-radius: var(--r-12);
+  border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
 }
@@ -2028,7 +2052,7 @@ input.share-url {
   background: color-mix(in srgb, var(--warn) 12%, var(--surface-1));
   border: 1px solid var(--warn);
 }
-.notice--info { background: var(--surface-1); border: 1px solid var(--border); color: var(--text-secondary); }
+.notice--info { background: var(--surface-1); border: 1px solid var(--box-line); color: var(--text-secondary); }
 /* 失敗の知らせ。**単語帳がずっと `notice--error` と書いていたのに、
    この決まりが無かった**(2026-09 に気づいた)。名前だけあって効いておらず、
    ふつうの文と同じ見た目で出ていた。**色だけに頼らない**ので枠線も付ける */
@@ -2120,7 +2144,7 @@ input.share-url {
 .chart-tooltip {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   display: flex; gap: var(--sp-8); align-items: baseline;
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-6);
+  background: var(--surface-1); border: 1px solid var(--box-line); border-radius: var(--r-6);
   padding: 4px 10px; font-size: var(--fs-12); white-space: nowrap; pointer-events: none;
   box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
 }
@@ -2292,7 +2316,7 @@ html, body { overflow-x: clip; }
    ------------------------------------------------------------------ */
 .panel {
   margin-top: 14px; padding: 14px;
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface-0);
   display: flex; flex-direction: column; gap: var(--sp-10);
 }
@@ -2442,7 +2466,7 @@ html, body { overflow-x: clip; }
 .finder > .card-hint { margin: 0; }
 /* ② 条件で絞り込む。**畳める。押せることが押す前から分かるようにする** */
 .finder-filters {
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface-2); padding: 10px 12px;
 }
 .finder-filters[open] { background: var(--surface-1); }
@@ -2974,7 +2998,7 @@ html, body { overflow-x: clip; }
 .sign {
   display: inline-flex; flex-direction: column; align-items: center;
   min-width: 62px; padding: 6px 12px;
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface-2); line-height: 1.25;
 }
 .sign-value {
@@ -3060,7 +3084,7 @@ html, body { overflow-x: clip; }
 .avatar-menu {
   position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 40;
   width: min(280px, calc(100vw - 32px));
-  padding: 12px; border: 1px solid var(--border); border-radius: var(--r-14);
+  padding: 12px; border: 1px solid var(--box-line); border-radius: var(--r-14);
   background: var(--surface-1); box-shadow: var(--shadow-2);
 }
 .avatar-menu-head {
@@ -3117,7 +3141,7 @@ html, body { overflow-x: clip; }
   gap: var(--sp-8) var(--sp-10);
   padding: 6px 12px;
   padding-left: max(12px, env(safe-area-inset-left));
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--box-line);
   background: var(--surface-1);
 }
 /* **戻る道は、いちばん先に置く**(集中モードと同じ作法) */
@@ -3158,7 +3182,7 @@ html, body { overflow-x: clip; }
 
 .exercise-block {
   margin: 12px 0; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
 }
 .exercise-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .exercise-no {
@@ -3765,7 +3789,7 @@ html, body { overflow-x: clip; }
    見出しと英語の例が目に入るようにする。 */
 .teaching-note {
   margin: 10px 0;
-  border: 1px solid var(--border); border-radius: var(--r-8);
+  border: 1px solid var(--box-line); border-radius: var(--r-8);
   background: var(--surface-1);
 }
 /* 畳んでいるときは、ただの1行の見出しに見えるようにする。
@@ -3860,7 +3884,7 @@ html, body { overflow-x: clip; }
      重なって ☰ が押せなくなる**(上の節)。「別々に `fixed` で置かない」
      (`.sheet-floats`)と、まったく同じ話である */
   padding: 8px 14px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--box-line);
   /* **上の帯と同じ地色**(この節のいちばん上に書いてある決まり)。
      2026-09 に上の帯を白くしたので、ここも一緒に白くする ——
      片方だけ残すと、貼り付いた箱の中に**色の段差**が1本できる */
@@ -4029,7 +4053,7 @@ body:has(.focus) .app-tab { gap: 0; }
 /* 詳しい設定。既定では閉じておく */
 .details-box {
   margin: 14px 0; padding: 10px 12px;
-  border: 1px dashed var(--border); border-radius: var(--radius);
+  border: 1px dashed var(--box-line); border-radius: var(--radius);
 }
 
 /* 下書きができたことの知らせ。押したボタンのすぐ下に出す */
@@ -5480,7 +5504,7 @@ body:has(.focus) .app-tab { gap: 0; }
   display: flex; flex-direction: column; gap: var(--sp-8);
   margin: 16px 12px 16px 0; padding: 12px;
   background: var(--surface-1); color: var(--text-primary);
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   overflow-y: auto;
 }
 .lesson-notes-head {
@@ -5507,14 +5531,14 @@ body:has(.focus) .app-tab { gap: 0; }
 .notes-board {
   width: 100%; min-height: clamp(10rem, 40vh, 24rem);
   padding: 12px; line-height: 1.9;
-  border: 1px solid var(--border); border-radius: var(--r-8);
+  border: 1px solid var(--box-line); border-radius: var(--r-8);
   background: var(--surface-0); color: var(--text-primary);
   resize: vertical;
 }
 /* ゲストは読むだけ。**改行はそのまま出す**(書いたとおりに見える) */
 .notes-read {
   white-space: pre-wrap; line-height: 1.9;
-  padding: 12px; border: 1px solid var(--border); border-radius: var(--r-8);
+  padding: 12px; border: 1px solid var(--box-line); border-radius: var(--r-8);
   background: var(--surface-0);
 }
 .notes-foot { font-size: var(--fs-13); }
@@ -6002,7 +6026,7 @@ body:has(.focus) .app-tab { gap: 0; }
   max-width: min(20rem, calc(100vw - 16px));
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8);
   padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r-12);
+  border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
 }
@@ -6033,7 +6057,7 @@ body:has(.focus) .app-tab { gap: 0; }
 .tagpicker-chosen-label { font-size: var(--fs-12); color: var(--text-secondary); }
 .tagchip-x { margin-left: 6px; opacity: .7; font-size: var(--fs-11); }
 
-.tagcat { border: 1px solid var(--border); border-radius: var(--radius); }
+.tagcat { border: 1px solid var(--box-line); border-radius: var(--radius); }
 .tagcat.is-open { border-color: var(--text-muted); }
 .tagcat-head {
   display: flex; align-items: center; gap: var(--sp-8); width: 100%;
@@ -6066,7 +6090,7 @@ body:has(.focus) .app-tab { gap: 0; }
 /* これまでの宿題から復習する語を混ぜる欄 */
 .review-box {
   margin: 12px 0; padding: 10px 12px;
-  border: 1px dashed var(--border); border-radius: var(--radius);
+  border: 1px dashed var(--box-line); border-radius: var(--radius);
 }
 .review-count { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); margin: 6px 0; }
 .review-words { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin: 6px 0; }
@@ -6909,7 +6933,7 @@ button.wbfilter-ctl { text-align: left; }
 .practice-pop {
   position: fixed; z-index: 200;
   width: min(19rem, calc(100vw - 24px)); padding: 14px 16px;
-  border: 1px solid var(--border); border-radius: var(--r-12);
+  border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
 }
@@ -6928,7 +6952,7 @@ button.wbfilter-ctl { text-align: left; }
 .wbcal {
   position: fixed; z-index: 200;
   width: 288px; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r-12);
+  border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
   /* **背の低い画面でも、全体が映る**(2026-08 利用者の指定)。
@@ -6978,7 +7002,7 @@ button.wbfilter-ctl { text-align: left; }
 .wordbook { list-style: none; margin: 10px 0 0; padding: 0; }
 .wordbook-row {
   padding: 10px 12px; margin-bottom: 8px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--surface-1);
 }
 .wordbook-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8); }
@@ -7040,7 +7064,7 @@ button.wbfilter-ctl { text-align: left; }
    ようにしたい」)。`<button>` になったので、既定の見た目を打ち消す */
 .wb-stat {
   display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
-  padding: 12px 8px; border: 1px solid var(--border); border-radius: var(--r-12);
+  padding: 12px 8px; border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-2);
   font: inherit; text-align: center; cursor: pointer;
   /* **押せる大きさを割らない**(CLAUDE.md)。中身だけで 60px ほどある */
@@ -7095,7 +7119,7 @@ button.wbfilter-ctl { text-align: left; }
 .wb-add-open:not(.btn--primary) { color: var(--accent); }
 .wb-add-body {
   margin-top: 10px; padding: 14px 16px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--surface-2);
 }
 .wb-add-body > .field { margin-bottom: 10px; }
@@ -7389,7 +7413,7 @@ button.wbfilter-ctl { text-align: left; }
 .radio-en--you {
   font-size: var(--fs-19); font-weight: 600; line-height: 1.5;
   color: var(--text-secondary);
-  background: var(--surface-2); border: 1px dashed var(--border);
+  background: var(--surface-2); border: 1px dashed var(--box-line);
   border-radius: var(--r-8); padding: 8px 14px;
 }
 
@@ -7558,7 +7582,7 @@ button.wbfilter-ctl { text-align: left; }
   gap: var(--sp-8);
   padding: 8px 12px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--box-line);
   border-radius: var(--r-8);
 }
 /* **題が長くても、消すボタンを押し出さない** */
@@ -7675,7 +7699,7 @@ button.wbfilter-ctl { text-align: left; }
      上げ、角を丸め、影を一段付ける(「面の段差」で情報を分ける・CLAUDE.md)。
      **色は必ず変数で持つ**(プレインを選んだときに色だけが残らないように) */
   margin-top: 12px; padding: 26px 20px 20px;
-  border: 1px solid var(--border); border-radius: var(--r-18);
+  border: 1px solid var(--box-line); border-radius: var(--r-18);
   background: var(--surface-1); box-shadow: var(--shadow-1);
   text-align: center;
   /* **カードの下に送りしろを置く**(2026-09)。
@@ -7871,7 +7895,7 @@ button.wbfilter-ctl { text-align: left; }
 .hw-words {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin: 12px 0 0; padding: 10px 12px;
-  background: var(--accent-soft); border: 1px solid var(--border);
+  background: var(--accent-soft); border: 1px solid var(--box-line);
   border-radius: var(--r-8);
 }
 .hw-words-line { margin: 0; flex: 1 1 14rem; font-size: var(--fs-13h); line-height: 1.7; }
@@ -8763,7 +8787,7 @@ button.wbfilter-ctl { text-align: left; }
   position: sticky; bottom: 0; z-index: 2;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-10);
   margin-top: 10px; padding: 10px 12px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--surface-1); font-size: var(--fs-13);
 }
 .wordbook-pickbar > span:first-child { margin-right: auto; }
@@ -8798,7 +8822,7 @@ button.wbfilter-ctl { text-align: left; }
 .lfiles-who { display: block; margin: 0 0 14px; line-height: 1.7; }
 .lfiles-add {
   padding: 14px 16px; margin-bottom: 16px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--surface-2);
 }
 .lfiles-add > .field { margin-bottom: 10px; }
@@ -8826,7 +8850,7 @@ button.wbfilter-ctl { text-align: left; }
   display: flex; flex-wrap: wrap; gap: var(--sp-10);
   align-items: center; justify-content: space-between;
   padding: 12px 14px;
-  border: 1px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--surface-1);
 }
 .lfiles-main { min-width: 0; flex: 1 1 12rem; }
@@ -8959,7 +8983,7 @@ button.wbfilter-ctl { text-align: left; }
    **色は変数から取る**(配色を直せば、ここも一緒に直る)。 */
 .focus--plain .focus-top {
   background: var(--surface-0); color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--box-line);
 }
 .focus--plain .focus-count { color: var(--text-secondary); }
 .focus--plain .focus-top .btn {
@@ -9267,7 +9291,7 @@ button.wbfilter-ctl { text-align: left; }
 .gnote-part--mod > .gnote-t { color: var(--text-secondary); }
 .gnote-part--mod > .gnote-r {
   background: transparent; color: var(--text-muted);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--box-line);
 }
 .gnote-note {
   margin: 0;
@@ -9369,7 +9393,7 @@ button.wbfilter-ctl { text-align: left; }
 }
 .focus-wrap-list li {
   padding: 6px 12px; border-radius: var(--r-pill);
-  border: 1px solid var(--border); background: var(--surface-2);
+  border: 1px solid var(--box-line); background: var(--surface-2);
   font-size: var(--fs-15);
 }
 .focus-wrap-none { margin: 0; color: var(--text-secondary); font-size: var(--fs-14); }
@@ -10995,7 +11019,7 @@ button.wbfilter-ctl { text-align: left; }
 .setpop {
   position: fixed; z-index: 200;
   width: 320px; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r-12);
+  border: 1px solid var(--box-line); border-radius: var(--r-12);
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow-2);
   /* **背の低い画面でも、全体が映る。** 画面より高い箱はどこに置いても
@@ -11304,7 +11328,7 @@ button.wbfilter-ctl { text-align: left; }
 .shelfbuild-list > li {
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--sp-10) var(--sp-12);
-  border: 1px solid var(--border); border-radius: var(--r-8);
+  border: 1px solid var(--box-line); border-radius: var(--r-8);
   background: var(--surface-2);
   /* AI が付ける語句は長いことがある。**囲みから出さない** */
   overflow-wrap: break-word;
@@ -11330,7 +11354,7 @@ button.wbfilter-ctl { text-align: left; }
 .shelfbuild-all {
   margin: var(--sp-12) 0;
   padding: var(--sp-12);
-  border: 1px solid var(--border); border-radius: var(--r-8);
+  border: 1px solid var(--box-line); border-radius: var(--r-8);
   background: var(--surface-2);
 }
 .shelfbuild-all > .card-hint { margin-top: 0; }
@@ -11365,7 +11389,7 @@ button.wbfilter-ctl { text-align: left; }
 .shelf-pick {
   display: flex; align-items: center; gap: var(--sp-10);
   width: 100%; min-height: 48px; padding: var(--sp-10) var(--sp-12);
-  border: 1px solid var(--border); border-radius: var(--r-10);
+  border: 1px solid var(--box-line); border-radius: var(--r-10);
   background: var(--surface); color: var(--text);
   font-size: var(--fs-15); text-align: left; cursor: pointer;
 }
@@ -12150,3 +12174,18 @@ button.wbfilter-ctl { text-align: left; }
   .cardmove { transition: none !important; }
   .move-arrow { transition: none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   **紙と印刷では、入れ物の線を戻す**(第5.433節・2026-10-09)
+
+   画面では入れ物の枠線をやめ、`--surface-0` と `--surface-1` の
+   **地色の差**で分けている。紙はそれができない ——
+   **面のわずかな差は、インクに出ない。**
+   (CLAUDE.md「色だけに頼らない」と同じ根である)
+
+   ここは**いちばん後ろに置く。** `:root` と同じ細かさなので、
+   前に書くと上の `--box-line: transparent` に負ける
+   (共通ルール「打ち消す指定は、いちばん後ろに置く」)。
+   ════════════════════════════════════════════════════════════════════ */
+.lesson-sheet, .focus-paper { --box-line: var(--border); }
+@media print { :root { --box-line: var(--border); } }
