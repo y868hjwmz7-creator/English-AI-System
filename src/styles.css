@@ -8021,9 +8021,16 @@ button.wbfilter-ctl { text-align: left; }
   --qr-fg: var(--text-primary);
   --qr-dim: var(--text-secondary);
   --qr-faint: var(--text-muted);
+  /* **中の区切り**(答えの上の線・一覧の行)。**押せるものと同じ `--border`** */
   --qr-rule: var(--border);
   margin-top: 12px; padding: 14px;
-  border: 1px solid var(--qr-rule); border-radius: var(--radius);
+  /* ★ **この箱の輪郭は `--box-line`**(第5.433節・2026-10-09 利用者の指摘)。
+       **自分の名前(`--qr-rule`)で線を引いていたので、入れ物の線をやめた日に
+       ここだけ残った** —— 利用者「いまだに quick response の箱の枠線が
+       消えていません」。
+       **中の区切りとは別のもの**なので、値も別にする
+       (「1つの値にまとめてよいのは、同じものだけ」・第5.433節) */
+  border: 1px solid var(--box-line); border-radius: var(--radius);
   background: var(--qr-bg); color: var(--qr-fg);
 }
 /* **折り返しを許す。** 狭い画面では取り組み方の札が自分の行に落ちる。
