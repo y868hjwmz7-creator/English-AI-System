@@ -51,8 +51,8 @@
  */
 import { useRef, useState } from 'react'
 import {
-  PICKS, SIZES, isDueNow, pickCounts, pickLead, pickPool, plainOrders,
-  sizeLabel, takeCount, todayKey,
+  DUE_LABEL, PICKS, SIZES, isDueNow, pickCounts, pickLead, pickPool, plainOrders,
+  sizeOfValue, sizePickLabel, takeCount, todayKey,
 } from '../lib/reviewScope.js'
 /* ★ **段階(4段階)は `learnStage.js` 1か所**(第5.406節)。
      「何を出す」の「苦手」「未学習」も、ここの段そのものである */
@@ -91,6 +91,12 @@ export default function ReviewScope({
   shuffle = true, onShuffle = null,
   repeat = false, onRepeat = null,
   /**
+   * ★ **期限で絞るか**(第5.437節・2026-10-09 利用者の指定)。
+   * `'due'` なら「そろそろ忘れる頃」のものだけ。札とは**別の軸**である。
+   * **渡されなければ、そのスイッチは出ない**(効かない操作を見せない)。
+   */
+  scope = 'all', onScope = null,
+  /**
    * ★ **いまの画面の道具**(2026-10-09 利用者の指定)。
    *
    *   > Quick Responseや単語帳のPDF/印刷の機能を左のハンバーガーに
@@ -104,8 +110,10 @@ export default function ReviewScope({
   tools = null,
 }) {
   const today = todayKey()
-  const counts = pickCounts(rows, today)
-  const pool = pickPool(rows, pick, today)
+  /* ★ **期限は、札ではなくスイッチが決める**(第5.437節)。
+     数え上げと出題の両方に、同じ `scope` を通す(**数え方を2通り持たない**) */
+  const counts = pickCounts(rows, today, scope)
+  const pool = pickPool(rows, pick, today, scope)
   const take = takeCount(size, pool.length)
   /* **先取りが何件あるか。** ここで「次に出す日を動かさない」ことを
      先に言っておく。黙って動かさないと、進めたつもりで進んでいない */
@@ -167,31 +175,11 @@ export default function ReviewScope({
         }))}
       </div>
 
-      {/* ② **何問ずつ** —— 10 / 20 / ぜんぶ。**そのすぐ下にスイッチ2つ** */}
-      {見出し('many', `何${unit}ずつ`)}
-      <div className="chiprow" role="group" aria-labelledby="rscope-many">
-        {SIZES.map((s) => 札({
-          key: String(s), on: s === size, label: sizeLabel(s), onClick: () => onSize(s),
-        }))}
-      </div>
-      {(onShuffle || onRepeat) && (
-        <div className="chiprow rscope-switches">
-          {onShuffle && 札({
-            key: 'shuffle',
-            on: shuffle,
-            label: 'シャッフル',
-            icon: <ShuffleIcon />,
-            onClick: () => onShuffle(!shuffle),
-          })}
-          {onRepeat && 札({
-            key: 'repeat',
-            on: repeat,
-            label: '繰り返す',
-            icon: <RepeatIcon />,
-            onClick: () => onRepeat(!repeat),
-          })}
-        </div>
-      )}
+      {/* ★ **何問ずつ・シャッフル・繰り返すは、下に貼り付く帯へ移した**
+             (第5.437節・2026-10-09 利用者の指定)。
+             > 変更した後も「何問ずつ」「シャッフル」「繰り返し」が
+             > 常にどこかに表示されているのがベストです
+             スクロールしても消えないので、**ここから出した** */}
 
       {/* ③ **訊き方**(単語帳だけ)。**渡されなければ、この段ごと出ない** */}
       {forms && forms.length > 0 && (
@@ -305,6 +293,85 @@ export default function ReviewScope({
   /** この欄の呼び名。**絵だけにしたので、言葉はここ1か所が持つ** */
   const 出しかたと呼ぶ = '出しかた'
 
+  /** 始めるボタンの字。**2か所に書き写さない**(シートの帯と、始める前の画面) */
+  const 始める文字 = pool.length === 0
+    ? `出すものがありません`
+    : `この出しかたで始める(${take} ${unit})`
+
+  /* ══════════════════════════════════════════════════════════════
+     ★ **下に貼り付く帯**(第5.437節・2026-10-09 利用者の指定)
+
+       > 出す数を選択した後に1番下に「この10問で出す」というボタンが
+       > 出ますが、これは慣れていないと見逃すボタンですし、UIとして
+       > 分かりにくいです。(略)変更した後も「何問ずつ」「シャッフル」
+       > 「繰り返し」が常にどこかに表示されているのがベストです
+
+     **スクロールしても動かない**(`position: sticky`)ので、
+     どこまで送っても始めるボタンと設定が目に入る。
+
+     **問数はプルダウン**(5 から選べるので、札では横に並ばない)。
+     **シャッフルと繰り返すは絵だけ** —— 下のプレーヤーとまったく同じ絵を
+     使う(`ShuffleIcon` / `RepeatIcon` は `Icons.jsx` 1か所)。
+     ══════════════════════════════════════════════════════════════ */
+  const 帯 = (
+    <div className="rscope-bar">
+      <div className="rscope-bar-row">
+        {/* **何問ずつ。** 言い方は `sizePickLabel()` 1か所(「5 問」「ぜんぶ」) */}
+        <label className="rscope-size">
+          <span className="sr-only">{`何${unit}ずつ`}</span>
+          <select
+            value={String(size)}
+            onChange={(e) => onSize(sizeOfValue(e.target.value))}
+          >
+            {SIZES.map((n) => (
+              <option key={String(n)} value={String(n)}>{sizePickLabel(n, unit)}</option>
+            ))}
+          </select>
+        </label>
+        {onShuffle && (
+          <button
+            type="button"
+            aria-pressed={shuffle}
+            aria-label="ランダム"
+            title="ランダム"
+            className={`btn btn--quiet rscope-sw${shuffle ? ' chip--on' : ''}`}
+            onClick={() => onShuffle(!shuffle)}
+          >
+            <ShuffleIcon />
+          </button>
+        )}
+        {onRepeat && (
+          <button
+            type="button"
+            aria-pressed={repeat}
+            aria-label="くり返す"
+            title="くり返す"
+            className={`btn btn--quiet rscope-sw${repeat ? ' chip--on' : ''}`}
+            onClick={() => onRepeat(!repeat)}
+          >
+            <RepeatIcon />
+          </button>
+        )}
+        {/* ★ **期限のスイッチ。字で書く**(第5.437節)——
+             絵にすると「出会った時期」(日付の絞り込み)と見分けが付かない */}
+        {onScope && 札({
+          key: 'due',
+          on: scope === 'due',
+          label: DUE_LABEL,
+          onClick: () => onScope(scope === 'due' ? 'all' : 'due'),
+        })}
+      </div>
+      <button
+        type="button"
+        className="btn btn--primary rscope-start"
+        disabled={pool.length === 0}
+        onClick={() => { setOpen(false); onStart?.() }}
+      >
+        <FocusIcon />{始める文字}
+      </button>
+    </div>
+  )
+
   /** 絵と、その中身。**畳んだ形でも、始める前でも、これ1つ** */
   const 出しかた = (
     <>
@@ -339,39 +406,29 @@ export default function ReviewScope({
           /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
           placeKey={`${pick}/${size}/${narrowed}/${form}/${order}/${repeat}/${shuffle}/${moreOpen}`}
         >
-          {上の3段}
-          {詳しくしぼる}
-          {道具}
-          {/* ★ **いちばん下に「◯問で始める」**(利用者の指定・段階3)。
-                 「押す前に出題数が分かるようにする」—— 数は `takeCount()`
-                 1か所から出す(**書き写さない**)。
-                 **押したら、この箱を閉じる** —— 開いたまま出題に戻ると、
-                 設定が練習の上に居座る(`.setpop` は z-index 200) */}
-          <div className="btn-row rscope-go">
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={pool.length === 0}
-              onClick={() => { setOpen(false); onStart?.() }}
-            >
-              <FocusIcon />
-              {pool.length === 0
-                ? `出すものがありません`
-                : `${take} ${unit}で始める`}
-            </button>
-          </div>
-          {/* **押したら何が起きるかを1行で言う。** 箱の番号は出さない */}
-          <p className="tip card-hint rscope-lead">
-            {pickLead(pick, unit)}
-            {repeat && ` 出し切っても止まらず、もう一度この範囲を回します。`}
-          </p>
-          {ahead > 0 && (
-            <p className="card-hint rscope-lead">
-              このうち <strong>{ahead} {unit}</strong>は先取りなので、
-              正解しても<strong>次に出る日は動きません</strong>
-              (同じ範囲を何度も回して先へ飛ぶと、明日の復習が空になるためです)。
+          {/* **流れる中身**(ここだけがスクロールする) */}
+          <div className="rscope-scroll">
+            {上の3段}
+            {詳しくしぼる}
+            {道具}
+            {/* **押したら何が起きるかを1行で言う。** 箱の番号は出さない */}
+            <p className="tip card-hint rscope-lead">
+              {pickLead(pick, unit, scope)}
+              {repeat && ` 出し切っても止まらず、もう一度この範囲を回します。`}
             </p>
-          )}
+            {ahead > 0 && (
+              <p className="card-hint rscope-lead">
+                このうち <strong>{ahead} {unit}</strong>は先取りなので、
+                正解しても<strong>次に出る日は動きません</strong>
+                (同じ範囲を何度も回して先へ飛ぶと、明日の復習が空になるためです)。
+              </p>
+            )}
+          </div>
+          {/* ★ **帯は、流れる中身の外**(第5.437節)——
+                中に入れると一緒に流れてしまい、貼り付かない。
+                **押したら、この箱を閉じる** —— 開いたまま出題に戻ると、
+                設定が練習の上に居座る(`.setpop` は z-index 200) */}
+          {帯}
         </SettingsSheet>
       )}
     </>
@@ -389,16 +446,14 @@ export default function ReviewScope({
           disabled={pool.length === 0}
           onClick={onStart}
         >
-          <FocusIcon />
-          {pool.length === 0
-            ? `出すものがありません`
-            : `${take} ${unit}で始める`}
+          {/* **字は1か所から**(第5.437節)。シートの帯と同じものを使う */}
+          <FocusIcon />{始める文字}
         </button>
         {出しかた}
       </div>
 
       <p className="tip card-hint rscope-lead">
-        {pickLead(pick, unit)}
+        {pickLead(pick, unit, scope)}
         {repeat && ` 出し切っても止まらず、もう一度この範囲を回します。`}
       </p>
 

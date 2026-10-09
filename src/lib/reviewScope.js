@@ -50,7 +50,7 @@ import { DEFAULT_FORM, SESSION_SIZE, formOf } from './wordQuiz.js'
 import { FILTER_KEYS, countNarrowed } from './wordbookFilter.js'
 /* ★ **段(覚え具合)は `learnStage.js` 1か所**(第5.406節)。
      「何を出す」の「苦手」「未学習」は、あちらの段そのものである */
-import { stageOrDefaultPool } from './learnStage.js'
+import { stageLabel, stageOrDefaultPool } from './learnStage.js'
 
 export { addedDayOf, daysAgo, todayKey }
 
@@ -91,7 +91,7 @@ export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
      もとは**2つの操作**だった。
 
        ・範囲の札(`scope`) … 今日の復習 / ぜんぶ / 1週間以内 / …
-       ・段の札(`stage`)   … 未学習 / 苦手 / 学習中 / 覚えた
+       ・段の札(`stage`)   … 未学習 / 苦手 / 覚えかけ / 覚えた
 
      「苦手なものを今日ぶんから」をやるには、**2か所を押す**必要があり、
      しかも**どちらを押したか画面の離れた場所に出ていた。**
@@ -103,7 +103,7 @@ export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
      「今日の復習」は `scope = 'due'` そのもの)。
 
    【細かい組み合わせは、消していない】
-     「今日の復習 × 学習中」のような組は、**「詳しくしぼる」の中の
+     「今日の復習 × 覚えかけ」のような組は、**「詳しくしぼる」の中の
      「段階」**で作れる(**勝手に狭めない**・CLAUDE.md)。
      ══════════════════════════════════════════════════════════════════ */
 
@@ -111,14 +111,64 @@ export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
  * **押したら何になるか**の表。**ここ1か所。**
  * 画面で `id === 'weak' ? …` と書かない(判断は1か所・CLAUDE.md)。
  */
+/* ══════════════════════════════════════════════════════════════════
+   ★ **4つとも「覚え具合」にそろえた**(第5.437節・2026-10-09 利用者の指定)
+
+     > 「今日の復習」この文言を変えます。今日学んだことの復習かのようにも
+     > 読み取れるからです。全部、苦手、覚えかけ、覚えた、この四つだけなら
+     > シンプルで分かりやすい
+
+   もとの4枚は、**1行に2つの軸が混ざっていた。**
+
+     ・今日の復習 … **期限**の話(次に出す日が来たか)
+     ・苦手 / 未学習 / ぜんぶ … **覚え具合**の話
+
+   だから「今日の復習」だけが浮いて見え、しかも**今日やった教材の復習**と
+   読めてしまう。いまは**札は覚え具合だけ**にして、期限は
+   **スイッチ(`DUE_LABEL`)**へ出した —— 軸が混ざらず、
+   間隔をあけた復習の入口も残る。
+
+   **「未学習」は札から外した**(利用者の指定の4つに無い)。
+   **消してはいない** —— 「詳しくしぼる」の中の「覚え具合」で選べる
+   (**勝手に狭めない**・CLAUDE.md)。
+
+   **名前は `LEARN_STAGES` から読む**(`learnStage.js` 1か所)——
+   ここに「覚えかけ」と書き写すと、段の名前を変えた日に片方だけ古くなる。
+   ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * **押したら何になるか**の表。**ここ1か所。**
+ * 画面で `id === 'weak' ? …` と書かない(判断は1か所・CLAUDE.md)。
+ *
+ * `id` は段の id とそろえてある(`weak` / `learning` / `done`)。
+ * 「ぜんぶ」だけが段を持たない。
+ */
 export const PICKS = [
-  { id: 'due', label: '今日の復習', scope: 'due', stage: null },
-  { id: 'weak', label: '苦手', scope: 'all', stage: 'weak' },
-  { id: 'new', label: '未学習', scope: 'all', stage: 'new' },
-  { id: 'all', label: 'ぜんぶ', scope: 'all', stage: null },
+  { id: 'all', label: 'ぜんぶ', stage: null },
+  ...['weak', 'learning', 'done'].map((id) => ({ id, label: stageLabel(id), stage: id })),
 ]
 
 export const pickOf = (id) => PICKS.find((p) => p.id === id) ?? PICKS[0]
+
+/**
+ * ★ **期限で絞るスイッチの呼び名**(第5.437節・2026-10-09 利用者の指定)。
+ *
+ * はじめ「今日の分だけ」と書いたが、**利用者に意味が伝わらなかった。**
+ *
+ *   > 私は、いまだに「今日の分だけ」の意味がわかりません。
+ *   > その日に初めて取り組んだ教材があり、そこから登録した単語や
+ *   > quick response があるのならいみがわかるのですが
+ *
+ * 中身は「**次に出す日が今日(か、過ぎている)もの**」——
+ * 答え方で次の日が動く(まだ → 翌日 / 言えた → だんだん先へ)ので、
+ * **そろそろ忘れる頃**のものが集まる。
+ *
+ * **名前そのものに意味を持たせる。** 画面に説明書きを足して補わない
+ * (`.claude/rules/common.md`「余計な説明書きを置かない」)。
+ * **カレンダーの絵にしない** —— 日付の絞り込み(「出会った時期」)が
+ * 別にあるので、**同じ絵が2つの違うことを指す**ことになる。
+ */
+export const DUE_LABEL = 'そろそろ忘れる頃'
 
 /**
  * ★ **いま出している範囲を、題の先頭に足すための言葉**
@@ -133,9 +183,14 @@ export const pickOf = (id) => PICKS.find((p) => p.id === id) ?? PICKS[0]
  *
  * **知らない id も空。** 当てずっぽうで「今日の復習」と書かない。
  */
-export const pickName = (id) => {
+export const pickName = (id, scopeId = 'all') => {
+  /* ★ **期限で絞っているなら、それも題に出す**(第5.437節)。
+     「ぜんぶ」の札のままスイッチだけ入れている人は多いので、
+     ここを見ないと**何で絞っているのか題から消える** */
   const p = PICKS.find((x) => x.id === id)
-  return (!p || p.id === 'all') ? '' : p.label
+  const 段 = (!p || p.id === 'all') ? '' : p.label
+  if (scopeId !== 'due') return 段
+  return 段 ? `${DUE_LABEL}の${段}` : DUE_LABEL
 }
 
 /**
@@ -147,35 +202,39 @@ export const pickName = (id) => {
  * **当てずっぽうで「ぜんぶ」を光らせない**(黙って嘘をつかない・CLAUDE.md)。
  * そのときは「◯件しぼり中」の側が、絞っていることを言う。
  */
-export const pickIdOf = (scope, stage) => {
-  if (stage) return PICKS.find((p) => p.stage === stage)?.id ?? ''
-  return scope === 'due' ? 'due' : 'all'
+export const pickIdOf = (stage) => {
+  /* ★ **期限はもう見ない**(第5.437節)。札は覚え具合だけになったので、
+     スイッチを入れても光る札は変わらない(**別の軸**である) */
+  if (!stage) return 'all'
+  return PICKS.find((p) => p.stage === stage)?.id ?? ''
 }
 
 /**
  * その札を押したら出るもの。**押す前の数も、押したあとの出題も、これ1つ。**
  * **数え方を2通り持たない**(CLAUDE.md)。
  */
-export const pickPool = (rows, id, today = todayKey()) => {
+export const pickPool = (rows, id, today = todayKey(), scopeId = 'all') => {
   const p = pickOf(id)
-  return scopePool(stageOrDefaultPool(rows, p.stage), p.scope, today)
+  /* ★ **期限は呼ぶ側が渡す**(第5.437節)。札の持ちものではなくなった */
+  return scopePool(stageOrDefaultPool(rows, p.stage), scopeId, today)
 }
 
 /** 札に添える数。**数が見えないと選べない**(第5.245節と同じ考え方) */
-export const pickCounts = (rows, today = todayKey()) => Object.fromEntries(
-  PICKS.map((p) => [p.id, pickPool(rows, p.id, today).length]),
+export const pickCounts = (rows, today = todayKey(), scopeId = 'all') => Object.fromEntries(
+  PICKS.map((p) => [p.id, pickPool(rows, p.id, today, scopeId).length]),
 )
 
 /**
  * 押したら何が起きるのかを、1行の日本語で言う。
  * **仕組みの内側の数字(箱の番号)は出さない**(CLAUDE.md)。
  */
-export function pickLead(id, unit = '問') {
+export function pickLead(id, unit = '問', scopeId = 'all') {
   const p = PICKS.find((x) => x.id === id)
   if (!p) return `詳しくしぼっています。`
-  if (p.id === 'due') return `今日が復習の日のものから出します。`
-  if (p.id === 'all') return `溜まっている${unit}ぜんぶから出します。期限は見ません。`
-  return `「${p.label}」の${unit}から出します。期限は見ません。`
+  /* ★ **期限は別の軸**(第5.437節)。札と組み合わせて1行で言う */
+  const 元 = p.id === 'all' ? `溜まっている${unit}ぜんぶ` : `「${p.label}」の${unit}`
+  if (scopeId === 'due') return `${元}のうち、次に出す日が来たものから出します。`
+  return `${元}から出します。期限は見ません。`
 }
 
 /**
@@ -186,7 +245,11 @@ export function pickLead(id, unit = '問') {
  * **`SESSION_SIZE`(10)は既定として残す。** 単語帳がずっとその数だった。
  * `'all'` は「範囲にあるものを全部」。
  */
-export const SIZES = [10, 20, 'all']
+/* ★ **5 から選べる**(第5.437節・2026-10-09 利用者の指定)。
+     > 何問ずつ出すかは5問から選べ、そしてプルダウンか何かの形にします
+     札を横に並べると5つは入らないので、**プルダウン**にした。
+     **一覧はここ1か所**(聞き流しの個数も、これをそのまま使う) */
+export const SIZES = [5, 10, 20, 30, 'all']
 export const DEFAULT_SIZE = SESSION_SIZE
 
 /* ★ **聞き流しも、同じ一覧である**(第5.414節)。
@@ -537,7 +600,7 @@ export function saveRepeat(where, on) {
  * ============================================================================
  * 【段(覚え具合)は `learnStage.js` へ移した】(第5.406節・2026-10-07)
  *
- * 利用者の指定で **4段階**(未学習 / 苦手 / 学習中 / 覚えた)になった。
+ * 利用者の指定で **4段階**(未学習 / 苦手 / 覚えかけ / 覚えた)になった。
  * もとはここに2組(`WORD_GROUPS` / `QR_GROUPS`)あり、
  * **単語帳は `status`、Quick Response は箱**と分け方が違っていた。
  *

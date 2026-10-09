@@ -35,7 +35,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { CardPeekCtx, MoveArrow } from './CardMove.jsx'
 import SpeakButton from './SpeakButton.jsx'
-import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { frameFormOf } from '../lib/frameMatch.js'
@@ -112,6 +111,18 @@ export default function QrCard({
    * **何をするかは `CardMove` が持つ** —— ここは置き場所だけを決める。
    */
   arrows = false,
+  /**
+   * ★ **出しかたの3つ**(第5.437節・`PracticeKnobs`)。
+   * 問数のプルダウン・ランダム・くり返す。**呼ぶ側が渡す** ——
+   * 覚えておくのは画面の役目で、カードは置き場所だけを決める。
+   * **渡されなければ出ない**(教材の中の Quick Response には無い)。
+   */
+  knobs = null,
+  /**
+   * ★ **見出しの行の右端に置くもの**(第5.437節)。復習の画面の
+   * 「もう出さない」がここに入る。**渡されなければ出ない。**
+   */
+  corner = null,
 }) {
   const [shown, setShown] = useState(false)
   /**
@@ -124,8 +135,10 @@ export default function QrCard({
    * 訳は**読めなかったときの助け**なので、既定は出さない側にしておく。
    */
   const [jaOn, setJaOn] = useState(false)
-  /** 答えの音をくり返すか。**覚えない**(次に開いたときは1回に戻す) */
-  const [loop, setLoop] = useState(false)
+  /* ★ **音声の「くり返す」は廃止した**(第5.437節・2026-10-09 利用者の指定)。
+       > そしてその横の音声用の「繰り返す」、これも不必要です
+     **控えを残さない** —— 誰も押さないスイッチが残ると、
+     次に触る人が「まだ使える」と思って描いてしまう(CLAUDE.md) */
   const bodyRef = useRef(null)        // 出題の枠。**動かすのはここだけ**
   const enRef = useRef(null)
 
@@ -179,6 +192,12 @@ export default function QrCard({
           <p className="qr-from">
             <span className="num-badge">{no}</span>
             {pair.speaker && <span>{pair.speaker}</span>}
+            {/* ★ **見出しの行の右端**(第5.437節・2026-10-09 利用者の指定)。
+                 >「もう出さない」も問題の中のどこかに動かしましょう
+                 操作の行から外したので、**判定のとなりに並ばない。**
+                 **流れの中に置く**ので、話し手の名前に重ならない
+                 (浮かせると、下に何が来ても避けない・第5.417節) */}
+            {corner && <span className="qr-corner">{corner}</span>}
           </p>
 
           {/* **答えは「足す」のではなく、同じ場所で入れ替える**
@@ -323,11 +342,23 @@ export default function QrCard({
           {/* **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)。
               Quick Response は**口に出して言う**練習なので、自分で言ってから
               **耳で答え合わせをする**ほうが素直である */}
+          {/* ★ **出しかたの3つ(問数 / ランダム / くり返す)を、ここに置く**
+                 (第5.437節・2026-10-09 利用者の指定)。
+                 **音声の「くり返す」は廃止した**(同じ日の指定
+                 「そしてその横の音声用の「繰り返す」、これも不必要です」)——
+                 その空いた場所が、この3つの置き場所である */}
+          {knobs}
+          {/* ★ **「聴く」は、1段目のいちばん右**(第5.437節・2026-10-09 利用者の指定)。
+                 > 聴くボタンを右端にしてください。押す頻度からして右側ベターです
+
+               **升目は4つ**なので、**ここに置くと4つ目**になる ——
+               ヒントや訳が増えても、あちらが次の段へ回るだけで
+               「聴く」は動かない(**押しても、まわりの物が動かない**)。
+
+               **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)——
+               口に出して言ってから、耳で答え合わせをする */}
           <SpeakButton text={pair.en} className="btn--ghost"
-                       clipVoice={clipVoice} tier={tier} repeat={loop} />
-          {/* **くり返し**(2026-09 利用者の指定「オートリピートのボタン」)。
-              口が追いつくまで、同じ英文を何度も聴く練習である */}
-          <RepeatToggle on={loop} onChange={setLoop} className="btn--ghost" />
+                       clipVoice={clipVoice} tier={tier} />
           {/* **ヒント**(2026-09 利用者の指定)。
               **ヒントを持たない問には出さない** —— ふだんの Quick Response と
               Native Flow の行は `hint` が `null` なので、ボタンごと出ない

@@ -16300,6 +16300,125 @@ for (const [q2, 期待, 何] of [
   await page.close()
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   ★ **練習の行と、下に貼り付く帯**(第5.437節・2026-10-09 利用者の指定)
+
+     > 幅は下の二つのボタンに揃え、両端の位置を揃え、
+     > 綺麗にバランスよく収めてください
+     > 聴くボタンを右端にしてください。押す頻度からして右側ベターです
+     > 変更した後も「何問ずつ」「シャッフル」「繰り返し」が
+     > 常にどこかに表示されているのがベストです
+
+   **描いて測る。** 「CSS に `grid-template-columns` がある」では
+   見張ったことにならない —— 打ち消す決まりが後ろにあれば効かない。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+  console.log('\n── 練習の行と、貼り付く帯(第5.437節) ──')
+  const 開く = async (q, 待つ) => {
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=${q}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector(待つ, { timeout: 15000 })
+    await page.waitForTimeout(250)
+  }
+
+  // ── ① 練習のカード ────────────────────────────────────────
+  await 開く('qrrev', '.qr-peek')
+  const 行 = await page.evaluate(() => {
+    const 箱 = (s) => { const e = document.querySelector(s); if (!e) return null
+      const b = e.getBoundingClientRect()
+      return { 左: Math.round(b.left), 右: Math.round(b.right) } }
+    const 中 = [...document.querySelectorAll('.qr-peek > *')].map((e) => {
+      const b = e.getBoundingClientRect()
+      return {
+        名: (e.getAttribute('aria-label') || e.textContent || '').trim(),
+        左: Math.round(b.left), 右: Math.round(b.right),
+        上: Math.round(b.top), 幅: Math.round(b.width),
+      }
+    })
+    return { 操作: 箱('.qr-peek'), 答え: 箱('.qr-answers'), 中,
+      もう出さない: Boolean(document.querySelector('.qr-corner')) }
+  })
+  if (!行.操作 || !行.答え) ng('練習の行 … 操作の行か、答えの行が描かれていない')
+  else if (行.操作.左 !== 行.答え.左 || 行.操作.右 !== 行.答え.右) {
+    ng('練習の行 … 操作の行と答えの行で、両端がそろっていない',
+      `操作 ${行.操作.左}–${行.操作.右} / 答え ${行.答え.左}–${行.答え.右}`)
+  } else ok(`練習の行 … 両端が答えの行とそろっている(${行.操作.左}–${行.操作.右})`)
+
+  /* **1段目は4つで、幅が同じ**(升目になっている)。
+     **数を書き写さない** —— 幅どうしを比べる */
+  const 一段目 = 行.中.filter((x) => x.上 === (行.中[0]?.上 ?? 0))
+  if (一段目.length !== 4) {
+    ng('練習の行 … 1段目が4つになっていない', 一段目.map((x) => x.名).join(' / '))
+  } else if (new Set(一段目.map((x) => x.幅)).size !== 1) {
+    ng('練習の行 … 4つの幅がそろっていない', 一段目.map((x) => `${x.名}:${x.幅}`).join(' / '))
+  } else ok(`練習の行 … 1段目は4つ・同じ幅(${一段目[0].幅}px)`)
+
+  /* ★ **「聴く」は1段目のいちばん右**(利用者の指定)。
+     **並び順そのものを見る** —— 「在るか」だけだと、左端でも緑になる */
+  const 聴く = 一段目.filter((x) => /聴く|Stop/.test(x.名))
+  if (聴く.length !== 1) ng('練習の行 … 「聴く」が1段目に1つ無い', 行.中.map((x) => x.名).join(' / '))
+  else if (聴く[0].右 !== Math.max(...一段目.map((x) => x.右))) {
+    ng('練習の行 … 「聴く」が1段目のいちばん右にいない',
+      一段目.map((x) => `${x.名}:${x.右}`).join(' / '))
+  } else ok('練習の行 … 「聴く」は1段目のいちばん右')
+
+  /* **音声の「くり返す」は廃止した。** 残っていたら赤 */
+  const 音のくり返し = 行.中.filter((x) => /^(1回|くり返す)$/.test(x.名)
+    && !/ランダム/.test(x.名)).length
+  if (行.中.some((x) => x.名 === '1回')) {
+    ng('練習の行 … 音声の「くり返す」が残っている', `${音のくり返し} 個`)
+  } else ok('練習の行 … 音声の「くり返す」は無い(廃止した)')
+
+  if (!行.もう出さない) ng('練習の行 … 「もう出さない」が見出しの行に無い')
+  else ok('練習の行 … 「もう出さない」は見出しの行にある')
+
+  // ── ② 出しかたの帯 ──────────────────────────────────────
+  await 開く('rscope', '.rscope-sort')
+  await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+  await page.waitForTimeout(400)
+  const 帯 = await page.evaluate(() => {
+    const b = document.querySelector('.rscope-bar')
+    const 中 = document.querySelector('.rscope-scroll')
+    if (!b || !中) return null
+    const r = b.getBoundingClientRect()
+    const r2 = 中.getBoundingClientRect()
+    return {
+      貼り付き: window.getComputedStyle(b).position,
+      地: window.getComputedStyle(b).backgroundColor,
+      帯の上: Math.round(r.top), 中身の下: Math.round(r2.bottom),
+      始める: document.querySelector('.rscope-start')?.textContent?.trim() ?? '',
+      持ちもの: [...document.querySelectorAll('.rscope-bar-row > *')]
+        .map((e) => (e.getAttribute('aria-label') || e.textContent || '').trim()),
+    }
+  })
+  if (!帯) ng('帯 … 下に貼り付く帯が描かれていない')
+  else {
+    if (帯.貼り付き !== 'sticky') ng('帯 … 貼り付いていない', 帯.貼り付き)
+    else ok('帯 … 下に貼り付いている(送っても残る)')
+    /* **地色を敷いていないと、下を流れる札と重なって読めなくなる** */
+    const 透け = /rgba\([^)]*,\s*0\s*\)/.test(帯.地) || 帯.地 === 'transparent'
+    if (透け) ng('帯 … 地色が透けている(下の札と重なって読めなくなる)', 帯.地)
+    else ok(`帯 … 地色を敷いている(${帯.地})`)
+    if (帯.帯の上 < 帯.中身の下 - 1) {
+      ng('帯 … 流れる中身の中に入っている(それでは貼り付かない)',
+        `帯 ${帯.帯の上} / 中身の下 ${帯.中身の下}`)
+    } else ok('帯 … 流れる中身の外にいる')
+    /* **3つとも、ずっと見えている**(利用者の指定) */
+    for (const 名 of ['ランダム', 'くり返す']) {
+      if (!帯.持ちもの.some((t) => t.includes(名))) ng(`帯 … 「${名}」が帯に無い`, 帯.持ちもの.join(' / '))
+      else ok(`帯 … 「${名}」が帯にある`)
+    }
+    const 問数 = 帯.持ちもの.find((t) => /問ずつ/.test(t))
+    if (!問数) ng('帯 … 何問ずつのプルダウンが帯に無い', 帯.持ちもの.join(' / '))
+    else if (!/5 問/.test(問数)) ng('帯 … プルダウンに「5 問」が無い(5から選べる)', 問数)
+    else ok('帯 … 何問ずつは5から選べるプルダウン')
+    if (!帯.始める.includes('始める')) ng('帯 … 「始める」が帯に無い', 帯.始める)
+    else ok(`帯 … 始めるボタンが帯にある(${帯.始める})`)
+  }
+  await page.close()
+}
+
 await browser.close()
 console.log(bad === 0 ? '\n✅ 帯の持ちものは、すべて意図どおりです' : `\n❌ ${bad} 件`)
 process.exit(bad === 0 ? 0 : 1)

@@ -40,6 +40,7 @@ import Wordbook from './components/Wordbook.jsx'
 import IconButton from './components/IconButton.jsx'
 import AppTabs from './components/AppTabs.jsx'
 import QrCard from './components/QrCard.jsx'
+import PracticeKnobs from './components/PracticeKnobs.jsx'
 import FrameParts from './components/FrameParts.jsx'
 import BookShelf from './components/BookShelf.jsx'
 import BookPick from './components/BookPick.jsx'
@@ -1633,9 +1634,25 @@ const qrScreen = (plain) => (
           「ヒント内の『ヒント』の表示が崩れている」)。
           押した状態は本物でも呼ぶ側が持つので、ここでも props で渡す */}
       {/* `?say=1` … **言い換え**(英文が出題・第5.198節) */}
+      {/* ★ **出しかたの3つと「もう出さない」も、本物と同じ渡し方で**
+          (第5.437節)。**復習(`plain`)のときだけ** —— 教材の中の
+          Quick Response には、どちらも無い。
+          **骨組みだけが本物と食い違うと、検証は何も守らない**(CLAUDE.md) */}
       <QrCard pair={q.get('say') === '1' ? QR_SAY_PAIR : QR_PAIR}
               no={2} onAnswer={() => {}} showFrame={plain}
-              hintOn={plain} onHint={() => {}} />
+              hintOn={plain} onHint={() => {}}
+              corner={plain ? (
+                <button type="button" className="btn btn--ghost btn--small qr-retire">
+                  もう出さない
+                </button>
+              ) : null}
+              knobs={plain ? (
+                <PracticeKnobs
+                  unit="問" size={10} onSize={() => {}}
+                  shuffle onShuffle={() => {}}
+                  repeat={false} onRepeat={() => {}}
+                />
+              ) : null} />
     </section>
   </FocusFrame>
 )
@@ -2013,7 +2030,7 @@ function RScopeDemo({ rows }) {
   const [repeat, setRepeat] = useState(false)
   const tally = stageTally(rows)
   /** ★ いま光っている札。**本物と同じ `pickIdOf()` から**(第5.414節) */
-  const pick = pickIdOf(scope, group)
+  const pick = pickIdOf(group)
   return (
     <>
     <ReviewStats
@@ -2029,7 +2046,9 @@ function RScopeDemo({ rows }) {
          シャッフルは `shuffle` である */
       rows={rows} unit="問" pick={pick} size={size}
       narrowed={narrowedCount({ filter, stage: group })}
-      onPick={(id) => { const p = pickOf(id); setGroup(p.stage); setScope(p.scope) }}
+      onPick={(id) => { setGroup(pickOf(id).stage) }}
+      scope={scope}
+      onScope={setScope}
       onSize={setSize} onStart={() => {}}
       stage={group} onStage={setGroup}
       onClearAll={() => { setFilter(emptyFilter()); setGroup(null) }}

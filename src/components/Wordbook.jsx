@@ -82,6 +82,8 @@ import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
+/* ★ **出しかたの3つ**(第5.437節)。Quick Response と同じ部品(書き写さない) */
+import PracticeKnobs from './PracticeKnobs.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 /* ★ **いくつ絞っているかは `narrowedCount()`**(第5.414節)——
    段階も一緒に数えるので、`countNarrowed()` を直に呼ばない */
@@ -1047,10 +1049,10 @@ export default function Wordbook({
    * **押した瞬間に0件**になる。押せたのに何も出ないのは、
    * いちばん分かりにくい形である。外したら、覚えている範囲へ戻す。
    */
-  const pickGroup = (id) => {
-    setStage(id)
-    setScope(id ? 'all' : loadScope('word'))
-  }
+  /* ★ **段をえらんでも、期限には触らない**(第5.437節)。
+     期限は「そろそろ忘れる頃」のスイッチが持つ**別の軸**になったので、
+     ここで `scope` を動かすと、**押していないスイッチが勝手に切り替わる** */
+  const pickGroup = (id) => { setStage(id) }
 
   /* ══════════════════════════════════════════════════════════════
      ★ **「何を出す」の4つ**(第5.414節・段階3)
@@ -1064,25 +1066,23 @@ export default function Wordbook({
     filter,
   )
   /** いま光っている札。**決めるのは `pickIdOf()` 1か所** */
-  const pick = pickIdOf(scope, stage)
-  const pickN = pickCounts(forPick, todayKey())
+  const pick = pickIdOf(stage)
+  /* ★ **期限は `scope` が持つ**(第5.437節)。数え上げにも同じものを通す */
+  const pickN = pickCounts(forPick, todayKey(), scope)
   /** いま選んでいる範囲の残り。**札の数え上げと同じ道を通す**(2通り持たない) */
   const restInScope = pickN[pick] ?? 0
 
   /**
-   * 札を押したとき。**範囲と段階を、いっぺんに動かす。**
+   * 札を押したとき。★ **動かすのは段階だけ**(第5.437節)。
    *
-   * 「覚えた」語は次に出る日が先なので、範囲が「今日の復習」のままだと
-   * **押した瞬間に0件**になる。だから段階の札は「ぜんぶ」へ移す
-   * (2026-09 利用者の指定・`pickGroup` と同じ考え方)。
+   * 4つとも「覚え具合」になったので、**期限は動かさない** ——
+   * あれは「そろそろ忘れる頃」のスイッチが持つ別の軸である。
    * **対応は `PICKS` 表1か所**(ここで `id === 'weak'` と書かない)。
    */
-  const pickWhat = (id) => {
-    const p = pickOf(id)
-    setStage(p.stage)
-    setScope(p.scope)
-    if (!p.stage) saveScope('word', p.scope)
-  }
+  const pickWhat = (id) => { setStage(pickOf(id).stage) }
+
+  /** 期限のスイッチ。**覚えておく**(一度決めれば毎回選ぶものではない) */
+  const pickDue = (id) => { setScope(id); saveScope('word', id) }
 
   /* **選んでいた札が0件になったら、押せる札へ移す。**
      黙って空のまま置くと「出すものがありません」だけが残る
@@ -1780,7 +1780,7 @@ export default function Wordbook({
        ここに札や帯を積むと元に戻る。
        **「ぜんぶ」のときは足さない**(`pickName()` が空を返す)。
        **言葉は `PICKS` 1か所**(書き写さない)。 */
-  const drillLabel = nowName([pickName(pick), ...(basicBook
+  const drillLabel = nowName([pickName(pick, scope), ...(basicBook
     ? [bookLabel, tierOf(tier)?.label ?? '']
     : shelfBook
     ? [bookLabel, ...shelfPick
@@ -2252,6 +2252,9 @@ export default function Wordbook({
               onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
               repeat={repeat}
               onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
+              /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
+              scope={scope}
+              onScope={pickDue}
               onStart={start}
             >
               {/* **絞り込みも「出しかた」の中へ**(2026-09 利用者の指定)。
@@ -2409,6 +2412,9 @@ export default function Wordbook({
                     onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
                     repeat={repeat}
                     onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
+                    /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
+                    scope={scope}
+                    onScope={pickDue}
                     onStart={start}
                     /* ★ **紙に出すのは、ここ(右上)の中**(2026-10-09) */
                     tools={paperBox}
@@ -2770,6 +2776,22 @@ export default function Wordbook({
                       **何の音か**が分からない。ここは英語が伏せてある
                       場所なので、「英語」と名指しする。
                       鳴っているあいだ `Stop` に変わるのは、どの画面とも同じ */}
+                  {/* ★ **出しかたの3つ(問数 / ランダム / くり返す)**
+                      (第5.437節・2026-10-09 利用者の指定)。
+                      **Quick Response とまったく同じ部品**(`PracticeKnobs`)——
+                      「これは単語帳にも共通の仕様にしたいです」 */}
+                  <PracticeKnobs
+                    unit="語"
+                    size={size}
+                    onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
+                    shuffle={shuffle}
+                    onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
+                    repeat={repeat}
+                    onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
+                  />
+                  {/* ★ **「聴く」は右端**(第5.437節・2026-10-09 利用者の指定)。
+                      > 聴くボタンを右端にしてください。
+                      > 押す頻度からして右側ベターです */}
                   <SpeakButton text={word} label="英語を聴く" className="btn--ghost" />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。

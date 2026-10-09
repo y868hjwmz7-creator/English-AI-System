@@ -7832,7 +7832,7 @@ button.wbfilter-ctl { text-align: left; }
    **1本の壊れた帯**に見えた。**同じ見た目のものを2つ置かない。**
 
    ここは「単語」「副詞」と**同じ丸い札**にそろえ、見分けは
-   **字そのもの**(未学習 / 苦手 / 学習中 / 覚えた)が付ける ——
+   **字そのもの**(未学習 / 苦手 / 覚えかけ / 覚えた)が付ける ——
    **色だけに頼らない**(CLAUDE.md)。
    地は札の面(`--surface-2`)で、種類(金)とも品詞(枠だけ)とも違う。 */
 .wc-tag--stage {
@@ -7862,9 +7862,11 @@ button.wbfilter-ctl { text-align: left; }
    どちらも答えそのものではないので、答えの2つとは段を分ける。
    上に細い線を1本引いて、**問題と操作の境目**をはっきりさせる */
 .wordcard-peek {
-  display: flex; justify-content: center; align-items: center;
-  flex-wrap: wrap; gap: var(--sp-8);
-  width: 100%; padding-top: 14px; border-top: 1px solid var(--border);
+  align-items: center;
+  gap: var(--sp-8);
+  /* ★ **答えの行と同じ幅**(第5.437節)。`min(100%, 360px)` は
+     すぐ下の `.wordcard-answers` と同じ決まりである */
+  width: min(100%, 360px); padding-top: 14px; border-top: 1px solid var(--border);
 }
 /* **2つは同じ幅にする。** 幅が違うと、片方が「主」に見えてしまう */
 /* 答えの3つ(0027)。**となりどうしに置き、同じ幅で並べる。**
@@ -8345,6 +8347,24 @@ button.wbfilter-ctl { text-align: left; }
 .qr-answers,
 .qr-peek { display: flex; justify-content: center; gap: var(--sp-10); width: min(100%, 320px); }
 .qr-answers .btn { flex: 1 1 0; min-width: 0; }
+/* ══════════════════════════════════════════════════════════════════
+   ★ **操作の行は4等分の升目**(第5.437節・2026-10-09 利用者の指定)
+
+     > 幅は下の二つのボタンに揃え、両端の位置を揃え、
+     > 綺麗にバランスよく収めてください
+
+   **幅(`width`)と `gap` は、答えの行と同じ決まりから来る**(すぐ上)ので、
+   **両端はひとりでにそろう** —— 数を書き写さない(CLAUDE.md)。
+
+   **升目にする理由はもう1つある。** 升の幅が中身で決まらないので、
+   「聴く」が鳴っているあいだ `Stop` に変わっても**1pxも動かない**
+   (「押しても、まわりの物が動かない」・共通ルール)。
+   4つを超えたら(ヒント・訳を見る)**次の段へ回る**(同じ升の幅のまま)。
+   ══════════════════════════════════════════════════════════════════ */
+.qr-peek,
+.wordcard-peek { display: grid; grid-template-columns: repeat(4, 1fr); }
+.qr-peek > *,
+.wordcard-peek > * { min-width: 0; }
 /* 開いたあとの英語。語に触れれば意味も引ける */
 /* 答え。**問題と入れ替えて**同じ場所に出す。
    出す場所が同じなので、目が迷わない */
@@ -10780,7 +10800,7 @@ button.wbfilter-ctl { text-align: left; }
 /* **高さは3つともそろえる**(`stretch`)。狭い画面(320px)では
    字が2行になるものと1行のものが混ざるので、`center` のままだと
    **下端がぎざぎざになる**(実測 34 / 46 / 44px)。 */
-.qr-peek { align-items: stretch; flex-wrap: wrap; }
+.qr-peek { align-items: stretch; }
 /* ★ **「入りきらない」の起点を、中身の長さにしない**(2026-10-08 実測)。
 
    `flex-basis: auto` だと**中身の長さで折り返しが決まる**ので、
@@ -10790,7 +10810,8 @@ button.wbfilter-ctl { text-align: left; }
    小さめの起点(4rem)から**伸びて帯を埋める**形にする ——
    3つなら必ず1行に収まり、**ヒントや訳を見るが増える教材では、
    これまでどおり折り返す**(5つだと 5 × 4rem + すき間 で帯を超える)。 */
-.qr-peek > * { flex: 1 1 4rem; min-width: 0; }
+/* ★ **`flex-basis` の話は終わった**(第5.437節)。升目になったので、
+   **中身の長さで折り返しが決まらない** —— 4つで1段、5つ目から次の段 */
 
 /* ── **中身が変わっても、場所を動かさない札**(第5.281節・2026-09-27
       実機・利用者の指定)────────────────────────────────
@@ -10911,7 +10932,36 @@ button.wbfilter-ctl { text-align: left; }
 /* **シャッフル / 繰り返すは、問数のすぐ下**(利用者の指定)。
    **`gap` で離す**(共通ルール)—— `margin` で回すと、
    下に来るものが変わった日に隙間が 0 になる */
-.rscope-switches { margin-top: var(--sp-6); }
+/* ══════════════════════════════════════════════════════════════════
+   ★ **下に貼り付く帯**(第5.437節・2026-10-09 利用者の指定)
+
+     > 出す数を選択した後に1番下に「この10問で出す」というボタンが出ますが、
+     > これは慣れていないと見逃すボタンですし、UIとして分かりにくいです。
+     > (略)変更した後も「何問ずつ」「シャッフル」「繰り返し」が
+     > 常にどこかに表示されているのがベストです
+
+   **`position: sticky` で、送っても下に残る。** 流れる中身
+   (`.rscope-scroll`)の**外**に置いてあるので、上が流れても動かない。
+   **地色を必ず敷く** —— 透けると、下を流れる札と重なって読めなくなる。
+   ══════════════════════════════════════════════════════════════════ */
+.rscope-bar {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; gap: var(--sp-8);
+  margin-top: var(--sp-12); padding-top: var(--sp-10);
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+}
+.rscope-bar-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+}
+/* **プルダウンは中身なりの幅。** 全体に掛かっている
+   `input, select, textarea { width: 100% }` を、ここで打ち消す
+   (CLAUDE.md「その見た目が、どこで決まっているのかを先に読む」) */
+.rscope-size > select,
+.knob-size > select { width: auto; min-width: 0; }
+/* **絵だけのスイッチ。** 中身が1つでも、押せる的は小さくしない */
+.rscope-sw { padding-left: 0; padding-right: 0; min-width: 44px; }
+.rscope-start { width: 100%; }
 
 /* **「詳しくしぼる」。** 上の3段から、線で切り分ける ——
    **線と影を同時に強く使わない**(第5.401節) */
@@ -10954,10 +11004,8 @@ button.wbfilter-ctl { text-align: left; }
 .rscope-more-body {
   display: flex; flex-direction: column; gap: var(--sp-6);
 }
-/* **シートのいちばん下の「◯問で始める」。**
-   上の「詳しくしぼる」と、はっきり離す(別々の物をくっつけない) */
-.setpop .rscope-go { margin-top: var(--sp-14); }
-.setpop .rscope-go .btn--primary { flex: 1 1 auto; }
+/* ★ **シートの中の「始める」は、貼り付く帯の中へ移した**(第5.437節)。
+   `.setpop .rscope-go` はもう描かれない —— **控えを残さない**(CLAUDE.md) */
 
 /* ── 選ぶものは、吹き出しの中へ(2026-09 実機・利用者の指定)────────
    > 単語帳とQuick Response帳は以前よりは良くなりましたが選択肢が
@@ -12210,3 +12258,21 @@ button.wbfilter-ctl { text-align: left; }
    ════════════════════════════════════════════════════════════════════ */
 .lesson-sheet, .focus-paper { --box-line: var(--border); }
 @media print { :root { --box-line: var(--border); } }
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ **練習の最中の「出しかた」の3つ**(第5.437節・`PracticeKnobs`)
+
+   升目(`.qr-peek` / `.wordcard-peek`)の1つぶんに、そのまま収まる。
+   **絵だけのボタンでも、押せる的は小さくしない。**
+   ══════════════════════════════════════════════════════════════════ */
+.knob {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding-left: 0; padding-right: 0; min-width: 0;
+}
+.knob-size > select {
+  /* **升目いっぱいに広げる。** 字は中央にそろえる(となりの絵と釣り合う) */
+  width: 100%; min-width: 0; text-align: center;
+  padding-left: var(--sp-6); padding-right: var(--sp-6);
+}
+/* **見出しの行の右端**(「もう出さない」)。流れの中なので重ならない */
+.qr-corner { margin-left: auto; }

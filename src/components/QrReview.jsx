@@ -76,6 +76,8 @@ import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
 import { MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
+/* ★ **出しかたの3つ**(第5.437節)。単語帳と同じ部品を使う(書き写さない) */
+import PracticeKnobs from './PracticeKnobs.jsx'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
@@ -563,10 +565,9 @@ export default function QrReview({
    * 何も出ないという、いちばん分かりにくい形になる。
    * 段を外したら、覚えている範囲へ戻す(`onlySet` と同じ作法)。
    */
-  const pickGroup = (id) => {
-    setGroup(id)
-    setScope(id ? 'all' : loadScope('qr'))
-  }
+  /* ★ **段をえらんでも、期限には触らない**(第5.437節・単語帳と同じ)。
+     期限は「そろそろ忘れる頃」のスイッチが持つ**別の軸**になった */
+  const pickGroup = (id) => { setGroup(id) }
 
   /* **選んでいた札が0件になったら、押せる札へ移す**(絞り込みを変えたとき)。
      黙って空のまま置くと、「出すものがありません」だけが残って
@@ -582,16 +583,15 @@ export default function QrReview({
     [rows, filter],
   )
   /** いま光っている札。**決めるのは `pickIdOf()` 1か所** */
-  const pick = pickIdOf(scope, group)
-  const counts = pickCounts(forPick, today)
+  const pick = pickIdOf(group)
+  /* ★ **期限は `scope` が持つ**(第5.437節)。数え上げにも同じものを通す */
+  const counts = pickCounts(forPick, today, scope)
 
-  /** 札を押したとき。**範囲と段階を、いっぺんに動かす**(`PICKS` 表1か所) */
-  const pickWhat = (id) => {
-    const p = pickOf(id)
-    setGroup(p.stage)
-    setScope(p.scope)
-    if (!p.stage) saveScope('qr', p.scope)
-  }
+  /** 札を押したとき。★ **動かすのは段階だけ**(第5.437節・`PICKS` 表1か所) */
+  const pickWhat = (id) => { setGroup(pickOf(id).stage) }
+
+  /** 期限のスイッチ。**覚えておく**(一度決めれば毎回選ぶものではない) */
+  const pickDue = (id) => { setScope(id); saveScope('qr', id) }
 
   useEffect(() => {
     if (busy || forPick.length === 0) return
@@ -968,7 +968,7 @@ export default function QrReview({
        ここに札や帯を積むと元に戻る。
        **「ぜんぶ」のときは足さない**(`pickName()` が空を返す)。
        **言葉は `PICKS` 1か所**(書き写さない)。 */
-  const drillLabel = nowName([pickName(pick), ...(nfBook
+  const drillLabel = nowName([pickName(pick, scope), ...(nfBook
     ? [bookLabel, unit ? unitName(unitOf(unit)) : '']
     : frameBook
     ? [bookLabel, framePartOf(part)?.label ?? '', frameFormLabel(part, form)]
@@ -1428,11 +1428,26 @@ export default function QrReview({
 
                  この行なら**流れの中**なので、重なりようがない。
                  判定のボタンからも1段離れたまま(案B-2 のねらいは保つ)。 */
-            extra={(
+            /* ★ **「もう出さない」は見出しの行の右端へ**(第5.437節・
+                 2026-10-09 利用者の指定)。操作の行は、出しかたの3つと
+                 「聴く」で埋まった */
+            corner={(
               <button type="button" className="btn btn--ghost btn--small qr-retire"
                       onClick={retire}>
                 もう出さない
               </button>
+            )}
+            /* ★ **出しかたの3つ**(第5.437節)。単語帳とまったく同じ部品 */
+            knobs={(
+              <PracticeKnobs
+                unit="問"
+                size={size}
+                onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
+                shuffle={shuffle}
+                onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
+                repeat={repeat}
+                onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
+              />
             )}
           />
           </CardMove>
@@ -1512,6 +1527,9 @@ export default function QrReview({
             onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
             onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
+            /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
+            scope={scope}
+            onScope={pickDue}
             onStart={start}
             /* ★ **紙に出すのは、ここ(右上)の中**(2026-10-09) */
             tools={paperBox}
@@ -1642,6 +1660,9 @@ export default function QrReview({
             onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
             onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
+            /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
+            scope={scope}
+            onScope={pickDue}
             onStart={start}
           >
             {/* **絞り込みは単語帳と同じ部品**(`WordbookFilter`)。

@@ -135,7 +135,7 @@ import {
 } from '../src/data/genres.js'
 import {
   DEFAULT_SIZE, PICKS, SIZES,
-  isDueOn, pickCounts, pickIdOf, pickLead, pickName, pickPool,
+  DUE_LABEL, isDueOn, pickCounts, pickIdOf, pickLead, pickName, pickPool,
   runKeyOf, scopePool, shouldRecord, takeCount,
 } from '../src/lib/reviewScope.js'
 /* ★ カードを送る・判定する操作(第5.417節・段階4)。
@@ -2916,8 +2916,9 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '覚え具合 … 卒業の箱は `DONE_BOX` 1か所から決まる', `箱 ${DONE_BOX}`)
 
     /* **呼び名は `learnStage.js` 1か所。** 単語帳も Quick Response も同じ */
-    ok(LEARN_STAGES.map((g) => g.label).join('/') === '未学習/苦手/学習中/覚えた',
-      '覚え具合 … 呼び名は「未学習 / 苦手 / 学習中 / 覚えた」',
+    /* ★ **「学習中」は「覚えかけ」になった**(第5.437節・利用者の指定) */
+    ok(LEARN_STAGES.map((g) => g.label).join('/') === '未学習/苦手/覚えかけ/覚えた',
+      '覚え具合 … 呼び名は「未学習 / 苦手 / 覚えかけ / 覚えた」',
       LEARN_STAGES.map((g) => g.label).join('/'))
     ok(LEARN_STAGES.length === 4, '覚え具合 … 4段階である')
 
@@ -2961,11 +2962,15 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
          段で読み分けると「覚えた」が2つの `status` にまたがって落ちる */
     ok(/status: null/.test(wb), '単語帳 … 1回でぜんぶ読んでいる(段で読み分けない)')
     ok(!/VIEWS/.test(wb), '単語帳 … 段ごとに読み分ける `VIEWS` は残っていない')
-    /* **押したら、範囲を「ぜんぶ」へ移す。** そうしないと「覚えた」語は
-       次に出る日が先なので、押した瞬間に0件になる */
-    ok(/setScope\(id \? 'all' : loadScope\('word'\)\)/.test(wb)
-      && /setScope\(id \? 'all' : loadScope\('qr'\)\)/.test(qr),
-      '段階を押す … 押したら範囲を「ぜんぶ」に移す(押した瞬間に0件にしない)')
+    /* ★ **段を押しても、期限は動かさない**(第5.437節)。
+       期限は「そろそろ忘れる頃」のスイッチが持つ**別の軸**になったので、
+       ここで `scope` を動かすと**押していないスイッチが勝手に切り替わる**。
+       もとは「押した瞬間に0件にしない」ための細工だった */
+    for (const [名, src] of [['単語帳', wb], ['Quick Response', qr]]) {
+      const 中 = src.match(/const pickGroup = [^\n]*/)?.[0] ?? ''
+      ok(中 && !/setScope/.test(中),
+        `段階を押す … ${名}は、段を押しても期限に触らない`, 中.slice(0, 80))
+    }
     /* ★ **押しても読み直さない**(第5.406節)。札は手元で絞る */
     /* ★ **段をえらんでいないときの既定も、1か所から**(第5.414節)。
          `status !== 'known'` が**単語帳と Quick Response に2つ**書いてあった */
@@ -3017,7 +3022,10 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     }
     /* ★ **「何を出す」は4つ**(第5.414節・段階3・利用者の指定)。
          **どれが光るかは `pickIdOf()` 1か所**で、画面で組み立てない */
-    ok(/pickIdOf\(scope, stage\)/.test(wb) && /pickIdOf\(scope, group\)/.test(qr),
+    /* ★ **渡すものは書き写さない**(第5.436節で6度踏んだ)。
+         `pickIdOf()` を呼んでいるか、だけを見る —— 期限が札から外れた
+         第5.437節で、また「仕組みは壊れていないのに赤い」が起きるところだった */
+    ok(/const pick = pickIdOf\(/.test(wb) && /const pick = pickIdOf\(/.test(qr),
       '出しかた … 光る札は `pickIdOf()` が決める(画面で組み立てない)')
     ok(/pick=\{pick\}/.test(wb) && /onPick=\{pickWhat\}/.test(wb)
       && /pick=\{pick\}/.test(qr) && /onPick=\{pickWhat\}/.test(qr),
@@ -3040,17 +3048,38 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const rs = rd('src/components/ReviewScope.jsx')
     ok(/forms && forms\.length > 0 && \(/.test(rs) && /並べ方\.length > 0 && \(/.test(rs),
       '出しかた … 渡さなければ、その行ごと出さない(効かない操作を見せない)')
-    ok(/onRepeat && 札\(\{/.test(rs), '出しかた … 繰り返すも、渡したときだけ出す')
-    /* ★ **シャッフルと繰り返すは、問数の「すぐ下」**(第5.414節・利用者の指定)。
-         もとは問数と同じ行だったが、スイッチ2つになったので下の行へ移した。
-         **問数の行より後ろにいること**を、いちばん近い対で見る */
-    ok(/aria-labelledby="rscope-many"[\s\S]{0,600}?rscope-switches[\s\S]{0,900}?onRepeat/.test(rs),
-      '出しかた … シャッフルと繰り返すは、何問ずつのすぐ下にある')
+    ok(/onRepeat && \(/.test(rs), '出しかた … 繰り返すも、渡したときだけ出す')
+    /* ★ **何問ずつ・ランダム・くり返すは、下に貼り付く帯の中**
+         (第5.437節・2026-10-09 利用者の指定)。
+         > 変更した後も「何問ずつ」「シャッフル」「繰り返し」が
+         > 常にどこかに表示されているのがベストです
+         **帯は、流れる中身(`.rscope-scroll`)の外**にいること ——
+         中に入れると一緒に流れてしまい、貼り付かない */
+    const 帯の位置 = rs.indexOf('className="rscope-bar"')
+    const 中身の位置 = rs.indexOf('className="rscope-scroll"')
+    ok(帯の位置 > 0 && 中身の位置 > 0, '出しかた … 貼り付く帯と、流れる中身がある')
+    ok(/const 帯 = \([\s\S]{0,1800}?rscope-start/.test(rs),
+      '出しかた … 帯の中に「始める」がある(見逃しようがない)')
+    for (const 名 of ['rscope-size', 'onShuffle(!shuffle)', 'onRepeat(!repeat)']) {
+      ok(new RegExp(`const 帯 = \\([\\s\\S]{0,1800}?${名.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(rs),
+        `出しかた … 帯の中に「${名}」がある`)
+    }
+    /* **流れる中身の側には、もう置いていない**(2か所に出さない) */
+    ok(!/rscope-switches/.test(rs),
+      '出しかた … 中身の側に、古いスイッチの行が残っていない')
     /* **画面が本当に渡しているか。** 定義だけあっても何も出ない */
     ok(/forms=\{QUIZ_FORMS\}/.test(wb) && /orders=\{WORD_ORDERS\}/.test(wb),
       '出しかた … 単語帳が、形と並べ方を渡している')
-    ok((wb.match(/onRepeat=\{\(on\) =>/g) ?? []).length === 2,
-      '出しかた … 始める前と、復習の最中の**両方**に渡している')
+    /* ★ **練習の最中は、カードの行(`PracticeKnobs`)が持つ**(第5.437節)。
+       数えるのは「出しかた」と「カード」の**両方に在るか** ——
+       呼び方を書き写すと、形を変えた日に赤くなる */
+    for (const [名, src] of [['単語帳', wb], ['Quick Response', qr]]) {
+      ok(/<PracticeKnobs/.test(src),
+        `出しかた … ${名}は、練習の最中もカードの行から変えられる`)
+      ok((src.match(/onRepeat=\{/g) ?? []).length >= 2,
+        `出しかた … ${名}は、始める前と練習の最中の**両方**に渡している`,
+        `${(src.match(/onRepeat=\{/g) ?? []).length} か所`)
+    }
     /* **上の帯からは外した。** スマホで画面から切れていた */
     ok(!/wb-formpick/.test(wb), '出しかた … 上の帯に出題の形を置いていない')
     ok(!/おまかせ/.test(wb), '出しかた … 「おまかせ」という言葉を画面に出していない')
@@ -3132,26 +3161,47 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '出会った時期 … 絞り込みの鍵は `met` 1つ(日付と別々に持たない)')
 
   /* ══════════════════════════════════════════════════════════
-     ★ **「何を出す」は4つ**(第5.414節・段階3・利用者の指定)
+     ★ **「何を出す」は4つとも「覚え具合」**(第5.437節・利用者の指定)
 
-       > 何を出す:「今日の復習」「苦手」「未学習」「ぜんぶ」の4つ。
-       > それぞれに該当数を表示。初期設定は「今日の復習」。
+       > 全部、苦手、覚えかけ、覚えた、この四つだけなら
+       > シンプルで分かりやすい
+
+     期限は札から出て、**「そろそろ忘れる頃」のスイッチ**になった。
      ══════════════════════════════════════════════════════════ */
-  ok(PICKS.length === 4 && PICKS[0].id === 'due',
-    '何を出す … 4つで、はじめは「今日の復習」', PICKS.map((p) => p.label).join(' / '))
+  ok(PICKS.length === 4 && PICKS[0].id === 'all',
+    '何を出す … 4つで、はじめは「ぜんぶ」', PICKS.map((p) => p.label).join(' / '))
+  /* ★ **期限の札は、もう無い**(「出ない側」も見る)。
+     これが残っていると、1行に2つの軸が混ざったままになる */
+  ok(!PICKS.some((p) => p.scope === 'due' || p.label.includes('今日')),
+    '何を出す … 札に「期限」のものが混ざっていない')
+  /* **名前は `LEARN_STAGES` から来る**(書き写していない)。
+     段の名前を変えた日に、札だけ古くなることがない */
+  ok(PICKS.filter((p) => p.stage).every((p) => p.label === stageLabel(p.stage)),
+    '何を出す … 札の名前は、段の名前そのもの(書き写していない)')
   /* **数え上げと、実際に出るものが食い違わない。**
      食い違うと「23 問あります」と書いてあるのに別の数が出る */
   const pk = pickCounts(rows, T)
   ok(PICKS.every((p) => pk[p.id] === pickPool(rows, p.id, T).length),
     '何を出す … 札に出す数と、実際に出るものが**同じ道**を通っている')
+  /* ★ **期限は、呼ぶ側が渡す**(第5.437節)。入れたら数が減る側も見る ——
+     片方だけだと、**スイッチを無視する形**に書き換えても緑になる */
+  const 期限あり = pickCounts(rows, T, 'due')
+  ok(PICKS.every((p) => 期限あり[p.id] <= pk[p.id]),
+    '何を出す … 「そろそろ忘れる頃」を入れると、どの札も増えない')
+  ok(PICKS.some((p) => 期限あり[p.id] < pk[p.id]),
+    '何を出す … 「そろそろ忘れる頃」は、実際に減らしている',
+    PICKS.map((p) => `${p.label} ${pk[p.id]}→${期限あり[p.id]}`).join(' / '))
   /* **ちょうど1つに決まる。** 2つ光ったり、1つも光らなかったりしない */
-  ok(PICKS.every((p) => pickIdOf(p.scope, p.stage) === p.id),
-    '何を出す … どの組み合わせでも、当たる札はちょうど1つ')
-  /* **「出る」と「出ない」の両方。** 4つのどれにも当たらない組み合わせ
-     (詳しくしぼるで「学習中」をえらんだとき)では、**どれも光らない** ——
+  ok(PICKS.every((p) => pickIdOf(p.stage) === p.id),
+    '何を出す … どの段でも、当たる札はちょうど1つ')
+  /* **「出る」と「出ない」の両方。** 4つのどれにも当たらない段
+     (詳しくしぼるで「未学習」をえらんだとき)では、**どれも光らない** ——
      **当てずっぽうで「ぜんぶ」を光らせない** */
-  ok(pickIdOf('all', 'learning') === '',
+  ok(pickIdOf('new') === '',
     '何を出す … 4つのどれでもないときは、どれも光らせない')
+  /* ★ **期限のスイッチの呼び名は1か所**(第5.437節)。
+     「今日の分だけ」では意味が伝わらなかった(利用者の指摘) */
+  ok(DUE_LABEL === 'そろそろ忘れる頃', '何を出す … 期限のスイッチの呼び名', DUE_LABEL)
 
   // ── 個数 ───────────────────────────────────────────────
   ok(takeCount(10, 23) === 10 && takeCount(30, 23) === 23,
@@ -3159,9 +3209,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
   ok(takeCount('all', 23) === 23, '個数 … 「ぜんぶ」は範囲にあるだけ出す')
   /* ★ **10 / 20 / ぜんぶ の3つ**(第5.414節・段階3・利用者の指定
        「何問ずつ:「10」「20」「ぜんぶ」の3つ(5と30は廃止)」) */
-  ok(SIZES.length === 3 && SIZES.includes(10) && SIZES.includes(20)
-    && SIZES.includes('all') && !SIZES.includes(5) && !SIZES.includes(30),
-    '個数 … 10 / 20 / ぜんぶ の3つ(5と30は廃止)', SIZES.join(' / '))
+  /* ★ **5 から選べる**(第5.437節・利用者の指定「5問から選べ」)。
+     **いちばん小さいものを見る** —— 「5 が在る」だけだと、
+     4 や 1 を足しても緑のままになる */
+  ok(SIZES.includes(5) && SIZES.includes('all')
+    && Math.min(...SIZES.filter((n) => typeof n === 'number')) === 5,
+  '個数 … いちばん小さいのは 5(そこから選べる)', SIZES.join(' / '))
+  ok(SIZES.length === 5, '個数 … 5 / 10 / 20 / 30 / ぜんぶ の5つ', SIZES.join(' / '))
   /* ★ **聞き流しも同じ一覧**(第5.414節)。はじめ別に持ったが、
        聞き流しの個数は「出しかた」の `size` をそのまま使うので、
        **一覧が2つあると、選べる札と実際に流れる数が食い違う。**
@@ -3216,13 +3270,17 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     '詳しくしぼる … 絞っているときだけ「◯件しぼり中」と出る')
   ok(/onClearAll &&[\s\S]{0,300}?すべて解除/.test(rs),
     '詳しくしぼる … すべて解除のボタンがある(渡さなければ出ない)')
-  /* ★ **いちばん下に「◯問で始める」**(利用者の指定)。
-       **数は `takeCount()` 1か所から**(書き写さない) */
-  ok(/\$\{take\} \$\{unit\}で始める/.test(rs),
-    'シート … いちばん下に「◯問で始める」がある(押す前に数が分かる)')
+  /* ★ **始めるボタンは、下に貼り付く帯の中**(第5.437節・利用者の指定)。
+       **数は `takeCount()` 1か所から**(書き写さない)。
+       **言葉は1つの変数から**(帯と、始める前の画面で2度書かない) */
+  ok(/const 始める文字 = [\s\S]{0,300}?\$\{take\} \$\{unit\}/.test(rs),
+    'シート … 「始める」の字に、押す前の数が入っている')
+  ok((rs.match(/\{始める文字\}/g) ?? []).length === 2,
+    'シート … 始めるの字は1か所から出る(帯と、始める前の画面)',
+    `${(rs.match(/\{始める文字\}/g) ?? []).length} か所`)
   /* **シートの中では、詳しくしぼるより後ろにいる** */
-  ok(/詳しくしぼる\}[\s\S]{0,900}?で始める/.test(rs),
-    'シート … 「始める」は、詳しくしぼるより下にある')
+  ok(/詳しくしぼる\}[\s\S]{0,900}?\{帯\}/.test(rs),
+    'シート … 「始める」の帯は、詳しくしぼるより下にある')
 
   for (const [file, where, unit] of [
     ['Wordbook', 'word', '語'], ['QrReview', 'qr', '問'],
@@ -12941,8 +12999,11 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   ok((素.match(/orders=\{QR_ORDERS\}/g) ?? []).length === 2,
     'Quick Response … 並べ方の札を、始める前と練習中の両方に渡している',
     `${(素.match(/orders=\{QR_ORDERS\}/g) ?? []).length} か所`)
-  ok((素.match(/onRepeat=\{/g) ?? []).length === 2,
-    'Quick Response … 繰り返すの札も、両方に渡している',
+  /* ★ **3か所**(第5.437節)。始める前・練習中の「出しかた」・
+     カードの行(`PracticeKnobs`)。**数そのものではなく、
+     「2つより多いか」で見る** —— 足した日に赤くならないように */
+  ok((素.match(/onRepeat=\{/g) ?? []).length >= 2,
+    'Quick Response … 繰り返すは、どこからでも変えられる',
     `${(素.match(/onRepeat=\{/g) ?? []).length} か所`)
   /* **組み直しの鍵に並べ方が入っているか。**
      入っていないと、練習中に並べ方を変えても出る問が前のままになる */
@@ -15337,7 +15398,10 @@ console.log('\n▶ 「今日の復習」と「ぜんぶ」が 1000 で止まら�
        「何を出す」が4つになっても、数える道は1本である */
   const 数 = pickCounts(sortWordbook(data), 今日)
   ok(数.all === 2500, '「ぜんぶ」が 1000 で止まらない', `${数.all} 語`)
-  ok(数.due === 2500, '「今日の復習」も 1000 で止まらない', `${数.due} 語`)
+  /* ★ **期限は `pickCounts()` の3つめで渡す**(第5.437節)。
+     札の id ではなくなったので、そちらで数える */
+  const 数due = pickCounts(sortWordbook(data), 今日, 'due')
+  ok(数due.all === 2500, '「そろそろ忘れる頃」も 1000 で止まらない', `${数due.all} 語`)
   /* **3つの札(表を直に数えたもの)と、「ぜんぶ」がそろうか。**
      既定の段は「まだ + 練習中」を読むので、そこと突き合わせる ——
      **「できた」は読んでいない**ので、3つの合計とは比べない */
@@ -15941,14 +16005,14 @@ console.log('\n▶ いま出している範囲を、題の先頭に出す(第5.4
   for (const f of ['src/components/Wordbook.jsx', 'src/components/QrReview.jsx']) {
     const 名 = f.includes('Wordbook') ? '単語帳' : 'Quick Response'
     const w = 素(f)
-    ok(/pickName\(pick\)/.test(w), `${名} … 範囲の言葉は \`pickName()\` 1か所`)
+    ok(/pickName\(pick/.test(w), `${名} … 範囲の言葉は \`pickName()\` 1か所`)
     /* ★ **見比べる相手は、できるだけ近いものにする**(CLAUDE.md・第5.337節)。
          ファイル全体で札の言葉を探すと、**前からある画面の名前**
          (`aria-label="今日の復習"`)に当たって、いつも赤くなる ——
          測りたいのは**題を組んでいる行**だけである */
     const 題 = w.slice(w.indexOf('const drillLabel'))
       .slice(0, w.slice(w.indexOf('const drillLabel')).indexOf('\n  const ') + 1)
-    ok(題.includes('pickName(pick)'),
+    ok(題.includes('pickName(pick'),
       `${名} … 題の先頭は \`pickName()\` が組んでいる`, 題.split('\n')[0].trim())
     const 書き写し = PICKS.filter((p) => p.id !== 'all')
       .filter((p) => 題.includes(p.label))
