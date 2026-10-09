@@ -2806,6 +2806,194 @@ for (const [label, want] of Object.entries(WANT)) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   ★ **ホームを 1行1つに**(第5.431節・2026-10-09 利用者の指定)
+
+     > 情報の見せ方、余白、文字の階層、カードの配置を改善してください
+     > 各カードの説明文も不要です
+     > 見やすさの観点からいくと1列のBが良さそうです
+     > PCでは…720で左寄せ一列で
+
+   【見るのは8つ。**値を書き写さず、カードどうしを突き合わせる**】
+     ①**1列**である(同じ行に2つ並ばない)
+     ②高さ・左端・幅が、どのカードでも同じ
+     ③**絵と矢印の場所**が、どのカードでも同じ
+     ④矢印は名前と**重ならない**(名前が長いカードでも)
+     ⑤**説明文が1つも無い**
+     ⑥組の見出しが出る。**組が1つだけなら出ない**
+     ⑦どの組にも入っていないものも、**黙って消えない**
+     ⑧**広い画面でも、横に伸び続けない**(1280 と 1680 で同じ幅)
+
+   **「出る」と「出ない」の両方を見る**(CLAUDE.md)——
+   ⑥は `?one=1`(組が1つだけ)で、出ないほうも測る。
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  /** その幅のホームを測る */
+  const 見る = (page) => page.evaluate(() => {
+    const 丸 = (v) => Math.round(v * 10) / 10
+    const R = (el) => {
+      const b = el.getBoundingClientRect()
+      return { 左: 丸(b.left), 右: 丸(b.right), 上: 丸(b.top), 下: 丸(b.bottom),
+        幅: 丸(b.width), 高: 丸(b.height) }
+    }
+    const 箱 = [...document.querySelectorAll('.home-box')]
+    return {
+      数: 箱.length,
+      名: 箱.map((e) => e.querySelector('.home-box-label')?.textContent ?? ''),
+      形: 箱.map((e) => {
+        const b = R(e)
+        const ic = e.querySelector('.home-box-icon')
+        const la = e.querySelector('.home-box-label')
+        const go = e.querySelector('.home-box-go')
+        return {
+          幅: b.幅, 高: b.高, 左: b.左, 上: b.上, 下: b.下,
+          絵の寄り: ic ? 丸(R(ic).左 - b.左) : null,
+          矢の寄り: go ? 丸(b.右 - R(go).右) : null,
+          /* **名前と矢印のあいだ。** 負なら重なっている */
+          あいだ: (la && go) ? 丸(R(go).左 - R(la).右) : null,
+        }
+      }),
+      説明: document.querySelectorAll('.home-box-desc').length,
+      組: [...document.querySelectorAll('.home-group')].map((e) => e.textContent),
+      /* **骨組みが渡した数。** 見張りの側に数を書き写さない */
+      渡した数: Number(document.querySelector('[data-home-pages]')
+        ?.getAttribute('data-home-pages') ?? -1),
+      中身の幅: document.querySelector('.home')
+        ? 丸(document.querySelector('.home').getBoundingClientRect().width) : null,
+      帯の上: document.querySelector('.app-tabs')
+        ? 丸(document.querySelector('.app-tabs').getBoundingClientRect().top) : null,
+    }
+  })
+  /** いちばん下まで送る(指で払うのと同じ道) */
+  const 下まで = async (page, w, h) => {
+    await page.mouse.move(Math.round(w / 2), Math.round(h / 2))
+    for (let i = 0; i < 24; i += 1) { await page.mouse.wheel(0, 300) }
+    await page.waitForTimeout(350)
+  }
+  const 開く = async (w, h, 足し = '') => {
+    const page = await browser.newPage({ viewport: { width: w, height: h } })
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=home${足し}`,
+      { waitUntil: 'networkidle' })
+    await page.waitForSelector('.home-box', { timeout: 8000 })
+    await page.waitForTimeout(300)
+    return page
+  }
+
+  /* ── ①〜⑦ 狭い画面(いちばん厳しい 320px)────────────────────── */
+  {
+    const w = 320; const h = 568
+    const page = await 開く(w, h)
+    const a = await 見る(page)
+    await 下まで(page, w, h)
+    const 送った = await 見る(page)
+    const 形 = a.形
+    const 同じ = (読む) => new Set(形.map(読む)).size === 1
+    /** 同じ行に2つ並んでいないか(縦に 4px 以上かぶったら同じ行) */
+    const 横並び = 形.some((x, i) => 形.slice(i + 1)
+      .some((y) => Math.min(x.下, y.下) - Math.max(x.上, y.上) > 4))
+    if (a.数 < 2) {
+      ng('ホーム … カードが描かれていない', `${a.数} 枚`)
+    } else if (横並び) {
+      ng('ホーム … 1列になっていない(同じ行に2つ並んでいる)',
+        '利用者の指定は「1列のB」である(第5.431節)')
+    } else if (!同じ((x) => x.高) || !同じ((x) => x.左) || !同じ((x) => x.幅)) {
+      ng('ホーム … カードの高さ・左端・幅がそろっていない',
+        `高 ${[...new Set(形.map((x) => x.高))].join('/')}`
+        + ` 左 ${[...new Set(形.map((x) => x.左))].join('/')}`
+        + ` 幅 ${[...new Set(形.map((x) => x.幅))].join('/')}`)
+    } else if (a.説明 !== 0) {
+      /* **矢印の検査より前に置く。** 説明文を戻すと矢印も押し出されるので、
+         後ろに置くと**別の名前で赤くなり、読み違える**(赤チェックで分かった) */
+      ng('ホーム … カードに説明文が残っている',
+        `${a.説明} 本。利用者の指定は「各カードの説明文も不要です」`)
+    } else if (!同じ((x) => x.絵の寄り) || !同じ((x) => x.矢の寄り)) {
+      ng('ホーム … 絵と矢印の場所が、カードによって違う',
+        `絵 ${[...new Set(形.map((x) => x.絵の寄り))].join('/')}`
+        + ` 矢 ${[...new Set(形.map((x) => x.矢の寄り))].join('/')}`)
+    } else if (形.some((x) => x.あいだ == null || x.あいだ < 0)) {
+      ng('ホーム … 矢印が名前に重なっている',
+        `いちばん近いところで ${Math.min(...形.map((x) => x.あいだ ?? -999))}px`)
+    } else if (a.数 !== a.渡した数) {
+      /* **渡したものが、黙って消えていないか。**
+         どの組にも入っていないカードは、ここで初めて数に出る */
+      ng('ホーム … 渡した行き先のうち、描かれていないものがある',
+        `渡した ${a.渡した数} / 描いた ${a.数}`)
+    } else if (a.組.length < 2) {
+      ng('ホーム … 組の見出しが出ていない', `出たのは ${a.組.length} 個`)
+    } else if (送った.形[送った.形.length - 1].下 > (送った.帯の上 ?? Infinity)) {
+      ng('ホーム … いちばん下のカードが、下のメニューに隠れている',
+        `カードの下 ${送った.形[送った.形.length - 1].下}`
+        + ` / 帯の上 ${送った.帯の上}`)
+    } else {
+      ok(`ホーム(${w}px) … 1列・${a.数} 枚とも高さ ${形[0].高}px で`
+        + `左端も幅もそろい、絵は ${形[0].絵の寄り}px・矢印は右から ${形[0].矢の寄り}px。`
+        + `説明文は 0 本、組は「${a.組.join(' / ')}」。`
+        + `送り切っても、いちばん下のカード(${送った.形[送った.形.length - 1].下})は`
+        + `帯(${送った.帯の上})に隠れない`)
+    }
+    await page.close()
+  }
+
+  /* ── ⑥の出ない側 + ⑦ 組が1つだけなら、見出しを出さない ─────── */
+  {
+    const page = await 開く(390, 844)
+    const 全 = await 見る(page)
+    await page.close()
+    const page2 = await 開く(390, 844, '&one=1')
+    const 一 = await 見る(page2)
+    await page2.close()
+    if (!全.数 || !一.数) {
+      ng('ホーム … 組の出し分けを測れない', `${全.数} 枚 / ${一.数} 枚`)
+    } else if (一.組.length !== 0) {
+      ng('ホーム … 組が1つしか無いのに、見出しが出ている',
+        `「${一.組.join(' / ')}」。何も分けていない見出しは置かない`)
+    } else if (一.数 !== 一.渡した数) {
+      ng('ホーム … 組が1つだけのとき、渡した行き先が描かれていない',
+        `渡した ${一.渡した数} / 描いた ${一.数}`)
+    } else {
+      ok(`ホーム … 組が1つだけのときは見出しを出さない(${一.数} 枚)。`
+        + `渡した行き先は、どの組にも入っていないものも含めて全部出る`
+        + `(ぜんぶ ${全.数} 枚)`)
+    }
+  }
+
+  /* ── ⑧ 広い画面でも、1列のまま・書いてある幅で止まる ──────────
+       **数を書き写さない。** `styles.css` に**いくつと書いてあるか**を
+       先に読み取り、**そのとおりに描かれているか**だけを測る ——
+       止め幅を変えても付いてくるし、**消せば読み取れずに赤くなる**
+       (CLAUDE.md「名前を先に読み取ってから、その名前で性質を見る」)。
+
+       **`.app` の側にも止め幅がある**ので、「1280 と 1680 で同じ幅」では
+       素通りする(赤チェックで分かった —— どちらも 1068px だった)。 */
+  {
+    const 書いてある = (() => {
+      const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+      const i = css.indexOf('\n.home {')
+      if (i < 0) return null
+      const 塊 = css.slice(i, css.indexOf('}', i))
+      const m = /max-width:\s*(\d+)px/.exec(塊)
+      return m ? Number(m[1]) : null
+    })()
+    const もっと広 = await 開く(1680, 900)
+    const b2 = await 見る(もっと広)
+    await もっと広.close()
+    if (!b2.形.length) {
+      ng('ホーム … 広い画面を測れない')
+    } else if (書いてある == null) {
+      ng('ホーム … 広い画面で止める幅が、`.home` に書かれていない',
+        '止めないと、名前と矢印が 1,000px 以上離れる(第5.431節)')
+    } else if (Math.round(b2.中身の幅) !== 書いてある) {
+      ng('ホーム … 広い画面で、書いてある幅になっていない',
+        `書いてある ${書いてある}px / 描かれた ${b2.中身の幅}px`)
+    } else if (b2.形.some((x, i) => b2.形.slice(i + 1)
+      .some((y) => Math.min(x.下, y.下) - Math.max(x.上, y.上) > 4))) {
+      ng('ホーム … 広い画面で2列になっている', '利用者の指定は「720で左寄せ一列」')
+    } else {
+      ok(`ホーム(広い画面)… 1列のまま、書いてある ${書いてある}px で止まる`)
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    ★ **正解の聞き流し**(第5.334節・2026-10-01 利用者の指定)
 
      > その上で、応答問題には正解の聞き流しモードを作ります。
@@ -12844,6 +13032,10 @@ for (const W of [1280, 390]) {
 /* 見る画面。**押すものが縦に積まれるところ**を中心に並べる。
    **画面を足したら、ここにも足す** —— 足すまで見張られない */
 const SCREENS = [
+  /* ★ **ホーム**(第5.431節)。見出しと行が縦に積まれ、
+       行の中では**絵・名前・矢印が横に並ぶ。**
+       `one=1` は**組が1つだけ**(見出しが出ない形) */
+  ['home', ''], ['home', 'one=1'],
   ['tools', ''], ['form', ''], ['search', ''], ['qr', ''], ['qrrev', ''],
   /* **テスト対策の、試験と PART**(第5.309節)。**横に2つ並ぶ**ので、
      横のすき間がいちばん出やすい。作れない PART の1行も、

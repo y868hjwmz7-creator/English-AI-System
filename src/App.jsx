@@ -619,9 +619,15 @@ export default function App() {
   // 並びは役割の順。トレーナーには「教材 → ゲスト → 集計」が仕事の順で、
   // 「今週の宿題 / 学習の記録」は自分自身の学習の画面である。
   //
-  // **`desc`(1行の説明)も、ここが持つ**(2026-09 利用者の指定)。
-  // ホームの箱がそれを出す。**呼び名と説明を2か所に分けない** ——
-  // 分けると、名前を変えたときに説明だけが古いまま残る。
+  // ★ **`desc`(1行の説明)は全部やめた**(2026-10-09 利用者の指定・第5.431節)。
+  //    > 各カードの説明文も不要です
+  //    読んでいたのは**ホームの箱1か所**だけだったので、出すのをやめた時点で
+  //    誰も読まない入れ物になった。**呼ぶ人がいなくなったものを残さない**
+  //    (残すと、次に見た人が「まだ使うのかもしれない」と読む・CLAUDE.md)。
+  //
+  // **`group`(ホームでどの組に並ぶか)は、ここが持つ。**
+  // 組の**呼び名と並び**は `AppHome.jsx` の `HOME_GROUPS` 1か所にある ——
+  // ここは id を言うだけで、呼び名を書き写さない。
   const pages = [
     /* **ホーム**(2026-09 利用者の指定)。
          > ロードの後いきなり教材が映るのではなく、何か箱を並べて、
@@ -633,11 +639,11 @@ export default function App() {
     { id: HOME_ID, label: 'ホーム', icon: HomeIcon },
     (!isSupabaseConfigured || isTrainer) && {
       id: 'materials', label: '教材', icon: BookIcon,
-      desc: 'さがす・作る・ゲストに共有する',
+      group: 'study',
     },
     (!isSupabaseConfigured || isTrainer) && {
       id: 'learners', label: 'ゲスト', icon: PeopleIcon,
-      desc: '担当ゲストの宿題と取り組み',
+      group: 'guest',
     },
     /* **アサインする**(第5.181節・2026-09 利用者の指定)。
 
@@ -652,17 +658,17 @@ export default function App() {
        同じ絵を2つに付けると、どちらがどちらか分からない */
     (!isSupabaseConfigured || isTrainer) && {
       id: 'assign', label: 'アサインする', icon: ShareIcon,
-      desc: '単語帳と Quick Response の冊を、ゲストに出す',
+      group: 'guest',
     },
     // **集計は管理者だけ**(2026-08 の設計変更)。トレーナーが見るのは
     // 「ゲスト」画面に出る取り組みのほうで、スクール全体の数字ではない
     (!isSupabaseConfigured || isOwner) && {
       id: 'admin', label: '集計', icon: ChartIcon,
-      desc: 'スクール全体の教材とゲストの数',
+      group: 'guest',
     },
     (!isSupabaseConfigured || !isTrainer) && {
       id: 'homework', label: '今週の宿題', icon: TaskIcon,
-      desc: 'トレーナーから届いた教材',
+      group: 'study',
     },
     /* **文法30日集中講座 + 基礎単語**(0052・2026-09 利用者の指定)。
        > pre basic と basic に基礎単語習得モードとか文法30日集中講座などが欲しい
@@ -675,13 +681,13 @@ export default function App() {
        判断は `basicsOn`(= `showsBasics()`)1か所。**既定は出さない** */
     (!isSupabaseConfigured || (!isTrainer && basicsOn)) && {
       id: 'course', label: '30日講座', icon: StepsIcon,
-      desc: '文法30日と、基礎の単語',
+      group: 'study',
     },
     // 単語帳は**トレーナーも使う。** トレーナーも日々英語を学んでいる
     // (2026-08 利用者の指定)。記録はログインしている人ごとに分かれる
     {
       id: 'wordbook', label: '単語帳', icon: CardsIcon,
-      desc: '覚えた語を、間をあけてくり返す',
+      group: 'study',
     },
     /* **Quick Response の復習**(0040・2026-09 利用者の指定)。
        教材の中で「まだ」を押した文が、**1つのアカウントに1つ**溜まる。
@@ -695,7 +701,7 @@ export default function App() {
        (Native Flow・単語帳の冊とまったく同じ作法) */
     {
       id: 'qr', label: 'Quick Response', icon: BoltIcon,
-      desc: '日本語を見て、英語で言う',
+      group: 'study',
     },
     /* **「達成具合」は廃止した**(第5.246節・2026-09-23 利用者の指定
        「達成具合、これ要らないね。排除しましょう」)。
@@ -709,7 +715,7 @@ export default function App() {
        この id で残っている。**呼び名だけを変える** */
     {
       id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon,
-      desc: '声に出して、話す練習をする',
+      group: 'study',
     },
     /* **音楽**(0049・2026-09 利用者の指定「自作の音楽が流れるように」)。
        曲を入れるのも消すのも**トレーナーと管理者だけ**なので、
@@ -722,7 +728,7 @@ export default function App() {
        **「作って、出す」が1つの画面で済む。** 行き先は1つ減った */
     (!isSupabaseConfigured || isTrainer) && {
       id: 'bgm', label: '音楽', icon: MusicIcon,
-      desc: '聞き流しのときに流す曲',
+      group: 'study',
     },
     // 「学習の記録」は外した(2026-08 の設計変更)。
     // **やったことは、こちらが裏で数える**(0022・`src/lib/practice.js`)。
@@ -991,7 +997,13 @@ export default function App() {
             スマホでメニューが隠れていても「いまどこか」が分かる */}
         <AppTopbar
           onToggle={toggleNav} open={navOpen} wide={navPush} pageLabel={pageLabel}
-          icon={nowPage?.icon ?? null}
+          /* ★ **ホームだけ、絵を出さない**(2026-10-09 利用者の指定・第5.431節)。
+               > 「ホーム」の文字とホームアイコンが重複して見えないよう、
+               > どちらを主役にするか整理してください
+             **字を主役にした。** 家の絵は左のメニューに同じものが出ており、
+             帯では名前のすぐ左に並ぶので、**同じことを2回**言っていた。
+             ほかの画面は変えていない —— あちらは絵と名前で1組である */
+          icon={view === HOME_ID ? null : (nowPage?.icon ?? null)}
           /* **いま見ている画面の印だけ**を出す。
              「単語帳」の横に青い丸が出ても、何の印か分からない */
           badge={view === 'materials' ? jobBadge : null}

@@ -110,6 +110,10 @@ import {
   BoltIcon, BookIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
 } from './components/Icons.jsx'
+/* ★ **ホーム**(第5.431節)。`pages` を props で受け取るだけなので、
+     本物の部品をそのまま描いて測れる */
+import AppHome, { HOME_GROUPS } from './components/AppHome.jsx'
+import { ChartIcon, PeopleIcon, ShareIcon } from './components/Icons.jsx'
 import MaterialShare from './components/MaterialShare.jsx'
 import SearchBar from './components/SearchBar.jsx'
 /* **アサインの手順**(第5.238節)。本物の部品をそのまま描く ——
@@ -1411,6 +1415,43 @@ const 帯つき = (中身) => (
   </div>
 )
 
+/* ★ ── ホーム(`?screen=home`・第5.431節・2026-10-09 利用者の指定)──
+
+     > 情報の見せ方、余白、文字の階層、カードの配置を改善してください
+     > 各カードの説明文も不要です
+
+   **組の呼び名は書き写さない。** `HOME_GROUPS` から引く ——
+   書き写すと、呼び名を変えた日に骨組みだけが古くなる(CLAUDE.md)。
+
+   **`?one=1` は「組が1つだけ」の形**(ゲストのアカウント)。
+   そこでは見出しを出さない —— 何も分けていない見出しを置かない。
+   **いちばん危ない形を、検証の中に必ず1つ置く**(CLAUDE.md)ので、
+   **どの組にも入っていない1つ**(`group` 無し)も混ぜてある。 */
+const [組ゲスト, 組学習] = HOME_GROUPS.map((g) => g.id)
+const HOME_PAGES = [
+  { id: 'learners', label: 'ゲスト', icon: PeopleIcon, group: 組ゲスト },
+  { id: 'assign', label: 'アサインする', icon: ShareIcon, group: 組ゲスト },
+  { id: 'admin', label: '集計', icon: ChartIcon, group: 組ゲスト },
+  { id: 'materials', label: '教材', icon: BookIcon, group: 組学習 },
+  { id: 'wordbook', label: '単語帳', icon: CardsIcon, group: 組学習 },
+  { id: 'qr', label: 'Quick Response', icon: BoltIcon, group: 組学習 },
+  { id: 'pronunciation', label: 'スピーチ練習', icon: MicIcon, group: 組学習 },
+  /* **どの組にも入っていないもの。** 黙って消えないことを測る */
+  { id: 'homework', label: '今週の宿題', icon: TaskIcon },
+]
+const homeScreen = (ひと組) => {
+  const 渡す = ひと組 ? HOME_PAGES.filter((x) => x.group === 組学習) : HOME_PAGES
+  /* **渡した数を、そのまま外に書いておく。**
+     見張りは「描かれたカードの数」とこれを突き合わせる ——
+     数を見張りの側に書き写すと、骨組みを増やした日に古くなる */
+  return 帯つき(
+    <div data-home-pages={渡す.length}>
+      <AppHome pages={渡す}
+               onPick={(id) => { document.querySelector('.home').dataset.picked = id }} />
+    </div>,
+  )
+}
+
 const TABS = 帯つき(
   <>
     <div style={{ height: '1200px' }} />
@@ -2581,7 +2622,9 @@ const CHUNK = (
 applyTips(loadTips())
 
 createRoot(document.getElementById('root')).render(
-  q.get('screen') === 'qrmode'
+  q.get('screen') === 'home'
+    ? homeScreen(!!q.get('one'))
+    : q.get('screen') === 'qrmode'
     ? QRMODE
     : q.get('screen') === 'fill'
     ? FILL
