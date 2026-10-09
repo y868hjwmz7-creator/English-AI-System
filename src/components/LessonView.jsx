@@ -1522,7 +1522,11 @@ export default function LessonView({
                   className={`btn btn--small${pen ? ' btn--primary' : ''}`}
                   aria-pressed={pen}
                   title="紙に書き込む(閉じると消えます)"
-                  onClick={() => setPen((v) => !v)}>
+                  /* ★ **開いたら、設定のシートは閉じる**(2026-10-09 利用者の
+                       指定・第5.429節)。メモと同じ理由である ——
+                       **シートが紙の上に残っていては、書けない。**
+                       押した先に用があるものは、押したらシートを畳む */
+                  onClick={() => { setPen((v) => !v); setViewSets(false) }}>
             <PenIcon /><span className="mid-text">書き込む</span>
           </button>
 

@@ -2296,8 +2296,8 @@ for (const [label, want] of Object.entries(WANT)) {
  * **3つとも「出る」と「出ない」の両方を見る**(CLAUDE.md)。
  * ══════════════════════════════════════════════════════════════════════ */
 {
-  /** その幅で、メモがどう出るか */
-  const メモの出かた = async (w) => {
+  /** その幅で、学習ツール(メモ / 書き込む)を押したらどうなるか */
+  const メモの出かた = async (w, 名 = 'メモ') => {
     const page = await browser.newPage({ viewport: { width: w, height: 900 } })
     await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
       { waitUntil: 'networkidle' })
@@ -2305,13 +2305,13 @@ for (const [label, want] of Object.entries(WANT)) {
     /* 「設定」を開いてから「メモ」を押す(狭い窓では帯に出ていない) */
     const 設定 = await page.$('.lesson-sets')
     if (設定) { await 設定.click(); await page.waitForTimeout(300) }
-    const 押せた = await page.evaluate(() => {
+    const 押せた = await page.evaluate((n) => {
       const b = [...document.querySelectorAll('button')]
-        .find((x) => /メモ/.test(x.textContent) && x.getBoundingClientRect().width > 0)
+        .find((x) => new RegExp(n).test(x.textContent) && x.getBoundingClientRect().width > 0)
       if (!b) return false
       b.click()
       return true
-    })
+    }, 名)
     await page.waitForTimeout(500)
     const m = await page.evaluate(() => ({
       シート: [...document.querySelectorAll('.sheet')]
@@ -2331,6 +2331,9 @@ for (const [label, want] of Object.entries(WANT)) {
        **広い画面では、これまでどおり紙の右**(そこには置く余地がある)。 */
   const 狭い = await メモの出かた(390)
   const 広い = await メモの出かた(1280)
+  /* ★ **「書き込む」も同じ**(2026-10-09 利用者の指定・第5.429節)——
+       シートが紙の上に残っていては、書けない */
+  const ペン = await メモの出かた(390, '書き込む')
   if (!狭い.押せた || !広い.押せた) {
     ng('メモ … ボタンを押せなかった', '見張りが素通りしている')
   } else if (!狭い.シート || 狭い.横の箱) {
@@ -2338,11 +2341,15 @@ for (const [label, want] of Object.entries(WANT)) {
       `シート ${狭い.シート} / 横の箱 ${狭い.横の箱}`)
   } else if (狭い.設定も) {
     ng('メモ(390px) … 設定のシートが残ったまま(2枚重なる)')
+  } else if (!ペン.押せた || ペン.設定も) {
+    ng('書き込む(390px) … 設定のシートが残ったまま(紙の上に乗っていて書けない)',
+      `押せた ${ペン.押せた} / 設定も ${ペン.設定も}`)
   } else if (広い.シート || !広い.横の箱) {
     ng('メモ(1280px) … 紙の右に出ていない',
       `シート ${広い.シート} / 横の箱 ${広い.横の箱}`)
   } else {
-    ok('メモ … 狭い画面では下から出すシート、広い画面では紙の右(設定は残らない)')
+    ok('メモ … 狭い画面では下から出すシート、広い画面では紙の右'
+      + '(メモも書き込むも、押したら設定のシートは残らない)')
   }
 
   /* ── ★ **シートは「押して離した」ときに閉じる**(第5.427節)──────
