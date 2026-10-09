@@ -934,10 +934,15 @@ a { color: var(--accent); }
    出すのは**見える線だけ**で、上下を**割合**でへこませる ——
    **px を書かないので、帯の高さや字の大きさを変えた日もついてくる**
    (CLAUDE.md「値を書き写さない。性質で見る」)。
-   色は上端の線とまったく同じ `--tabs-line`(色を2か所に書かない) */
+   ★ **色は `--border` のほう**(第5.433節で分けた)。
+   もとは上端の線と同じ `--tabs-line` を使っていたが、
+   **あれは帯の輪郭**(入れ物)で、**こちらはタブどうしの区切り**である ——
+   入れ物の線をやめた日に、**縦の区切りまで一緒に消えた**
+   (`npm run test:bar` の「タブのあいだに縦の区切りが無い」が捕まえた)。
+   **1つの値にまとめてよいのは、同じものだけ。** */
 .app-tab + .app-tab::before {
   content: ''; position: absolute; left: -1px; top: 28%; bottom: 28%;
-  width: 1px; background: var(--tabs-line);
+  width: 1px; background: var(--border);
 }
 .app-tab-icon { display: inline-flex; font-size: var(--fs-20); line-height: 1; }
 /* ★ **絵を、字と同じまん中に置く**(第5.403節・2026-10-06 実機・利用者の指定)。

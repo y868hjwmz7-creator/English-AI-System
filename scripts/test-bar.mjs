@@ -16205,7 +16205,13 @@ for (const [q2, 期待, 何] of [
   }
 
   /* ② 押せるもの —— 線が残っている */
-  for (const [名, sel] of [['ボタン', '.btn'], ['札', '.chip']]) {
+  /* ★ **測る相手をまちがえない。**
+       はじめ `.chip` と書いたら、**声の札**(`.cast-chip--quiet .cast-chip-btn`)に
+       当たった —— あれは**この節の前から、わざと線を消してある**。
+       **「わざと消してあるもの」を測ると、直っていても赤くなる。**
+       選んでいる札(`.chip--on`)も外す —— あちらの線は金(`--accent-line`)で、
+       `--border` を1度も通らない(2026-10-09 実測) */
+  for (const [名, sel] of [['ボタン', '.btn'], ['札', '.chiprow > .chip:not(.chip--on)']]) {
     const m = await 読む(sel)
     if (!m) ng(`押せるもの … ${名}が描かれていない`)
     else if (!m.辺.length) ng(`押せるもの … ${名}に、幅のある辺が1つも無い`)
@@ -16226,14 +16232,22 @@ for (const [q2, 期待, 何] of [
     } else ok('入れ物 … 下の帯の線も透明になっている')
   }
 
-  /* ④ 紙では戻す —— **面のわずかな差は、インクに出ない** */
-  await 開く('sheet')
+  /* ④ 紙では戻す —— **面のわずかな差は、インクに出ない**
+
+       **骨組みに紙の画面は無い。** だから「紙の決まりを当てた箱」を1つ作って、
+       **決まりの重なり(カスケード)そのもの**を読む ——
+       見たいのは「`.lesson-sheet` の中で `--box-line` が戻るか」であって、
+       紙の画面が描けるかどうかではない。 */
   {
     const v = await page.evaluate(() => {
-      const el = document.querySelector('.lesson-sheet, .focus-paper')
-      return el ? window.getComputedStyle(el).getPropertyValue('--box-line').trim() : null
+      const d = document.createElement('div')
+      d.className = 'lesson-sheet'
+      document.body.appendChild(d)
+      const got = window.getComputedStyle(d).getPropertyValue('--box-line').trim()
+      d.remove()
+      return got
     })
-    if (v === null) ng('紙 … 紙が描かれていない')
+    if (v === null) ng('紙 … 紙の決まりが読み取れない')
     else if (!v || v === 'transparent' || /^rgba\([^)]*,\s*0\s*\)$/.test(v)) {
       ng('紙 … 紙の上でも入れ物の線が消えている',
         `--box-line: ${v || '(空)'} —— 面の差はインクに出ない`)
