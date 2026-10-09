@@ -536,6 +536,24 @@ const 線 = 1.8
 /** 角と端の形。**丸めない**(第5.419節・利用者の指定) */
 const 角 = { strokeLinecap: 'square', strokeLinejoin: 'miter' }
 
+/**
+ * **シャッフルの、上下へのはみ出しを減らす割合**
+ * (2026-10-09 利用者の指定・第5.430節)。
+ *
+ *   > シャッフルの矢印の上下へのはみ出しも減らしつつ
+ *
+ * くり返しの輪は**2本の横棒**なので、絵が低い帯に収まって見える。
+ * 一方シャッフルは**斜めに走る2本**で、箱いっぱいに上下する ——
+ * となりに並べると、こちらだけ背が高く見えた。
+ *
+ * **`transform: scaleY` では潰さない。** あれは**線の太さまで細くする**ので、
+ * くり返しとそろえてある `線`(1.8)が崩れる。
+ * **置き場所(y 座標)だけ**をまん中(10)へ寄せる。
+ */
+const 縦 = 0.76
+/** y 座標を、まん中(10)を軸に `縦` まで寄せる。**数は書き写さない** */
+const 低く = (y) => Math.round((10 + (y - 10) * 縦) * 100) / 100
+
 function RepeatLoop() {
   return (
     <>
@@ -631,7 +649,7 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
      `off` は 0 —— **回す範囲が無いので、点も無い** */
   const 点 = { off: 0, sentence: 1, item: 2, all: 3 }[range] ?? 2
   /* 点の間隔。**真ん中ぞろえ**にすると、増えても左右に均等に広がる */
-  const 間 = 4.6
+  const 間 = 3
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
       {/* ★ **2本の矢印**(2026-09-30 利用者の指定・写真つき・第5.324節)。
@@ -647,15 +665,24 @@ export function RepeatRangeIcon({ range = 'item', className = 'icon' }) {
           ★ **輪は `RepeatLoop` 1か所**(第5.326節)——
             聞き流しの `RepeatIcon` と**同じ絵**を使う。
             ここに書き写すと、片方だけ古くなる(実際そうなった)。 */}
-      {/* ★ **輪は上へ寄せて、少し小さくする**(第5.419節)。
-            点を下に置く場所を作るためで、**輪の絵そのものは1文字も
-            変えていない**(`RepeatLoop` のまま・書き写さない) */}
-      <g transform="translate(10 7.4) scale(0.74) translate(-10 -10)">
-        <RepeatLoop />
-      </g>
-      {/* 回す範囲は**点の数**。1つ(文)→ 2つ(段落・発言)→ 3つ(全文) */}
+      {/* ★ **輪は原寸に戻した**(2026-10-09 利用者の指定・第5.430節)。
+
+            > シャッフルの右側の矢印が上下にはみ出してダイナミックなのに
+            > 対して、丸がない時のリピートが小さく、不揃いに見えるんですよね。
+            > リピートの丸を矢印の囲いの中に入れるのはどうでしょうか？
+
+            第5.419節では**点を輪の下に置く場所を作るために**輪だけを
+            0.74 倍に縮めていた。そのため「しない」(点が0)のときは
+            **点も無く、輪も小さい**ので、となりのシャッフルより
+            一回り小さく見えていた。
+            **点を囲いの中に入れれば、縮める理由そのものが無くなる。**
+            どの段でも、絵の外形はシャッフルとそろう。 */}
+      <RepeatLoop />
+      {/* 回す範囲は**点の数**。1つ(文)→ 2つ(段落・発言)→ 3つ(全文)。
+          **囲いの中**(まん中の高さ)に並べる —— 上下の筋のあいだは
+          だいたい 7.1〜12.9 なので、まん中は 10 である */}
       {Array.from({ length: 点 }, (_, i) => (
-        <circle key={i} r="1.5" cy="15.8" fill="currentColor"
+        <circle key={i} r="1.1" cy="10" fill="currentColor"
                 cx={10 + (i - (点 - 1) / 2) * 間} />
       ))}
     </svg>
@@ -680,13 +707,15 @@ export function ShuffleIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
       {/* 左上 → 右下。穂先は筋と同じ斜め(45度)を向く */}
-      <path d="M2.6 6.4h3.2L14.1 13.9"
+      <path d={`M2.6 ${低く(6.4)}h3.2L14.1 ${低く(13.9)}`}
             fill="none" stroke="currentColor" strokeWidth={線} {...角} />
-      <path d="M16.6 16.6 16 12.1 12.1 16z" fill="currentColor" />
+      <path d={`M16.6 ${低く(16.6)} 16 ${低く(12.1)} 12.1 ${低く(16)}z`}
+            fill="currentColor" />
       {/* 左下 → 右上 */}
-      <path d="M2.6 13.6h3.2L14.1 6.1"
+      <path d={`M2.6 ${低く(13.6)}h3.2L14.1 ${低く(6.1)}`}
             fill="none" stroke="currentColor" strokeWidth={線} {...角} />
-      <path d="M16.6 3.4 16 7.9 12.1 4z" fill="currentColor" />
+      <path d={`M16.6 ${低く(3.4)} 16 ${低く(7.9)} 12.1 ${低く(4)}z`}
+            fill="currentColor" />
     </svg>
   )
 }

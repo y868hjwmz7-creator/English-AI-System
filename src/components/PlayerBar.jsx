@@ -374,16 +374,24 @@ export default function PlayerBar({
 
       {/* ── ① いまどこか・くり返し・速さ ────────────────────────── */}
       <div className="player-head" ref={headRef}>
-        {/* ── 左のまとまり … いまどこか + シャッフル ──────────────
+        {/* ── 左のまとまり … いまどこかだけ ──────────────────────
               2026-09-30 利用者の指定(第5.325節)。
 
                 > 左側：段落数／発言数の表示＋シャッフル
-                > 数とシャッフルをひとまとまりに見せてください
                 > 必要以上に大きな枠や装飾を使わず、
                 > 小さなステータス表示としてまとめる
 
               **数が主で、単位は添え物。** 単位のほうを小さく・うすくする
-              (中身と意味は1文字も変えていない)。 */}
+              (中身と意味は1文字も変えていない)。
+
+              ★ **シャッフルは右へ移した**(2026-10-09 利用者の指定・
+                第5.430節)。
+
+                > シャッフルのアイコンを右に寄せて欲しいです。
+                > そしてリピートのアイコンとその右の再生スピードと
+                > 3つをバランスよくまとめた上で
+
+              左は**読むもの(数)**だけ、右は**押すもの(3つ)**だけになる。 */}
         <span className="player-head-l">
           <span className="player-at">
             {/* ★ **いま何問めかだけ、差し色**(2026-10-08 利用者がえらんだ案B・
@@ -396,11 +404,14 @@ export default function PlayerBar({
             <span className="player-at-n">{total}</span>
             <span className="wide-text player-at-unit"> {unit}</span>
           </span>
-          {onShuffle && <ShuffleKey on={shuffle} onChange={onShuffle} />}
         </span>
 
-        {/* ── 右のまとまり … くり返し + 速さ ──────────────────── */}
+        {/* ── 右のまとまり … シャッフル + くり返し + 速さ ──────────
+              **絵の2つが先、数字(速さ)が後ろ。** 同じ形のものを隣どうしに
+              置くと、3つが1つのまとまりに見える(第5.430節) */}
         <span className="player-head-r">
+        {onShuffle && <ShuffleKey on={shuffle} onChange={onShuffle} />}
+
         {onRepeat && (
           <RepeatUnit value={repeat ?? 'off'} unit={unit} onChange={onRepeat} />
         )}

@@ -2489,7 +2489,9 @@ for (const [label, want] of Object.entries(WANT)) {
  *
  * **見るのは6つ。「出る」と「出ない」の両方を見る**(CLAUDE.md)。
  *   ①文型ドリルには出る  ②**本文の教材には出ない**
- *   ③**数のすぐ右**にいる(同じまとまりの中で、あいだに何も挟まない)
+ *   ③**右のまとまり(シャッフル・くり返し・速さ)の先頭**にいて、
+ *     くり返しのすぐ左である(第5.430節で左から右へ移した。
+ *     数は左に1人で残る)
  *   ④押すと**問の並びが変わり**、もう一度押すと**もとに戻る**
  *   ⑤名前と押している印が変わる(**言い方は `shuffleSay()` から受け取る**)
  *   ⑥**押しても、まわりの物が動かない**(箱の大きさも、隣の場所も)
@@ -2520,17 +2522,23 @@ for (const [label, want] of Object.entries(WANT)) {
     const sh = document.querySelector('.player--dock .shuffle-key')
     const at = document.querySelector('.player--dock .player-at')
     const rep = document.querySelector('.player--dock .repeat-key')
-    const 左 = document.querySelector('.player--dock .player-head-l')
+    const 速 = document.querySelector('.player--dock .player-rate-now')
+    const 右 = document.querySelector('.player--dock .player-head-r')
     return {
       有る: !!sh,
       名: sh?.getAttribute('aria-label') ?? '',
       押: sh?.getAttribute('aria-pressed') ?? '',
       箱: sh ? R(sh) : null,
-      /* **数と同じまとまりの中に居るか。** 別の入れ物にいると、
-         狭い画面で離れて折り返す */
-      同じ組: !!(左 && at && sh && 左.contains(at) && 左.contains(sh)),
-      /* **数のすぐ右。** あいだに押せるものが挟まっていないこと */
-      すぐ右: !!(at && sh && sh.previousElementSibling === at),
+      /* ★ **押すもの3つと同じまとまりの中に居るか**(第5.430節)。
+           第5.325節では「数のすぐ右(左のまとまり)」だったが、
+           利用者の指定でシャッフルを**右のまとまり**へ移した。
+           別の入れ物にいると、狭い画面で離れて折り返す */
+      同じ組: !!(右 && sh && rep && 速
+        && 右.contains(sh) && 右.contains(rep) && 右.contains(速)),
+      /* **くり返しのすぐ左。** あいだに押せるものが挟まっていないこと */
+      すぐ左: !!(rep && sh && rep.previousElementSibling === sh),
+      /* **数は左のまとまりに1人で残っている**(押すものが混ざらない) */
+      数は左: !!(at && !右?.contains(at)),
       くり返し: rep ? R(rep) : null,
       並び: [...document.querySelectorAll('.lesson-page:not(.is-closed) li[data-key]')]
         .map((x) => x.getAttribute('data-key')).join(','),
@@ -2557,9 +2565,10 @@ for (const [label, want] of Object.entries(WANT)) {
     const a = await 見る(page)
     if (!a.有る) {
       ng('シャッフル … 文型ドリルに出ていない', '`.shuffle-key` が無い')
-    } else if (!a.同じ組 || !a.すぐ右) {
-      ng('シャッフル … 数のすぐ右に置かれていない',
-        `同じまとまり ${a.同じ組} / すぐ右 ${a.すぐ右}`)
+    } else if (!a.同じ組 || !a.すぐ左 || !a.数は左) {
+      ng('シャッフル … くり返し・速さと同じまとまりの先頭に置かれていない',
+        `同じまとまり ${a.同じ組} / くり返しのすぐ左 ${a.すぐ左}`
+        + ` / 数は左に残っている ${a.数は左}`)
     } else if (a.名 !== shuffleSay(false) || a.押 !== 'false') {
       /* **言い方は1か所から受け取る。** 書き写すと、変えた日に古くなる */
       ng('シャッフル … はじめの名前か押している印が違う', `「${a.名}」/ ${a.押}`)
@@ -2605,7 +2614,7 @@ for (const [label, want] of Object.entries(WANT)) {
         ng('シャッフル … 並びは変わっても、画面の番号が 1・2・3… のまま',
           `もと ${a.番号} → ${入.map((x) => x.番号).join(' / ')}`)
       } else {
-        ok(`シャッフル … 文型ドリルの数のすぐ右にあり、押すと並びが変わって`
+        ok(`シャッフル … 文型ドリルの右のまとまりの先頭にあり、押すと並びが変わって`
           + `(${a.並び} → ${入.find((x) => x.並び !== a.並び).並び})`
           + `、番号ももとの何番かに変わり`
           + `(${入.find((x) => x.並び !== a.並び).番号})`
@@ -2672,6 +2681,128 @@ for (const [label, want] of Object.entries(WANT)) {
     }
     await page.close()
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★ **右の3つを、ひとまとまりに**(第5.430節・2026-10-09 利用者の指定)
+
+     > シャッフルのアイコンを右に寄せて欲しいです。
+     > そしてリピートのアイコンとその右の再生スピードと3つを
+     > バランスよくまとめた上で大きさのバランスも整えてください。
+     > シャッフルの右側の矢印が上下にはみ出してダイナミックなのに対して
+     > 丸がない時のリピートが小さく、不揃いに見えるんですよね。
+     > リピートの丸を矢印の囲いの中に入れるのはどうでしょうか？
+     > シャッフルの矢印の上下へのはみ出しも減らしつつ
+
+   【なぜ不揃いだったか】
+   第5.419節では、点を**輪の下**に置く場所を作るために
+   **輪だけを 0.74 倍**に縮めていた。そのため「しない」(点が0)のときは
+   **点も無く、輪も小さい** —— となりのシャッフルより一回り小さく見えた。
+   点を**囲いの中**に入れれば、縮める理由そのものが無くなる。
+
+   【見るのは6つ。**値を書き写さず、2つの絵を突き合わせる**】
+     ①輪は、シャッフルと同じくらい**幅いっぱい**に描かれている
+       (0.74 倍に戻すと、ここが赤くなる)
+     ②点は**囲いの中**にいる(輪の上端より下、下端より上)
+     ③シャッフルのほうが**背が低い**(上下のはみ出しを減らした)
+     ④輪の大きさは、**4つの段のどれでも同じ**
+     ⑤シャッフルとくり返しは、**同じ大きさの箱**
+     ⑥**速さの字は、左の数字より大きくない。** 3つのあいだはどこも同じ
+
+   **`getBBox()` ではなく `getBoundingClientRect()` で測る** ——
+   前者は**親の `transform` を見ない**ので、輪を 0.74 倍に戻しても
+   同じ数が返り、**この見張りは何も守らなくなる。**
+   ══════════════════════════════════════════════════════════════════════ */
+{
+  const w = 390
+  const page = await browser.newPage({ viewport: { width: w, height: 900 } })
+  await page.goto(`http://localhost:${PORT}/__bar.html?kind=drill&role=trainer&who=g1`,
+    { waitUntil: 'networkidle' })
+  await page.waitForTimeout(400)
+  const 測る = () => page.evaluate(() => {
+    /** 描かれているものを、まとめて囲む箱(画面の座標) */
+    const 囲み = (els) => {
+      let x1 = Infinity; let y1 = Infinity; let x2 = -Infinity; let y2 = -Infinity
+      for (const el of els) {
+        const r = el.getBoundingClientRect()
+        if (r.width === 0 && r.height === 0) continue
+        x1 = Math.min(x1, r.left); y1 = Math.min(y1, r.top)
+        x2 = Math.max(x2, r.right); y2 = Math.max(y2, r.bottom)
+      }
+      if (!Number.isFinite(x1)) return null
+      const 丸 = (v) => Math.round(v * 10) / 10
+      return { 幅: 丸(x2 - x1), 高: 丸(y2 - y1), 上: 丸(y1), 下: 丸(y2) }
+    }
+    const R = (el) => {
+      const b = el.getBoundingClientRect(); const 丸 = (v) => Math.round(v * 10) / 10
+      return { 左: 丸(b.left), 右: 丸(b.right), 幅: 丸(b.width), 高: 丸(b.height) }
+    }
+    const 字 = (el) => Math.round(parseFloat(window.getComputedStyle(el).fontSize) * 10) / 10
+    const sh = document.querySelector('.player--dock .shuffle-key')
+    const rep = document.querySelector('.player--dock .repeat-key')
+    const 速 = document.querySelector('.player--dock .player-rate-now')
+    const 数 = document.querySelector('.player--dock .player-at')
+    const 数字 = document.querySelector('.player--dock .player-at-n')
+    if (!sh || !rep || !速 || !数 || !数字) return null
+    const svg = rep.querySelector('svg')
+    return {
+      輪: 囲み(svg.querySelectorAll('path')),
+      点: 囲み(svg.querySelectorAll('circle')),
+      点の数: svg.querySelectorAll('circle').length,
+      シャ: 囲み(sh.querySelectorAll('svg > *')),
+      箱シャ: R(sh), 箱くり: R(rep), 箱速: R(速), 箱数: R(数),
+      速の字: 字(速), 数の字: 字(数字),
+    }
+  })
+  const 見た = []
+  for (let i = 0; i < 4; i += 1) {
+    const m = await 測る()
+    if (!m) break
+    見た.push(m)
+    await page.click('.player--dock .repeat-key')
+    await page.waitForTimeout(140)
+  }
+  const a = 見た[0]
+  const 点あり = 見た.filter((m) => m.点の数 > 0)
+  /** 3つのあいだ(シャッフル→くり返し / くり返し→速さ) */
+  const 間 = a ? [Math.round((a.箱くり.左 - a.箱シャ.右) * 10) / 10,
+    Math.round((a.箱速.左 - a.箱くり.右) * 10) / 10] : []
+  if (見た.length < 4 || !a?.輪 || !a?.シャ) {
+    ng('右の3つ … 黒帯の絵が測れない', `${見た.length} 通りしか読めなかった`)
+  } else if (a.輪.幅 < a.シャ.幅 * 0.9) {
+    /* ①**輪を縮めると、ここが赤くなる**(0.74 倍に戻すと 3/4 になる) */
+    ng('右の3つ … くり返しの輪が、シャッフルより小さく描かれている',
+      `輪 ${a.輪.幅}px / シャッフル ${a.シャ.幅}px`
+      + '。**点を囲いの中に入れたので、輪を縮める理由は無い**(第5.430節)')
+  } else if (点あり.some((m) => m.点.上 <= m.輪.上 || m.点.下 >= m.輪.下)) {
+    /* ②点を輪の外(下)へ戻すと赤くなる */
+    const x = 点あり.find((m) => m.点.上 <= m.輪.上 || m.点.下 >= m.輪.下)
+    ng('右の3つ … くり返しの点が、矢印の囲いの外に出ている',
+      `点 ${x.点.上}〜${x.点.下} / 輪 ${x.輪.上}〜${x.輪.下}`)
+  } else if (a.シャ.高 >= a.輪.高) {
+    /* ③はみ出しを戻す(縦 1.0)と、2つの高さが同じになって赤くなる */
+    ng('右の3つ … シャッフルの上下のはみ出しが、くり返しより小さくなっていない',
+      `シャッフル ${a.シャ.高}px / 輪 ${a.輪.高}px`)
+  } else if (new Set(見た.map((m) => `${m.輪.幅}x${m.輪.高}`)).size !== 1) {
+    /* ④「しない」のときだけ小さい、が戻ってこないように */
+    ng('右の3つ … くり返しの輪の大きさが、段によって変わる',
+      見た.map((m) => `点${m.点の数}:${m.輪.幅}x${m.輪.高}`).join(' / '))
+  } else if (a.箱シャ.幅 !== a.箱くり.幅 || a.箱シャ.高 !== a.箱くり.高) {
+    ng('右の3つ … シャッフルとくり返しの、押せる箱の大きさが違う',
+      `${a.箱シャ.幅}x${a.箱シャ.高} / ${a.箱くり.幅}x${a.箱くり.高}`)
+  } else if (a.速の字 > a.数の字) {
+    /* ⑥**めったに触らない速さが、いちばん目立つ**のを止める */
+    ng('右の3つ … 速さの字が、左の数字より大きい',
+      `速さ ${a.速の字}px / 数字 ${a.数の字}px`)
+  } else if (間.some((g) => g < 0) || new Set(間).size !== 1) {
+    ng('右の3つ … 3つのあいだが、組によって違う', `${間.join(' / ')} px`)
+  } else {
+    ok(`右の3つ … 輪は原寸(${a.輪.幅}px・シャッフル ${a.シャ.幅}px)で`
+      + `4段とも同じ大きさ。点は囲いの中。シャッフルは ${a.シャ.高}px と`
+      + `輪 ${a.輪.高}px より低い。箱は ${a.箱シャ.幅}x${a.箱シャ.高} でそろい、`
+      + `速さ ${a.速の字}px ≦ 数字 ${a.数の字}px、あいだは ${間[0]}px`)
+  }
+  await page.close()
 }
 
 /* ══════════════════════════════════════════════════════════════════════

@@ -10351,6 +10351,30 @@ button.wbfilter-ctl { text-align: left; }
 .player--dock .player-rate-now { color: var(--player-accent); }
 .player--dock .player-rate-now:hover { color: #fff; }
 
+/* ══════════════════════════════════════════════════════════════════
+   **右の3つ(シャッフル・くり返し・速さ)を、ひとまとまりに**
+   (2026-10-09 利用者の指定・第5.430節・利用者がえらんだ案 E3)
+
+     > リピートのアイコンとその右の再生スピードと3つを
+     > バランスよくまとめた上で大きさのバランスも整えてください。
+
+   5通り描いて見比べてもらい、**いちばん詰めた形**に決まった。
+   3つを寄せると「1つのまとまり」に見え、左の数字と釣り合う。
+
+   **この帯だけ。** 上の帯(`.player--bar`)と集中モードの帯(`.focus-bar`)は
+   触っていない —— 言われたのは下の黒帯である
+   (直すのは、言われた場所だけ・`.claude/rules/common.md`)。 */
+.player--dock .repeat-key, .player--dock .shuffle-key { width: 30px; height: 28px; }
+.player--dock .repeat-key .icon,
+.player--dock .shuffle-key .icon { width: 18px; height: 18px; }
+/* 速さの字も、絵に合わせて1段落とす。**高さは絵の箱とそろえる** ——
+   そろえないと、押せる範囲だけが背高のっぽになる */
+.player--dock .player-rate-now { font-size: var(--fs-12); min-height: 28px; }
+/* **3つのあいだ。** 絵は 18px で、箱(30px)のまん中に描かれるので、
+   描かれているものどうしは 8px 離れている ——
+   接して見えるのは箱であって、絵ではない */
+.player--dock .player-head-r { gap: var(--sp-2); }
+
 
 /* ── ① いまどこか・くり返し・速さ ────────────────────────────────
      **いまどこかは左**(いちばん読む)、操作は右へ寄せる。
