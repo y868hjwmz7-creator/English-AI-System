@@ -326,7 +326,15 @@ export default function ReviewScope({
       {open && (
         <SettingsSheet
           anchorEl={sortRef.current}
-          onClose={() => setOpen(false)}
+          /* ★ **閉じたら、入力の印をこのボタンへ戻す**(2026-10-09)。
+               中の `<select>`(詳しくしぼる)を触ると、**閉じたあとも
+               印がそこに残る。** 矢印キーは「字を打っている最中は
+               1つも効かせない」(`cardMove.js` の `typing`)ので、
+               **そのまま練習に戻っても ← → ↑ ↓ が効かない**
+               —— 利用者の指摘「Quick Response 上で矢印キーが
+               効かなくなりました」。
+               **開いた本人に戻す**のは、吹き出しの決まりどおりでもある */
+          onClose={() => { setOpen(false); sortRef.current?.focus() }}
           title={出しかたと呼ぶ}
           /* 札を押すと数が変わり、箱の高さも変わる。**置き直す合図を渡す** */
           placeKey={`${pick}/${size}/${narrowed}/${form}/${order}/${repeat}/${shuffle}/${moreOpen}`}

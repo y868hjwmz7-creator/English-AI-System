@@ -98,12 +98,23 @@ export const edgeBand = (outer, card) => ({
    矢印キー
    ══════════════════════════════════════════════════════════════════ */
 
-/** 矢印キー → 何をするか。**知らないキーは `null`**(既定は「何もしない」) */
+/**
+ * キー → 何をするか。**知らないキーは `null`**(既定は「何もしない」)。
+ *
+ * ★ **スペースで、正解を出したり消したり**(2026-10-09 利用者の指定)。
+ *
+ *   > そして正解（日本語・英語）を表示したり消したりするのを
+ *   > スペースでできるようにしてください。
+ *
+ * **矢印は送りと判定、スペースは「見る」。** 役目が重ならない。
+ */
 const KEYS = {
   ArrowLeft: 'prev',
   ArrowRight: 'next',
   ArrowUp: 'ok',
   ArrowDown: 'yet',
+  ' ': 'peek',
+  Spacebar: 'peek',   // 古いブラウザはこの名前で来る
 }
 
 /**
@@ -120,14 +131,19 @@ const KEYS = {
  * @param {object} o  `{ typing }` … いま入力欄に字を打っているか
  * @returns {'prev'|'next'|'ok'|'yet'|null}
  */
-export function keyMove(e, { typing = false } = {}) {
+export function keyMove(e, { typing = false, onButton = false } = {}) {
   if (!e || typing) return null
   if (e.ctrlKey || e.metaKey || e.altKey) return null
-  return KEYS[e.key] ?? null
+  const move = KEYS[e.key] ?? null
+  /* ★ **ボタンの上でスペースを押したら、そのボタンが押される**(ブラウザの決まり)。
+       ここで横取りすると、**1回の操作で2つ起きる**。
+       矢印はボタンを押さないので、これまでどおり効かせる */
+  if (move === 'peek' && onButton) return null
+  return move
 }
 
-/** **キーの印**。ボタンの中に出す(「まだ ↓」「覚えた ↑」) */
-export const KEY_MARK = { prev: '←', next: '→', ok: '↑', yet: '↓' }
+/** **キーの印**。ボタンの中に出す(「まだ ↓」「覚えた ↑」「意味を見る ␣」) */
+export const KEY_MARK = { prev: '←', next: '→', ok: '↑', yet: '↓', peek: '␣' }
 
 /**
  * ボタンに出す言葉。**印は呼ぶ側で足さない**(1か所で組む)。
@@ -236,7 +252,12 @@ export const flyY = (move) => {
   return '0'
 }
 
-/** その動きで、中身を流すか。**4つとも流す**(向きが違うだけ) */
+/**
+ * その動きで、中身を流すか。
+ *
+ * **送りと判定は流す。** スペース(`peek`)は**流さない** ——
+ * あれは同じカードの中で、答えを出したり消したりするだけである。
+ */
 export const flies = (move) => ['prev', 'next', 'ok', 'yet'].includes(move)
 
 /* ══════════════════════════════════════════════════════════════════

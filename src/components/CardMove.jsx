@@ -58,6 +58,18 @@ import { FLY_MS, TAP_MIN, edgeBand, edgeFits, flies, flyX, flyY, keyMove } from 
  */
 export const CardMoveCtx = createContext(null)
 
+/**
+ * ★ **スペースで、正解を出したり消したり**(2026-10-09 利用者の指定)。
+ *
+ * **答えを出しているかどうかは、カードの中が持っている**
+ * (Quick Response の `QrCard`)。入れ物の `CardMove` までは届かないので、
+ * **カードの側から「これを呼んでください」と登録してもらう。**
+ *
+ * **道を2つ作らない** —— 登録が無ければ、画面が渡した `onPeek` を呼ぶ
+ * (単語帳はそちらを使う)。
+ */
+export const CardPeekCtx = createContext(null)
+
 /** いま字を打っているか。**打っていたら矢印キーを1つも効かせない** */
 function typingNow() {
   try {
@@ -72,6 +84,8 @@ function typingNow() {
 export default function CardMove({
   /** 操作が来たときに呼ぶもの。**渡されなかったものは効かせない** */
   onPrev = null, onNext = null, onOk = null, onYet = null,
+  /** ★ **スペース。正解を出したり消したり**(2026-10-09 利用者の指定) */
+  onPeek = null,
   /** 効かせるか(終わりの画面などでは `false`) */
   on = true,
   children,
@@ -84,7 +98,16 @@ export default function CardMove({
 
   /* 鳴らしている最中に呼ぶものは控えで持つ(いつも最新になる) */
   const doRef = useRef({})
-  doRef.current = { prev: onPrev, next: onNext, ok: onOk, yet: onYet }
+  /** カードの側が登録した「答えを出したり消したり」(無ければ画面のもの) */
+  const peekRef = useRef(null)
+  const 登録 = useCallback((fn) => { peekRef.current = fn ?? null }, [])
+  doRef.current = {
+    prev: onPrev,
+    next: onNext,
+    ok: onOk,
+    yet: onYet,
+    peek: () => { const f = peekRef.current ?? onPeek; if (typeof f === 'function') f() },
+  }
 
   /** その操作を行う。**無ければ何もしない**(既定は「できない」側) */
   const run = useCallback((move) => {
@@ -163,7 +186,11 @@ export default function CardMove({
   useEffect(() => {
     if (!on) return undefined
     const 聞く = (e) => {
-      const move = keyMove(e, { typing: typingNow() })
+      const move = keyMove(e, {
+        typing: typingNow(),
+        /* **ボタンの上でスペースを押したら、そのボタンに任せる** */
+        onButton: document.activeElement?.tagName === 'BUTTON',
+      })
       if (!move) return
       /* **ページの送りとぶつけない。** ↑↓ はふだん画面を送るキーである */
       e.preventDefault()
@@ -177,6 +204,7 @@ export default function CardMove({
   const 右出す = edgeFits(space.right)
 
   return (
+    <CardPeekCtx.Provider value={登録}>
     <CardMoveCtx.Provider value={on ? go : null}>
       {/* ★ **飛ぶのは、線と線のあいだの中身だけ**(2026-10-08 利用者の指定)。
 
@@ -208,6 +236,7 @@ export default function CardMove({
         )}
       </div>
     </CardMoveCtx.Provider>
+    </CardPeekCtx.Provider>
   )
 }
 

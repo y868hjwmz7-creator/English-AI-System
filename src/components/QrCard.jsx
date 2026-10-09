@@ -32,8 +32,8 @@
  *   教材の中は**その場で言えたか**、復習は**これから言えるか**を訊いている。
  *   単語帳が「まだ」/「覚えかけ」と訊くのと同じ関係である。
  */
-import { useEffect, useRef, useState } from 'react'
-import { MoveArrow } from './CardMove.jsx'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { CardPeekCtx, MoveArrow } from './CardMove.jsx'
 import SpeakButton from './SpeakButton.jsx'
 import RepeatToggle from './RepeatToggle.jsx'
 import EnglishText from './EnglishText.jsx'
@@ -133,6 +133,16 @@ export default function QrCard({
 
   // 出題が変わったら、答えも訳も閉じた状態から
   useEffect(() => { setShown(false); setJaOn(false); stopReading() }, [key])
+
+  /* ★ **スペースで、答えを出したり消したり**(2026-10-09 利用者の指定)。
+       **答えを出しているかはここが持っている**ので、
+       入れ物(`CardMove`)へ「これを呼んでください」と登録する。
+       **押すボタンと同じ状態を切り替えるだけ**(道を2つ作らない) */
+  const 登録 = useContext(CardPeekCtx)
+  useEffect(() => {
+    登録?.(() => setShown((v) => !v))
+    return () => 登録?.(null)
+  }, [登録])
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])

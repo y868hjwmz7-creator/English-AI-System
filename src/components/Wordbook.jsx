@@ -2415,7 +2415,10 @@ export default function Wordbook({
                **押すボタンとまったく同じ道を通る**(`answer()`)ので、
                記録するかどうかの決まりは1ミリも変わらない */
             onOk={() => answer(card, canLearning ? 'learning' : 'known')}
-            onYet={() => answer(card, 'unknown')}>
+            onYet={() => answer(card, 'unknown')}
+            /* ★ **スペースで、答えを出したり消したり**(2026-10-09 利用者の指定)。
+                 **押すボタンと同じ状態を切り替えるだけ**(道を2つ作らない) */
+            onPeek={() => setShown((v) => !v)}>
           <div className={`wordcard${isSelfGraded(form) ? ' wordcard--recall' : ''}`}
                ref={cardRef}>
 
