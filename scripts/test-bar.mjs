@@ -11128,15 +11128,23 @@ for (const W of [1280, 794, 453, 390, 320]) {
   }
 
   /* ── 聞き流し。**練習の画面から押して、本当に出るか** ───────────── */
-  /* ★ **道具は「出しかた」から出た**(第5.414節・段階3・利用者の指定)。
-       聞き流しは**上の帯**へ、紙は **☰ の中**へ移した。
-       だから「出しかたの中に道具が2つ」は、もう**無いのが正しい** ——
-       **「出る」と「出ない」の両方を見る**(CLAUDE.md) */
+  /* ★ **紙は「出しかた」の中へ戻った**(第5.436節・2026-10-08 利用者の指定)。
+
+         > PDF/印刷の機能を左のハンバーガーに入れるのをやめてください。
+         > 右上のメニューに入れてください。
+
+       第5.414節では「道具は出しかたから出した(聞き流しは上の帯・紙は ☰)」
+       だったが、**紙だけ、あとから戻された。**
+       いま正しいのは**紙が在って、聞き流しが無い**ことである ——
+       **「出る」と「出ない」の両方を見る**(CLAUDE.md)。
+       **名前で見分ける**(`wb-paper` / `wb-listen`)—— 文字で探すと、
+       言葉を変えた日に黙る */
   await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
   await page.waitForTimeout(500)
-  const 道具 = await page.evaluate(() =>
-    [...document.querySelectorAll('.sheet .wb-listen, .setpop .wb-listen')]
-      .map((x) => x.textContent.trim()))
+  const 中 = (sel) => page.evaluate((q) =>
+    [...document.querySelectorAll(q)].map((x) => x.textContent.trim()), sel)
+  const 紙 = await 中('.sheet .wb-paper, .setpop .wb-paper')
+  const 道具 = await 中('.sheet .wb-listen, .setpop .wb-listen')
   await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
   await page.waitForTimeout(300)
   /* **「出しかた」の中のものを、名指しで押す。**
@@ -11162,14 +11170,17 @@ for (const W of [1280, 794, 453, 390, 320]) {
     ある: !!document.querySelector('.radio'),
     文: (document.querySelector('.radio')?.textContent ?? '').replace(/\s+/g, ' ').slice(0, 120),
   }))
-  if (道具.length !== 0) {
-    ng('聞き流し … 「出しかた」に道具が残っている(☰ と上の帯へ移した)',
+  if (紙.length === 0) {
+    ng('出しかた … 印刷 / PDF が無い(右上のメニューに入れる・第5.436節)')
+  } else if (道具.length !== 0) {
+    ng('聞き流し … 「出しかた」に聞き流しが残っている(上の帯へ移した)',
       道具.join(' / '))
   } else if (!流.ある) {
     ng('聞き流し … 練習の画面から押しても、何も出ない',
       '**押す場所と、受け取る場所は同じ数だけ要る**(第5.191節)')
   } else {
     ok(`聞き流し … 練習の画面からも開ける(${流.文.slice(0, 40)}…)`)
+    ok(`出しかた … 印刷 / PDF は右上のメニューの中にある(${紙.join(' / ')})`)
   }
   await page.close()
 }

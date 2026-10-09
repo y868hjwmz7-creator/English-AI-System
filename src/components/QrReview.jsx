@@ -726,7 +726,7 @@ export default function QrReview({
    * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
    */
   const listen = async () => {
-    /* ★ **並びは `orderToUse()` 1か所**(第5.418節)。
+    /* ★ **並びは `orderToUse()` 1か所**(第5.436節)。
        ここだけ生の `order` を渡していたので、**シャッフルのスイッチが
        聞き流しに効いていなかった**(出題とは別の道を通っていた) */
     const pool = orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order }))
@@ -751,7 +751,7 @@ export default function QrReview({
      練習の最中に「ランダム / 教材ごと」を変えても**組み直されなかった**
      —— 第5.191節で「絞ったのに出る問が前のまま」を直したときと、
      まったく同じ抜け方である */
-  /* ★ **シャッフルも鍵に入れる**(第5.418節)。`order` を足した第5.244節と
+  /* ★ **シャッフルも鍵に入れる**(第5.436節)。`order` を足した第5.244節と
      まったく同じ抜け方で、入り切りを変えても組み直されなかった */
   const runKey = `${runKeyOf({ scope, size, filter, group, shuffle })}|${order}|${poolKey}`
   const runKeyRef = useRef(runKey)
@@ -775,7 +775,7 @@ export default function QrReview({
   }
 
   /**
-   * ★ **いま回した問を、もう一度**(第5.418節・2026-10-09 利用者の指摘)。
+   * ★ **いま回した問を、もう一度**(第5.436節・2026-10-09 利用者の指摘)。
    *
    *   > 10問を選んで「繰り返す」を選んでいるのに終了すると
    *   > 「次の10後に進む」となり、この時点でおかしいです。
@@ -1107,7 +1107,12 @@ export default function QrReview({
   const paperBox = (
     <>
       {/* 何問ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-      <button type="button" className="btn btn--quiet wb-listen"
+      {/* ★ **名前は `wb-paper`**(第5.436節・2026-10-09)。
+             もとは聞き流しと同じ `wb-listen` を着せていたので、
+             **「出しかたの中に聞き流しが残っていないか」を見ていた見張りが、
+             紙のボタンを聞き流しと取り違えて赤くなった。**
+             **違うものに、同じ名前を付けない**(`.claude/rules/common.md`) */}
+      <button type="button" className="btn btn--quiet wb-paper"
               disabled={sheetPairs.length === 0 || printing}
               onClick={() => setPrinting(true)}>
         <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 問)`}
@@ -1342,7 +1347,7 @@ export default function QrReview({
                   `shouldRecord()` が記録しないので、何周しても
                   明日の復習は空にならない(単語帳とまったく同じ) */}
               <div className="btn-row">
-                {/* ★ **「繰り返す」は、いま回した問をもう一度**(第5.418節)。
+                {/* ★ **「繰り返す」は、いま回した問をもう一度**(第5.436節)。
                      残りがあっても**こちらが先**である。
                      もとは残りが 0 のときだけ出していたので、
                      10 問を選んで入れていても「つぎの 10 問」しか出なかった */}

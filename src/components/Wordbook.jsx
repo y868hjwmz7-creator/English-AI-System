@@ -478,7 +478,7 @@ export default function Wordbook({
   const [pickedChoice, setPickedChoice] = useState(null)
   const doneRef = useRef([])                    // この10語の結果
   /**
-   * ★ **この回に出した語そのもの**(第5.418節・2026-10-09 利用者の指摘)。
+   * ★ **この回に出した語そのもの**(第5.436節・2026-10-09 利用者の指摘)。
    *
    *   > 10問を選んで「繰り返す」を選んでいるのに終了すると
    *   > 「次の10後に進む」となり、この時点でおかしいです。
@@ -1134,7 +1134,7 @@ export default function Wordbook({
          **並びは `orderToUse()` 1か所**が決める */
     const list = buildSession(pool, takeCount(size, pool.length),
       { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) })
-    /* ★ **この回の語を控える**(第5.418節)。「繰り返す」が回す相手である */
+    /* ★ **この回の語を控える**(第5.436節)。「繰り返す」が回す相手である */
     roundRef.current = list
     setQueue(list)
     doneRef.current = []
@@ -1146,7 +1146,7 @@ export default function Wordbook({
   }, [poolNow, size, order, shuffle])
 
   /**
-   * ★ **いま回した語を、もう一度**(第5.418節・2026-10-09 利用者の指摘)。
+   * ★ **いま回した語を、もう一度**(第5.436節・2026-10-09 利用者の指摘)。
    *
    * **池から組み直さない。** 答えた語は次に出る日が先へ動いているので、
    * 組み直すと**別の語**が出てくる —— それは「つぎの ◯ 語」である。
@@ -1204,7 +1204,7 @@ export default function Wordbook({
    * `setFilter` のすぐあとでは古い値しか読めないので、
    * **値そのものを見張って、変わったら組み直す。**
    */
-  /* ★ **シャッフルも鍵に入れる**(第5.418節)。入れないと、練習の最中に
+  /* ★ **シャッフルも鍵に入れる**(第5.436節)。入れないと、練習の最中に
      「ランダム」を入れ替えても組み直されない(**効かない操作を見せない**) */
   const runKey = runKeyOf({ scope, size, filter, group, order, shuffle })
   const runKeyRef = useRef(runKey)
@@ -1878,7 +1878,12 @@ export default function Wordbook({
   const paperBox = (
     <div className="wb-tools">
       {/* 何語ぶん刷るのかを、**押す前に**出す(紙は戻せない) */}
-      <button type="button" className="btn btn--quiet wb-listen"
+      {/* ★ **名前は `wb-paper`**(第5.436節・2026-10-09)。
+             もとは聞き流しと同じ `wb-listen` を着せていたので、
+             **「出しかたの中に聞き流しが残っていないか」を見ていた見張りが、
+             紙のボタンを聞き流しと取り違えて赤くなった。**
+             **違うものに、同じ名前を付けない**(`.claude/rules/common.md`) */}
+      <button type="button" className="btn btn--quiet wb-paper"
               disabled={sheetPairs.length === 0 || printing}
               onClick={() => setPrinting(true)}>
         <PrintIcon />{printing ? '紙に出しています…' : `印刷 / PDFで保存(${sheetPairs.length} 語)`}
@@ -2168,7 +2173,7 @@ export default function Wordbook({
             )}
           >
             {/* ★ **「繰り返す」は、いま回した語をもう一度**
-                 (第5.418節・2026-10-09 利用者の指摘)。
+                 (第5.436節・2026-10-09 利用者の指摘)。
                  残りがあっても**こちらが先**である —— 入れている人は
                  「つぎへ進む」ではなく「もう一度」を押したい。
                  **間隔の決まりは壊れない。** 先取りしたぶんは
