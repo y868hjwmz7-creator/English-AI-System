@@ -726,7 +726,10 @@ export default function QrReview({
    * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
    */
   const listen = async () => {
-    const pool = orderQrPairs(shown.map(qrPairOf), order)
+    /* ★ **並びは `orderToUse()` 1か所**(第5.418節)。
+       ここだけ生の `order` を渡していたので、**シャッフルのスイッチが
+       聞き流しに効いていなかった**(出題とは別の道を通っていた) */
+    const pool = orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order }))
     if (!pool.length) return
     setRadio(pool)
     /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
@@ -748,7 +751,9 @@ export default function QrReview({
      練習の最中に「ランダム / 教材ごと」を変えても**組み直されなかった**
      —— 第5.191節で「絞ったのに出る問が前のまま」を直したときと、
      まったく同じ抜け方である */
-  const runKey = `${runKeyOf({ scope, size, filter, group })}|${order}|${poolKey}`
+  /* ★ **シャッフルも鍵に入れる**(第5.418節)。`order` を足した第5.244節と
+     まったく同じ抜け方で、入り切りを変えても組み直されなかった */
+  const runKey = `${runKeyOf({ scope, size, filter, group, shuffle })}|${order}|${poolKey}`
   const runKeyRef = useRef(runKey)
   useEffect(() => {
     if (!run) { runKeyRef.current = runKey; return }
@@ -765,6 +770,28 @@ export default function QrReview({
     const take = takeCount(size, pending.length)
     setRun(pending.slice(0, take))
     setPending(pending.slice(take))
+    setAt(0)
+    setDone([])
+  }
+
+  /**
+   * ★ **いま回した問を、もう一度**(第5.418節・2026-10-09 利用者の指摘)。
+   *
+   *   > 10問を選んで「繰り返す」を選んでいるのに終了すると
+   *   > 「次の10後に進む」となり、この時点でおかしいです。
+   *   > そして、シャッフルが機能しているかは同じ範囲が繰り返されないと
+   *   > 機能しているか分かりません
+   *
+   * **残り(`pending`)には手を付けない。** 回すのは `run` そのもので、
+   * 並べ替えは `start()` とまったく同じ道(`orderQrPairs` + `orderToUse`)を
+   * 通す —— シャッフルが入っていれば並び替わる。
+   * **間隔の決まりは壊れない**(先取りしたぶんは `shouldRecord()` が
+   * 記録しない。単語帳とまったく同じ)。
+   */
+  const again = () => {
+    const list = orderQrPairs(run ?? [], orderToUse(QR_ORDERS, { shuffle, order }))
+    if (!list.length) return
+    setRun(list)
     setAt(0)
     setDone([])
   }
@@ -900,8 +927,8 @@ export default function QrReview({
     if (radioKeyRef.current === runKey) return
     if (loaded !== poolKey) return
     radioKeyRef.current = runKey
-    setRadio(orderQrPairs(shown.map(qrPairOf), order))
-  }, [runKey, radio, loaded, poolKey, shown, order])
+    setRadio(orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order })))
+  }, [runKey, radio, loaded, poolKey, shown, order, shuffle])
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
@@ -1315,15 +1342,21 @@ export default function QrReview({
                   `shouldRecord()` が記録しないので、何周しても
                   明日の復習は空にならない(単語帳とまったく同じ) */}
               <div className="btn-row">
-                {pending.length > 0 && (
-                  <button type="button" className="btn btn--primary" onClick={next}>
-                    つぎの {takeCount(size, pending.length)} 問
+                {/* ★ **「繰り返す」は、いま回した問をもう一度**(第5.418節)。
+                     残りがあっても**こちらが先**である。
+                     もとは残りが 0 のときだけ出していたので、
+                     10 問を選んで入れていても「つぎの 10 問」しか出なかった */}
+                {repeat && (
+                  <button type="button" className="btn btn--primary" onClick={again}>
+                    <RepeatIcon />
+                    この {run?.length ?? 0} 問をもう一度
                   </button>
                 )}
-                {pending.length === 0 && repeat && (
-                  <button type="button" className="btn btn--primary" onClick={start}>
-                    <RepeatIcon />
-                    もう一度この範囲を回す
+                {pending.length > 0 && (
+                  <button type="button"
+                          className={`btn ${repeat ? 'btn--quiet' : 'btn--primary'}`}
+                          onClick={next}>
+                    つぎの {takeCount(size, pending.length)} 問
                   </button>
                 )}
                 <button type="button"

@@ -477,6 +477,21 @@ export default function Wordbook({
   /** 4択で押した選択肢。**まちがいを赤くする相手**を見分けるために持つ */
   const [pickedChoice, setPickedChoice] = useState(null)
   const doneRef = useRef([])                    // この10語の結果
+  /**
+   * ★ **この回に出した語そのもの**(第5.418節・2026-10-09 利用者の指摘)。
+   *
+   *   > 10問を選んで「繰り返す」を選んでいるのに終了すると
+   *   > 「次の10後に進む」となり、この時点でおかしいです。
+   *   > そして、シャッフルが機能しているかは同じ範囲が繰り返されないと
+   *   > 機能しているか分かりません
+   *
+   * 「繰り返す」は**いま回した語をもう一度**という意味である。
+   * 池から組み直すと、答えた語は期限が先へ動いているので**別の語**が
+   * 出てくる —— それは「つぎの ◯ 語」と同じことで、
+   * **同じことをするものを2つ見せない**(CLAUDE.md)に反する。
+   * シャッフルが効いているかも、同じ語が並び替わって初めて分かる。
+   */
+  const roundRef = useRef([])
   /** いま出している1語のカード。**画面のまん中に置く**ために場所を測る */
   const cardRef = useRef(null)
   /** 進み具合の行。狭い画面では、ここを画面の上にそろえる */
@@ -1117,8 +1132,11 @@ export default function Wordbook({
          シャッフルしない**形だった —— 切り替えが見えないので、
          入れたのに効いていないように見える(**効かない操作を見せない**)。
          **並びは `orderToUse()` 1か所**が決める */
-    setQueue(buildSession(pool, takeCount(size, pool.length),
-      { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) }))
+    const list = buildSession(pool, takeCount(size, pool.length),
+      { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) })
+    /* ★ **この回の語を控える**(第5.418節)。「繰り返す」が回す相手である */
+    roundRef.current = list
+    setQueue(list)
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
@@ -1126,6 +1144,33 @@ export default function Wordbook({
     setStarted(true)
     setRunning(true)
   }, [poolNow, size, order, shuffle])
+
+  /**
+   * ★ **いま回した語を、もう一度**(第5.418節・2026-10-09 利用者の指摘)。
+   *
+   * **池から組み直さない。** 答えた語は次に出る日が先へ動いているので、
+   * 組み直すと**別の語**が出てくる —— それは「つぎの ◯ 語」である。
+   * 「繰り返す」は**同じ範囲をもう一度**という意味なので、
+   * `roundRef` に控えた**その語そのもの**を回す。
+   *
+   * **並びは `start()` とまったく同じ道**(`buildSession` + `orderToUse`)。
+   * シャッフルが入っていれば並び替わる —— 利用者が
+   * 「シャッフルが機能しているか分かりません」と言ったのは、
+   * **同じ語が二度と出てこなかった**からである。
+   *
+   * **読み直さない**(`reload` を呼ばない)。読み直すと `start()` が
+   * 走って池から組み直してしまう。
+   */
+  const again = useCallback(() => {
+    const list = roundRef.current ?? []
+    if (!list.length) return
+    setQueue(buildSession(list, list.length,
+      { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) }))
+    doneRef.current = []
+    setResult(null)
+    setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
+    setPickedChoice(null)
+  }, [order, shuffle])
 
   /**
    * **聞き流しを始める**(2026-09 利用者の指定)。
@@ -1159,7 +1204,9 @@ export default function Wordbook({
    * `setFilter` のすぐあとでは古い値しか読めないので、
    * **値そのものを見張って、変わったら組み直す。**
    */
-  const runKey = runKeyOf({ scope, size, filter, group, order })
+  /* ★ **シャッフルも鍵に入れる**(第5.418節)。入れないと、練習の最中に
+     「ランダム」を入れ替えても組み直されない(**効かない操作を見せない**) */
+  const runKey = runKeyOf({ scope, size, filter, group, order, shuffle })
   const runKeyRef = useRef(runKey)
   useEffect(() => {
     if (!running || !started) { runKeyRef.current = runKey; return }
@@ -2120,28 +2167,35 @@ export default function Wordbook({
               </>
             )}
           >
-            {/* **選んだ範囲の残りから、選んだ語数だけ続ける。**
-                読み直してから組み直すので、箱が動いたぶんも映る */}
-            {restInScope > 0
-              ? (
-                <button type="button" className="btn btn--primary" onClick={reload}>
-                  つぎの {takeCount(size, restInScope)} 語
-                </button>
-              )
-              /* **「繰り返す」が入っていたら、行き止まりを作らない**
-                 (2026-09 利用者の指定)。読み直すと、答えた語も戻ってくる ——
+            {/* ★ **「繰り返す」は、いま回した語をもう一度**
+                 (第5.418節・2026-10-09 利用者の指摘)。
+                 残りがあっても**こちらが先**である —— 入れている人は
+                 「つぎへ進む」ではなく「もう一度」を押したい。
                  **間隔の決まりは壊れない。** 先取りしたぶんは
                  `shouldRecord()` が記録しないので、何周しても
                  明日の復習は空にならない。
-                 **数は書かない** —— 読み直すまで何語あるか分からない */
-              : repeat
-                ? (
-                  <button type="button" className="btn btn--primary" onClick={reload}>
-                    <RepeatIcon />
-                    もう一度この範囲を回す
-                  </button>
-                )
-                : <p className="hint">この範囲は終わりです。</p>}
+
+                 **残りがあるぶんは、灰色で残す**(**行き止まりを作らない**)——
+                 「繰り返す」を切りに行かないと先へ進めないのは困る */}
+            <div className="btn-row">
+              {repeat && (
+                <button type="button" className="btn btn--primary" onClick={again}>
+                  <RepeatIcon />
+                  この {roundRef.current.length} 語をもう一度
+                </button>
+              )}
+              {/* **選んだ範囲の残りから、選んだ語数だけ続ける。**
+                  読み直してから組み直すので、箱が動いたぶんも映る */}
+              {restInScope > 0 && (
+                <button type="button"
+                        className={`btn ${repeat ? 'btn--quiet' : 'btn--primary'}`}
+                        onClick={reload}>
+                  つぎの {takeCount(size, restInScope)} 語
+                </button>
+              )}
+            </div>
+            {restInScope === 0 && !repeat
+              && <p className="hint">この範囲は終わりです。</p>}
           </SessionResult>
         </div>
         </div>

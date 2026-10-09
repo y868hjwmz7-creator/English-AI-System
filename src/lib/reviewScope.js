@@ -354,6 +354,13 @@ export function runKeyOf({
      あれはいま出ているカードの見せ方で、組み直すと答えかけが消える。
      **繰り返す(`repeat`)も入れない** —— 出し切ったあとに効くものである */
   order = '',
+  /* ★ **シャッフルの入り切りも鍵に入れる**(第5.418節・2026-10-09)。
+     入っていなかったので、練習の最中に「ランダム」を入れ替えても
+     **組み直されなかった** —— 画面はまったく変わらないので、
+     利用者には「ランダムが機能していない」と見える。
+     第5.244節で `order` を足したときと、まったく同じ抜け方である。
+     **既定は `null`** —— 渡さない呼び手(紙・聞き流し)の鍵は変わらない */
+  shuffle = null,
 } = {}) {
   const f = filter ?? {}
   /* **鍵は `FILTER_KEYS`(`wordbookFilter.js`)から読む**(2026-09)。
@@ -361,8 +368,11 @@ export function runKeyOf({
      ときに**そこだけ反映されなかった。** 品詞を足したこの回で、
      同じ落とし穴を二度踏まないよう**一覧そのものを共有した。**
      `emptyFilter()` も `countNarrowed()` も、同じ一覧を見ている */
-  return [scope, size, group ?? '', order ?? '', ...FILTER_KEYS.map((k) => f[k] ?? '')]
-    .join('\u0000')
+  return [
+    scope, size, group ?? '', order ?? '',
+    shuffle == null ? '' : (shuffle ? 'on' : 'off'),
+    ...FILTER_KEYS.map((k) => f[k] ?? ''),
+  ].join('\u0000')
 }
 
 /**

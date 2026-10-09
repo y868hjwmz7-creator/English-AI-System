@@ -76,5 +76,15 @@ export function orderQrPairs(list, order) {
       return String(a.added_at ?? '').localeCompare(String(b.added_at ?? ''))
     })
   }
-  return shuffled(rows)
+  /* ★ **混ぜるのは「ランダム」を選んだときだけ**(第5.418節・2026-10-09)。
+       もとは**どの値でも混ぜていた**ので、シャッフルのスイッチを切っても
+       ("" が渡る)並びは変わらなかった —— 画面には
+       「シャッフルを切ったときの並び」と書いてあるのに、
+       **切れないスイッチ**だった(**効かない操作を見せない**・CLAUDE.md)。
+       どれが「ランダム」かは **`QR_ORDERS` が `random: true` で言う** ——
+       `=== 'shuffle'` と書き写さない(第5.414節と同じ決まり) */
+  if (order === QR_ORDERS.find((o) => o.random)?.id) return shuffled(rows)
+  /* **何も選んでいなければ、渡された順のまま**(溜まった順)。
+     **黙って並べ替えない** */
+  return rows
 }
