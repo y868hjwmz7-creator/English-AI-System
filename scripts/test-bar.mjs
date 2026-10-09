@@ -3851,9 +3851,13 @@ export default defineConfig({
     } else if (home.札.includes('ホーム')) {
       ng(`ホーム ${w}px … ホームそのものの箱が並んでいる`,
         '押しても同じ場所に留まるだけ。**効かない操作を見せない**')
-    } else if (home.説明 !== home.箱) {
-      ng(`ホーム ${w}px … 説明の無い箱がある(${home.説明} / ${home.箱})`,
-        '`desc` は `pages` が持つ(呼び名と説明を2か所に分けない)')
+    } else if (home.説明 !== 0) {
+      /* ★ **裏返した**(第5.431節・2026-10-09 利用者の指定「各カードの
+           説明文も不要です」)。もとは「どの箱にも説明が在るか」を見ていた ——
+           **決まりが変わったら、見張りも裏返す**(古い見張りを残すと、
+           直した日に赤くなって、直したほうを疑うことになる) */
+      ng(`ホーム ${w}px … 箱に説明文が残っている(${home.説明} 本)`,
+        '利用者の指定は「各カードの説明文も不要です」(第5.431節)')
     } else if (!home.押せる形 || !home.押せる) {
       ng(`ホーム ${w}px … 押せる形になっていない`
         + `(button ${home.押せる形} / いちばん低い箱 ${home.低い}px)`)
@@ -3908,23 +3912,34 @@ export default defineConfig({
       }
     })
     const look = await 測る()
-    /* **1つの画面だけでは足りない。** 開いた瞬間は必ず「ホーム」なので、
-       絵を1つに決め打ちしても**そこでは合ってしまう。**
-       だから**別の画面へ移って、もう一度**突き合わせる */
-    await page.evaluate(() => {
-      const burger = document.querySelector('.app-topbar .nav-burger')
-      if (!document.querySelector('.app-nav-item')?.offsetParent) burger.click()
-    })
-    await page.waitForTimeout(150)
-    const 移った = await page.evaluate(() => {
-      const x = [...document.querySelectorAll('.app-nav-item')]
-        .find((e) => e.querySelector('.app-nav-label').textContent.trim() === '単語帳')
-      if (!x) return false
-      x.click()
-      return true
-    })
-    await page.waitForTimeout(200)
+    /* **1つの画面だけでは足りない。** 絵を1つに決め打ちしても、
+       その画面では合ってしまう。だから**別の画面へ2つ移って**突き合わせる。
+
+       ★ **ホームでは絵を出さない**(第5.431節・2026-10-09 利用者の指定
+         「『ホーム』の文字とホームアイコンが重複して見えないよう、
+          どちらを主役にするか整理してください」)。
+       だから**開いた瞬間(ホーム)は「出ない側」**として見て、
+       **絵そのものは、ホーム以外の2画面で突き合わせる。** */
+    const 移る = async (名) => {
+      await page.evaluate(() => {
+        const burger = document.querySelector('.app-topbar .nav-burger')
+        if (!document.querySelector('.app-nav-item')?.offsetParent) burger.click()
+      })
+      await page.waitForTimeout(150)
+      const いけた = await page.evaluate((n) => {
+        const x = [...document.querySelectorAll('.app-nav-item')]
+          .find((e) => e.querySelector('.app-nav-label').textContent.trim() === n)
+        if (!x) return false
+        x.click()
+        return true
+      }, 名)
+      await page.waitForTimeout(200)
+      return いけた
+    }
+    const 移った = await 移る('単語帳')
     const look2 = 移った ? await 測る() : look
+    const 移った3 = await 移る('Quick Response')
+    const look3 = 移った3 ? await 測る() : look2
     /* **地の上(`--surface-0`)のままではないか。**
        明るい配色では #eaecef、暗い配色では #0c0c0b である */
     const 白い = /^rgb\(255, 255, 255\)$/.test(look.地)
@@ -3938,21 +3953,23 @@ export default defineConfig({
       ng(`${どこ} … 影が入っていない`,
         '`.app-stick` が箱ごと落とす(帯が3つまで入るので、帯そのものに'
         + ' 付けると下の帯に隠れて見えない)')
-    } else if (!look.絵) {
-      ng(`${どこ} … いまいる画面の絵が出ていない`)
-    } else if (look.絵 !== look.メニューの絵) {
-      ng(`${どこ} … メニューと違う絵が出ている`,
-        '`pages` から引いたものをそのまま渡す(対応表を2つ持たない)')
+    } else if (look.絵) {
+      /* **出ない側。** ホームは字だけである(第5.431節) */
+      ng(`${どこ} … ホームなのに、いまいる画面の絵が出ている`,
+        '「ホーム」の字とホームの絵が二重になる(第5.431節)')
     } else if (!look2.絵 || look2.絵 !== look2.メニューの絵) {
       ng(`${どこ} … 「${look2.名}」でメニューと違う絵が出ている`,
+        '`pages` から引いたものをそのまま渡す(対応表を2つ持たない)')
+    } else if (!look3.絵 || look3.絵 !== look3.メニューの絵) {
+      ng(`${どこ} … 「${look3.名}」でメニューと違う絵が出ている`,
         '画面を移っても、メニューと同じ絵でなければならない'
         + '(1つの画面だけ見ると、絵を決め打ちしても緑になる)')
-    } else if (look2.絵 === look.絵) {
-      ng(`${どこ} … 画面を移っても絵が変わらない(${look.名} / ${look2.名})`,
+    } else if (look2.絵 === look3.絵) {
+      ng(`${どこ} … 画面を移っても絵が変わらない(${look2.名} / ${look3.名})`,
         'いまいる画面の絵を出していない')
     } else {
-      ok(`${どこ} … 白い(${look.地})・影あり・`
-        + `「${look.名}」「${look2.名}」ともメニューと同じ絵`)
+      ok(`${どこ} … 白い(${look.地})・影あり・ホーム(${look.名})は字だけ・`
+        + `「${look2.名}」「${look3.名}」はメニューと同じ絵`)
     }
 
     /* ── ★ **RIZAP のマークと ☰ は、端から同じだけ内側にいる**
