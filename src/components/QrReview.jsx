@@ -75,7 +75,7 @@ import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
-import { MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
+import { GraduateIcon, MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
 /* ★ **出しかたの3つ**(第5.437節)。単語帳と同じ部品を使う(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
 /* **吹き出しの入れ物は、すでにあるものを使う**(新しい箱を作らない) */
@@ -1435,90 +1435,110 @@ export default function QrReview({
                あちらは集中モードや紙にも出るので、
                **言われていない場所を勝手に変えない**(CLAUDE.md) */
             showFrame
-            /* ★ **「もう出さない」はカードの右上へ**(第5.417節・
-                 2026-10-07 利用者の指定・段階4の案B-2)。
-                 もとは `extra`(答えの行)だったので、**判定のすぐ下に
-                 横幅いっぱいで並び、押し間違えやすかった。**
-                 **消す道そのものは1つも減らしていない** —— 置き場所だけ移した */
-            /* ★ **「聴く」「リピート」と同じ行の、右端に置く**
-                 (第5.417節・2026-10-08 利用者の指定)。
+            /* ★ **「もう出さない」が通ってきた道**(置き場所だけで4回動いた)。
 
-                 カードの右上(案B-2)に浮かせていたが、**話し手の名前
-                 (「Naomi (Backend Engineer)」)に重なった** ——
-                 問によって名前の長さが違うので、**重なるかどうかが
-                 問ごとに変わる**(浮かせたものは、下に何が来ても避けない)。
+                 | いつ | どこ | なぜ動いたか |
+                 |---|---|---|
+                 | 第5.417節より前 | `extra`(答えの行) | **判定のすぐ下に横幅いっぱい**で並び、押し間違えた |
+                 | 第5.417節・案B-2 | カードの右上に浮かせる | **話し手の名前に重なった**(浮かせた物は避けない) |
+                 | 第5.437節 | 見出しの行(`corner`)の右端 | 操作の行が4つで埋まった |
+                 | **第5.441節(いま)** | **操作の行のいちばん左**(`retire`) | **まん中そろえの行だったので、番号を右端へ押し出した** |
 
-                 この行なら**流れの中**なので、重なりようがない。
-                 判定のボタンからも1段離れたまま(案B-2 のねらいは保つ)。 */
-            /* ★ **「もう出さない」は見出しの行の右端へ**(第5.437節・
-                 2026-10-09 利用者の指定)。操作の行は、出しかたの3つと
-                 「聴く」で埋まった */
-            corner={(
-              <>
-                {/* ★ **字を「覚えた にする」に、見た目を札と同じ金の枠に**
-                     (第5.438節・2026-10-09 利用者の指定・案A + B)。
-
-                     > 「もう出さない」は「覚えた」に入れられることを
-                     > 分かりやすくしたい
-
-                     **行き先が字に入っている**ので、説明が要らない。
-                     **「覚えた」の札とまったく同じ見た目**(`chip--on`)なので、
-                     どこへ入るのかが目でも分かる。
-
-                     ついでに、**もとの「もう出さない」は字のほうが
-                     正しくなかった** —— 30 日たてばまた出る作りだった
-                     (いまは第5.438節で、自分で選ばないかぎり出ない)。
-                     **言葉は `tipOnce.js` 1か所**(書き写さない) */}
-                <button type="button" ref={retireRef}
-                        className="btn btn--small qr-retire chip--on"
-                        onClick={askRetire}>
-                  {RETIRE_LABEL}
-                </button>
-                {/* ★ **初めてのときだけ、吹き出しで言う**(第5.438節)。
-                     > 初めての時だけ吹き出しで「覚えたに入れます」の説明が
-                     > 出ますが、もう表示しないを選べばその後は表示されない
-                     **二度目からは、押した人はもう知っている** */}
-                {askTip && (
-                  <SettingsSheet
-                    anchorEl={retireRef.current}
-                    onClose={() => { setAskTip(false); retireRef.current?.focus() }}
-                    title={RETIRE_LABEL}
-                  >
-                    <p className="card-hint qr-retire-lead">{RETIRE_LEAD}</p>
-                    <div className="btn-row qr-retire-go">
-                      <button type="button" className="btn btn--primary"
-                              onClick={() => { setAskTip(false); retire() }}>
-                        {RETIRE_LABEL}
-                      </button>
-                      <button type="button" className="btn btn--quiet"
-                              onClick={() => setAskTip(false)}>
-                        やめる
-                      </button>
-                    </div>
-                    {/* **「もう表示しない」は、えらぶもの。** 押すと覚えて、
-                        そのまま1回ぶんを進める(押し直させない) */}
-                    <button type="button" className="btn btn--small btn--ghost"
-                            onClick={() => {
-                              tipClose(RETIRE_TIP)
-                              setAskTip(false)
-                              retire()
-                            }}>
-                      もう表示しない
-                    </button>
-                  </SettingsSheet>
-                )}
-              </>
-            )}
-            /* ★ **出しかたの3つ**(第5.437節)。単語帳とまったく同じ部品 */
+                 **消す道そのものは、1度も減らしていない。**
+                 動いているのは置き場所だけである。 */
+            /* ★ **操作の行(第5.437節 → 第5.441節で絵だけ4つ)**。
+                 単語帳とまったく同じ部品(`PracticeKnobs`)*/
             knobs={(
               <PracticeKnobs
                 unit="問"
+                /* ★ **問数のプルダウンは、ここから外した**(第5.441節・
+                   2026-10-10 利用者の確認「問数はカードから外し、
+                   右上の絞り込みの中だけでよいか → はい」)。
+                   **いま何問ずつかは、くり返しの絵の中に出る** */
                 size={size}
-                onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
                 shuffle={shuffle}
                 onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
                 repeat={repeat}
                 onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
+                /* ★ **「もう出さない」は、操作の行のいちばん左**
+                   (第5.441節・2026-10-10 利用者の指摘)。
+
+                     > 問題番号は問題文の上の真ん中で良いバランスだったのに
+                     > 勝手に右端にいっています。別の場所に移してください
+
+                   第5.437節でカードの見出しの行(`corner`)へ置いたのが
+                   間違いだった —— あの行は**まん中そろえ**なので、
+                   `margin-left: auto` の物を足すと**番号が左端へ飛ぶ。**
+                   こちらは4つの升目の1つなので、**ほかの物を動かさない。**
+
+                   **並び順は `PracticeKnobs` が持つ**(卒業帽 → ランダム →
+                   くり返す)。4つめの「聴く」は `QrCard` が置く */
+                retire={(
+                  <>
+                    {/* ★ **字を戻し、絵だけにした**(第5.441節・
+                         2026-10-10 利用者の指定)。
+
+                         > 「覚えたにする」もやはり「もう出さない」の方が
+                         > 良いです
+                         > もう出さないなんだな、て一目でわかるアイコンが
+                         > 欲しいですね
+
+                         第5.438節で「覚えた にする」という字にしたが、
+                         **利用者の言葉は「もう出さない」に戻った**
+                         (`RETIRE_LABEL` 1か所を書き換えてある)。
+
+                         **升目には字を出さない** —— 4つとも絵だけに
+                         そろえたので、ここだけ字だと背がそろわない。
+                         **行き先(「覚えた」に入る)は、初めての1回だけ
+                         吹き出しが言う**(すぐ下)。
+                         **字は `aria-label` で読み上げに届く** ——
+                         言葉は `tipOnce.js` 1か所から引く(書き写さない)。
+
+                         **金は着せない。** 操作の行の金は
+                         「**いま入っている**」の印である(ランダム・
+                         くり返す・鳴っている「聴く」)。これは**押すと
+                         1回きり起きるもの**なので、休んでいる灰のままにする */}
+                    <button type="button" ref={retireRef}
+                            className="btn btn--small knob qr-retire"
+                            aria-label={RETIRE_LABEL} title={RETIRE_LABEL}
+                            onClick={askRetire}>
+                      <GraduateIcon />
+                    </button>
+                    {/* ★ **初めてのときだけ、吹き出しで言う**(第5.438節)。
+                         > 初めての時だけ吹き出しで「覚えたに入れます」の説明が
+                         > 出ますが、もう表示しないを選べばその後は表示されない
+                         **二度目からは、押した人はもう知っている** */}
+                    {askTip && (
+                      <SettingsSheet
+                        anchorEl={retireRef.current}
+                        onClose={() => { setAskTip(false); retireRef.current?.focus() }}
+                        title={RETIRE_LABEL}
+                      >
+                        <p className="card-hint qr-retire-lead">{RETIRE_LEAD}</p>
+                        <div className="btn-row qr-retire-go">
+                          <button type="button" className="btn btn--primary"
+                                  onClick={() => { setAskTip(false); retire() }}>
+                            {RETIRE_LABEL}
+                          </button>
+                          <button type="button" className="btn btn--quiet"
+                                  onClick={() => setAskTip(false)}>
+                            やめる
+                          </button>
+                        </div>
+                        {/* **「もう表示しない」は、えらぶもの。** 押すと覚えて、
+                            そのまま1回ぶんを進める(押し直させない) */}
+                        <button type="button" className="btn btn--small btn--ghost"
+                                onClick={() => {
+                                  tipClose(RETIRE_TIP)
+                                  setAskTip(false)
+                                  retire()
+                                }}>
+                          もう表示しない
+                        </button>
+                      </SettingsSheet>
+                    )}
+                  </>
+                )}
               />
             )}
           />

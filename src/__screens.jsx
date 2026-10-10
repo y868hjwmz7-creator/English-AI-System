@@ -110,7 +110,7 @@ import JobBar from './components/JobBar.jsx'
 import { AppTopbar } from './components/AppNav.jsx'
 import CastChip from './components/CastChip.jsx'
 import {
-  BoltIcon, BookIcon, CardsIcon, DownloadIcon, EraserIcon, MicIcon,
+  BoltIcon, BookIcon, CardsIcon, DownloadIcon, EraserIcon, GraduateIcon, MicIcon,
   PrintIcon, RefreshIcon, ScreenIcon, TaskIcon,
 } from './components/Icons.jsx'
 /* ★ **ホーム**(第5.431節)。`pages` を props で受け取るだけなので、
@@ -1635,25 +1635,33 @@ const qrScreen = (plain) => (
           「ヒント内の『ヒント』の表示が崩れている」)。
           押した状態は本物でも呼ぶ側が持つので、ここでも props で渡す */}
       {/* `?say=1` … **言い換え**(英文が出題・第5.198節) */}
-      {/* ★ **出しかたの3つと「もう出さない」も、本物と同じ渡し方で**
-          (第5.437節)。**復習(`plain`)のときだけ** —— 教材の中の
-          Quick Response には、どちらも無い。
-          **骨組みだけが本物と食い違うと、検証は何も守らない**(CLAUDE.md) */}
+      {/* ★ **操作の行も、本物と同じ渡し方で**(第5.437節 →
+          **第5.441節で絵だけ4つ**)。**復習(`plain`)のときだけ** ——
+          教材の中の Quick Response には、どれも無い。
+          **骨組みだけが本物と食い違うと、検証は何も守らない**(CLAUDE.md)。
+
+          ★ **`corner` は無くなった**(第5.441節)。「もう出さない」は
+          `PracticeKnobs` の `retire`(行のいちばん左)へ移った ——
+          見出しの行に置くと**番号を右端へ押し出す**(実機で起きた) */}
       <QrCard pair={q.get('say') === '1' ? QR_SAY_PAIR : QR_PAIR}
               no={2} onAnswer={() => {}} showFrame={plain}
               hintOn={plain} onHint={() => {}}
-              /* ★ **字も見た目も、本物と1文字も違えない**(第5.438節)。
-                   「覚えた」の札とまったく同じ金の枠(`chip--on`)である */
-              corner={plain ? (
-                <button type="button" className="btn btn--small qr-retire chip--on">
-                  {RETIRE_LABEL}
-                </button>
-              ) : null}
               knobs={plain ? (
                 <PracticeKnobs
-                  unit="問" size={10} onSize={() => {}}
+                  unit="問" size={10}
                   shuffle onShuffle={() => {}}
                   repeat={false} onRepeat={() => {}}
+                  /* ★ **本物と1文字も違えない**(第5.441節)。
+                       class も `aria-label` も、本物と同じものを着せる ——
+                       `.knob` が囲みを外して絵を 32px にするので、
+                       **骨組みだけ `btn--small` のままだと、
+                       見張りが「そろっている」と言ってしまう** */
+                  retire={(
+                    <button type="button" className="btn btn--small knob qr-retire"
+                            aria-label={RETIRE_LABEL} title={RETIRE_LABEL}>
+                      <GraduateIcon />
+                    </button>
+                  )}
                 />
               ) : null} />
     </section>

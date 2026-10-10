@@ -2775,10 +2775,14 @@ export default function Wordbook({
                       (第5.437節・2026-10-09 利用者の指定)。
                       **Quick Response とまったく同じ部品**(`PracticeKnobs`)——
                       「これは単語帳にも共通の仕様にしたいです」 */}
+                  {/* ★ **問数のプルダウンは、ここから外した**(第5.441節・
+                      2026-10-10 利用者の確認)。選ぶのは**右上の絞り込みの
+                      中だけ**である(そちらは `onSize` を持っている)。
+                      **いま何語ずつかは、くり返しの絵の中に出る**ので、
+                      見えなくなってはいない(`RepeatCountIcon`)*/}
                   <PracticeKnobs
                     unit="語"
                     size={size}
-                    onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
                     shuffle={shuffle}
                     onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
                     repeat={repeat}
@@ -2808,7 +2812,7 @@ export default function Wordbook({
                       ここで渡すのは残りの2つである。
                       **`btn--quiet`(灰)を渡すのは、色を決めている印**でもある
                       —— `toneOn()` は、呼ぶ側が色を持っていれば足さない */}
-                  <SpeakButton text={word} className="knob btn--quiet" icon={false} />
+                  <SpeakButton text={word} className="knob" label={null} />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 覚えかけ。

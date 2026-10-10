@@ -62,6 +62,15 @@ export default function SpeakButton({
    *
    * **既定は出す側のまま。** ほかの画面の Listen は1つも変わらない
    * (**言われた場所だけを直す**・CLAUDE.md)。
+   *
+   * ★ **翌日、升目は「絵だけ」の側に決まった**(第5.441節・
+   * 2026-10-10 利用者の指定「囲みなしのアイコンのみに」)。
+   * **決まりは同じ**(升目は字だけか絵だけのどちらか)で、
+   * **えらんだ側が逆になった** —— いまは2か所とも `label={null}` を
+   * 渡して**字**を消しており、このスイッチは既定のままである。
+   * **消していないのは、同じ決まりの逆向きが要る日のため**ではなく、
+   * `label` と `icon` で**どちらを消すかを選べる**形そのものが
+   * この決まりの中身だからである。
    */
   icon = true,
   /**
@@ -254,9 +263,28 @@ export default function SpeakButton({
     <button type="button"
             className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`
               + (waiting ? ' is-waiting' : '')}
+            /* **字があるときは付けない。** 見えている字と二重に名前を
+               持つと、読み上げがどちらを読むか端末まかせになる */
+            aria-label={label ? undefined : (playing ? SPEAK_STOP : SPEAK_LISTEN)}
+            title={label ? undefined : (playing ? SPEAK_STOP : SPEAK_LISTEN)}
             onClick={play}>
       {icon && (playing ? <StopIcon /> : <SpeakerIcon />)}
-      <SteadyLabel keep={[label, SPEAK_STOP]}>{playing ? SPEAK_STOP : label}</SteadyLabel>
+      {/* ★ **`label={null}` なら、字を1つも出さない**(第5.441節・
+            2026-10-10 利用者の指定)。練習の操作の行は**絵だけ4つ**に
+            そろえたので、ここに字が入ると1つだけ背が違って見える。
+
+            **場所を取っておくのもやめる** —— `SteadyLabel` は
+            「起こりうるいちばん広い字」のぶんを先に取るので、
+            残しておくと**絵の右に「Stop」ぶんの空白**が居座り、
+            升目の中で絵が左へずれる(「押しても、まわりの物が動かない」の
+            ために取っておくものなので、**字が無いときは要らない**)。
+
+            **名前は `aria-label` で届ける** —— 字が無いボタンは、
+            読み上げでは「ボタン」としか言われない。
+            **言葉は `speakLabel.js` 1か所**から引く(書き写さない) */}
+      {label
+        ? <SteadyLabel keep={[label, SPEAK_STOP]}>{playing ? SPEAK_STOP : label}</SteadyLabel>
+        : null}
     </button>
   )
 }

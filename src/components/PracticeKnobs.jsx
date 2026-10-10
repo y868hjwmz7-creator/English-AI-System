@@ -1,115 +1,98 @@
 /**
- * ★ **練習の最中に出す「出しかた」の3つ**(第5.437節・2026-10-09 利用者の指定)。
- *
- *   > この空いたスペースに、出す数と繰り返しとランダムのオンオフの
- *   > ボタンをおきたいです
- *   > 繰り返しとランダムは音声プレーヤーのアイコンを流用します。
- *   > これは角が丸い長方形で囲います。
- *   > 何問ずつ出すかは5問から選べ、そしてプルダウンか何かの形にします。
+ * ★ **練習の最中に出す操作**(第5.437節 → **第5.441節で絵だけにした**)。
  *
  * ============================================================================
+ * 【いまの形】(2026-10-10 利用者の指定・実寸の絵を並べて選んでもらった)
+ *
+ *   > シャッフルとリピートは囲みなしのアイコンのみにするべきな気がします。
+ *   > 出し方はやはり右上のアイコンからだけにする方が良いかもしれません。
+ *   > うるさすぎます
+ *   > 問数(10 問)はカードから外し、右上の絞り込みの中だけでよいか → はい
+ *
+ *   **囲みを全部外し、絵だけ4つ**にした。
+ *
+ *     [卒業帽]  [札シャッフル]  [10 を囲む矢印]  [スピーカー]
+ *
+ *   ・**問数のプルダウンは廃止した。** 選ぶのは右上の絞り込みの中だけ。
+ *     ただし**いま何問ずつ回っているかは見えていないと困る**ので、
+ *     くり返しの絵の中に数を入れた(`RepeatCountIcon`)
+ *   ・4つめの「聴く」は**呼ぶ側(`QrCard` / `Wordbook`)が置く** ——
+ *     あれは `SpeakButton` が鳴らす状態を持っているので、ここには来ない
+ *
  * 【なぜ部品にしたか】
  *
- *   単語帳と Quick Response の**両方**に、まったく同じ3つを置く
+ *   単語帳と Quick Response の**両方**に、まったく同じものを置く
  *   (2026-10-09 利用者の指定「これは単語帳にも共通の仕様にしたいです」)。
  *   **書き写すと、片方だけ古くなる**(CLAUDE.md「判断は1か所に持つ」)。
+ *   **並び順も、ここ1か所が持つ。**
  *
- * 【絵は、下のプレーヤーとまったく同じもの】
+ * 【高さ・大きさ・色は、ここで1つも書かない】
  *
- *   `ShuffleIcon` / `RepeatIcon` は `Icons.jsx` 1か所にある。
- *   **ここで描き直さない** —— 描き直すと、片方だけ形が変わる。
+ *   4つとも `btn btn--small knob` を着る。
+ *   **足りないぶん(押せる的の大きさ・絵の大きさ・囲みを外すこと)は
+ *   `.knob` が1か所で持つ**(`styles.css`)——
+ *   数を書き写さない(CLAUDE.md)。
  *
- * 【見た目は、4つとも1つの形】(第5.439節・2026-10-09 利用者の指摘)
+ * 【入っている印は `.chip--on` 1か所から来る】
  *
- *   > 現状は各ボタンの高さ・幅・色・枠線のルールが揃っておらず(略)
- *   > 4つの操作ボタンを、同じ高さ・角丸・枠線の太さで揃える
- *
- *   **高さ・角丸・枠線・色を、ここで決めない。** 3つとも
- *   `btn btn--small btn--quiet`(ふつうのボタン・小さめ・灰)を着せ、
- *   足りないぶんだけ `.knob` が足す。**4つめの「聴く」も同じ組**を着る
- *   (呼ぶ側が `SpeakButton` に渡している)ので、**ひとりでにそろう** ——
- *   **数も色も書き写さない**(CLAUDE.md)。
+ *   うすい金の地 + 金の絵。**色だけに頼らない**(CLAUDE.md)ので、
+ *   休んでいるときは地色が無く、**形の違いでも分かる。**
+ *   `aria-pressed` も付けるので、読み上げにも届く。
+ *   **ここで新しい配色を作らない。**
  *
  * 【字を出さないので、読み上げには `aria-label` で届ける】
  *
- *   絵だけにしたのは、**鳴っている最中に「聴く」→「Stop」で幅が
- *   変わらないようにする**ためでもある(「押しても、まわりの物が
- *   動かない」・共通ルール)。
- *
- * 【押している印は、色だけに頼らない】
- *
- *   `aria-pressed` + うすい地色 + 枠線 + 絵の色。`.chip--on` が
- *   その4つをまとめて持っているので、**ここで新しい配色を作らない。**
+ *   くり返しは**いま何問ずつかも言う** —— 絵の中の数は
+ *   `aria-hidden` の中にいるので、字で言い直さないと伝わらない。
  */
-import { SIZES, sizeOfValue, sizePickLabel } from '../lib/reviewScope.js'
-import { RepeatIcon, ShuffleIcon } from './Icons.jsx'
+/* **問数の言い方は `sizeLabel()` 1か所**(第5.441節)。
+   `'all'` を「All」と書くのはあちらの持ちもので、ここに書き写さない */
+import { sizeLabel } from '../lib/reviewScope.js'
+import { CardShuffleIcon, RepeatCountIcon } from './Icons.jsx'
 
 export default function PracticeKnobs({
   unit = '問',
-  size, onSize,
+  size,
   shuffle = true, onShuffle = null,
   repeat = false, onRepeat = null,
+  /**
+   * ★ **行のいちばん左に置くもの**(第5.441節)。
+   * 復習の画面の「もう出さない」(卒業帽)がここに入る。
+   *
+   * **渡されなければ出ない** —— 単語帳と、教材の中の Quick Response には
+   * 「もう出さない」が無い(**言われていない場所を変えない**)。
+   *
+   * **並び順をここに持つ**ために、呼ぶ側から中身だけを受け取る ——
+   * もとはカードの右上(`corner`)に置いていたが、
+   * **番号(丸の数字)を右端へ押しのけていた**(2026-10-10 利用者の指摘)。
+   */
+  retire = null,
 }) {
   return (
     <>
-      {/* ★ **何問ずつ。プルダウンだが、見た目はとなりの3つとまったく同じ**
-             (第5.439節・2026-10-09 利用者の指摘「高さ・幅・色・枠線の
-             ルールが揃っておらず」)。
-
-             **素の `<select>` をそのまま置くと、3つとそろわない。**
-             理由は2つ。
-
-               ①狭い画面では `font-size: 16px` を強いている(iOS が
-                 16px 未満の入力欄に触れると画面を拡大するため・CLAUDE.md)。
-                 となりのボタンは 13px なので、**字の大きさが違う**
-               ②Safari の矢印のぶんの `padding-right: 28px` が要る。
-                 72px の升目では「10 問」が入り切らない
-
-             だから**見えている面は `<span>` で描き、`<select>` は
-             透明にして升目いっぱいに重ねる。** 押すと端末の選ぶ画面が出る
-             —— 本物の `<select>` なので、読み上げもキーボードもそのまま効く。
-             **16px のままなので、iOS も拡大しない。**
-
-             **言葉は `sizePickLabel()` 1か所**(見えている面と、
-             中の選択肢の両方が、同じところから来る) */}
-      <label className="btn btn--small btn--quiet knob knob-size">
-        <span className="knob-face">
-          {sizePickLabel(size, unit)}
-          <span className="knob-caret" aria-hidden="true" />
-        </span>
-        <select
-          className="knob-pick"
-          aria-label={`何${unit}ずつ`}
-          value={String(size)}
-          onChange={(e) => onSize(sizeOfValue(e.target.value))}
-        >
-          {SIZES.map((n) => (
-            <option key={String(n)} value={String(n)}>{sizePickLabel(n, unit)}</option>
-          ))}
-        </select>
-      </label>
+      {retire}
       {onShuffle && (
         <button
           type="button"
           aria-pressed={shuffle}
           aria-label="ランダム"
           title="ランダム"
-          className={`btn btn--small btn--quiet knob${shuffle ? ' chip--on' : ''}`}
+          className={`btn btn--small knob${shuffle ? ' chip--on' : ''}`}
           onClick={() => onShuffle(!shuffle)}
         >
-          <ShuffleIcon />
+          <CardShuffleIcon />
         </button>
       )}
       {onRepeat && (
         <button
           type="button"
           aria-pressed={repeat}
-          aria-label="くり返す"
-          title="くり返す"
-          className={`btn btn--small btn--quiet knob${repeat ? ' chip--on' : ''}`}
+          aria-label={`くり返す(${sizeLabel(size)} ${unit}ずつ)`}
+          title={`くり返す(${sizeLabel(size)} ${unit}ずつ)`}
+          className={`btn btn--small knob${repeat ? ' chip--on' : ''}`}
           onClick={() => onRepeat(!repeat)}
         >
-          <RepeatIcon />
+          <RepeatCountIcon label={sizeLabel(size)} />
         </button>
       )}
     </>
