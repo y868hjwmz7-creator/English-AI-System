@@ -37,6 +37,9 @@ import FocusFrame from './FocusFrame.jsx'
 /* **題と進み具合は、練習の2画面とまったく同じ部品**(第5.264節)。
    書き写すと、必ずどこかだけ古くなる(CLAUDE.md) */
 import DrillHead from './DrillHead.jsx'
+/* **押しても、まわりの物が動かない**(共通ルール)。塊の行き先は
+   「1〜10」から「91〜100」まで伸びるので、いちばん広いぶんを先に取る */
+import SteadyLabel from './SteadyLabel.jsx'
 /* **設定の出し方は、アプリに1つ**(第5.274節)——
    スマホでは下から出るシート、パソコンでは吹き出し。
    「出しかた」(`ReviewScope`)とまったく同じ入れ物を使う。
@@ -74,7 +77,9 @@ import { SIZES, sizeOfValue, sizePickLabel } from '../lib/reviewScope.js'
 import {
   bgmPlaysIn, loadBgmPlace, loadRadioGap, loadRadioMode,
   hidesAnswer,
-  RADIO_ORDERS, loadRadioOrder, radioList, saveRadioOrder,
+  RADIO_ORDERS, loadRadioOrder, saveRadioOrder,
+  /* ★ **塊で送る**(第5.443節)。束を作るところと切るところを分けてある */
+  chunkCount, chunkRange, radioChunk, radioDeck, stepChunk,
   nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
   radioModesFor,
   radioSteps, radioTextOf, radioVoiceOf, radioWarmups, saveRadioGap, saveRadioMode,
@@ -257,10 +262,29 @@ export default function WordRadio({
    * 画面が描き直されるたびに順が変わる。** `useMemo` で押さえ、
    * **並べ方・数・一覧が変わったときだけ**混ぜ直す。
    */
-  const list = useMemo(
-    () => radioList(rows, order, take),
-    [rows, order, take],
+  const deck = useMemo(
+    () => radioDeck(rows, order),
+    [rows, order],
   )
+  /**
+   * ★ **いまの塊**(第5.443節・2026-10-10 利用者の指定)。
+   *
+   *   > 今は10個選んでいるなら、その10個の中で前後にはいけますよね？
+   *   > そこに、次の10個に移動できるボタンです。その前の10個とか。
+   *
+   * **これまでは、いつも先頭の N 個しか流れなかった** ——
+   * 11 番目から先へ行く道が1つも無かった(**行き止まり**・CLAUDE.md)。
+   *
+   * **混ぜるのは束のほう**(`deck`)で、塊はそこから切り出すだけである。
+   * そうしないと、塊を行き来するたびに中身が変わってしまう。
+   */
+  const [page, setPage] = useState(0)
+  const list = useMemo(
+    () => radioChunk(deck, take, page),
+    [deck, take, page],
+  )
+  /** 塊はいくつあるか。**1つなら、送るボタンそのものを出さない** */
+  const pages = chunkCount(deck.length, take)
   /**
    * **設定を開いているか**(第5.271節)。
    *
@@ -703,6 +727,53 @@ export default function WordRadio({
               道そのものは消していない(第5.172節「行き止まりを作らない」)。 */}
         </div>
 
+        {/* ★ **塊ごと送る**(第5.443節・2026-10-10 利用者の指定)。
+
+            > 聞き流しをしながら次の出す数の塊に飛ばすボタンがあると最高です。
+            > 今は10個選んでいるなら、その10個の中で前後にはいけますよね？
+            > そこに、次の10個に移動できるボタンです。その前の10個とか。
+
+            **塊が1つしか無いときは、行ごと出さない**(「ぜんぶ」を
+            えらんでいるとき・冊が少ないとき)——
+            **効かない操作を見せない**(CLAUDE.md)。
+
+            **ボタンには「行き先」を書く**(「11〜20」)。
+            「次の10」だと、いま何番目を聴いているのかが分からない ——
+            **いまの状態は出してよい**(共通ルール)。
+
+            **幅は、いちばん広い行き先で取っておく**(`SteadyLabel`)——
+            「1〜10」から「91〜100」に変わると行が動き、
+            **押そうとしていたもう片方が指の下でずれる**
+            (「押しても、まわりの物が動かない」・共通ルール)。 */}
+        {pages > 1 && (
+          <div className="btn-row radio-chunks">
+            {[-1, 1].map((向き) => {
+              const 先 = stepChunk(page, 向き, deck.length, take)
+              const r = chunkRange(先, deck.length, take)
+              /* **いちばん長くなる行き先だけ**を置いておく。
+                 **ぜんぶ並べない** —— 塊は何十にもなるので、
+                 見えない札をその数だけ描くことになる(実測 21 枚)。
+                 **数を書き写さない** —— 塊の数から組む */
+              const 最長 = Array.from({ length: pages }, (_, i) => {
+                const x = chunkRange(i, deck.length, take)
+                return `${x.from}〜${x.to}`
+              }).reduce((a, b) => (b.length > a.length ? b : a), '')
+              return (
+                <button type="button" key={向き} className="btn btn--quiet"
+                        onClick={() => {
+                          stopReading()
+                          setPage(先)
+                          move(0)
+                        }}>
+                  {向き < 0 && <span aria-hidden="true">◀ </span>}
+                  <SteadyLabel keep={[最長]}>{`${r.from}〜${r.to}`}</SteadyLabel>
+                  {向き > 0 && <span aria-hidden="true"> ▶</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ══════════════════════════════════════════════════════
             **説明書きと曲名は置かない**(第5.252節・2026-09-23 利用者の指定)
 
@@ -796,7 +867,11 @@ export default function WordRadio({
                     onChange={(e) => {
                       setTake(sizeOfValue(e.target.value))
                       /* **頭から読み直す。** 減らしたときに、いま読んでいる
-                         場所が一覧の外へ出たままになるのを防ぐ */
+                         場所が一覧の外へ出たままになるのを防ぐ。
+                         **塊も先頭へ戻す**(第5.443節)—— 10 個ずつの
+                         3つめを聴いていた人が 50 個ずつにすると、
+                         3つめはもう無い */
+                      setPage(0)
                       move(0)
                     }}>
             {SIZES.map((n) => (
@@ -851,7 +926,10 @@ export default function WordRadio({
                     const next = e.target.value
                     setOrder(next); saveRadioOrder(next, where)
                     /* **頭から読み直す。** 並びが変わったのに途中から
-                       続けると、いま読んでいる文と画面がずれる */
+                       続けると、いま読んでいる文と画面がずれる。
+                       **塊も先頭へ**(第5.443節)—— 混ぜ直したので、
+                       「3つめの塊」は前と別のものである */
+                    setPage(0)
                     move(0)
                   }}>
             {RADIO_ORDERS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}

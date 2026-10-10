@@ -71,7 +71,7 @@ import {
 /* ★ **覚え具合は4段階**(第5.406節・2026-10-07 利用者の指定)。
      Quick Response とまったく同じものを使う —— 分け方を2か所に書かない */
 import {
-  LEARN_STAGES, stageLead, stageOrDefaultPool, stageTally,
+  LEARN_STAGES, stageLabel, stageLead, stageOrDefaultPool, stageTally,
 } from '../lib/learnStage.js'
 /* **問題の箱をタップして切り替える**(第5.262節・2026-09-26 利用者の指定)。
    「英語を見る」のボタンは廃止した。**判断は `tapReveal.js` 1か所** */
@@ -82,6 +82,12 @@ import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
+/* ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘
+   「音声のロードが遅いです。初めてだと3-4秒かかります」)。
+   **どれを温めるかは `warmAhead.js` 1か所**(Quick Response と同じもの)。
+   **温め方も `prepareRead()` 1か所** —— 話者も段も、鳴らす側が決める */
+import { prepareRead } from '../lib/readAloud.js'
+import { warmTargets } from '../lib/warmAhead.js'
 /* ★ **出しかたの3つ**(第5.437節)。Quick Response と同じ部品(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
 import { usePracticeLog } from '../lib/practice.js'
@@ -1354,6 +1360,24 @@ export default function Wordbook({
     start()
   }, [isQuiz, loading, opened, rows.length, poolNow])
   const card = isQuiz ? queue[0] : null
+
+  /**
+   * ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘)。
+   *
+   *   > どうしても単語帳と quick response の音声のロードが遅いです。
+   *   > 初めてだと3-4秒かかります。
+   *
+   * **この画面は、先読みを1度も呼んでいなかった。** 「聴く」を押した
+   * その瞬間に窓口へ頼んでいたので、学校じゅうで誰も鳴らしたことの無い
+   * 語だけ 3〜4 秒かかっていた(2回目からは置いてあるので、すぐ鳴る)。
+   *
+   * **`queue` の先頭が、いま出ているカード**である。答えるたびに
+   * 先頭が落ちるので、**`queue` が変わったときに温め直す**。
+   * **費用は増えない** —— どのみち押されたときに作るものである。
+   */
+  useEffect(() => {
+    for (const t of warmTargets(queue)) prepareRead(t)
+  }, [queue])
 
   /* ★ **前へ / 次へ**(第5.417節・2026-10-07 利用者の指定・段階4)。
        矢印キー ← → と、紙の左右の余白クリックから来る。
@@ -2815,7 +2839,7 @@ export default function Wordbook({
                   <SpeakButton text={word} className="knob" label={null} />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
-                    まだ / 覚えかけ。
+                    まだ / 言える。
 
                     自分で「覚えた」と申告する道をなくし、代わりに
                     **「覚えかけ」を続けて押した回数**で卒業を決める(0038)。
@@ -2842,7 +2866,12 @@ export default function Wordbook({
                       <button type="button" className="btn btn--primary"
                               disabled={busy === card.word_norm}
                               onClick={() => answer(card, 'learning')}>
-                        {keyLabel('覚えかけ', 'ok', { keys: !coarse })}
+                        {/* ★ **呼び名は `learnStage.js` 1か所**(第5.443節・
+                            2026-10-10 利用者の指定「quick response と同じ
+                            『言える』に」)。**ここに書き写さない** ——
+                            札と「詳しくしぼる」も同じところから来ているので、
+                            **3つが一緒に変わる** */}
+                        {keyLabel(stageLabel('learning'), 'ok', { keys: !coarse })}
                       </button>
                     )
                     : (

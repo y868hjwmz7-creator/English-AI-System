@@ -434,7 +434,7 @@ console.log('\n▶ 応答の聞き流し(第5.334節 / 第5.355節)')
      足りなかったのは**何を鳴らすか**だけである。 */
   const { responseRadioRows } = await import('../src/lib/audioPlaylist.js')
   const { radioVoiceOf, radioTextOf, radioJaOf, radioAskOf, radioAskJaOf,
-    radioList, radioSteps, radioModesFor, radioGapsOf, hidesAnswer, RADIO_ORDERS,
+    radioDeck, radioSteps, radioModesFor, radioGapsOf, hidesAnswer, RADIO_ORDERS,
     DEFAULT_RADIO_GAP, DEFAULT_SAY_GAP } = await import('../src/lib/wordRadio.js')
   const mat = {
     kind: 'response', voiceIds: [], tags: [],
@@ -552,14 +552,14 @@ console.log('\n▶ 応答の聞き流し(第5.334節 / 第5.355節)')
 
   /* ★ **問題順のシャッフル**(利用者の指定)。
        **混ぜ方を2つ持たない** —— 聞き流しがもう持っている
-       「ランダム」(`radioList`)に載せる。だから `responseRadioRows()` は
+       「ランダム」(`radioDeck`)に載せる。だから `responseRadioRows()` は
        **混ぜない**(渡す前に混ぜると、あちらの欄と二重になる) */
   is(RADIO_ORDERS.some((o) => o.id === 'shuffle') && RADIO_ORDERS.some((o) => o.id === 'seq'),
     '聞き流しに「出た順」と「ランダム」の両方がある')
   const 多い = Array.from({ length: 24 }, (_, i) => ({ en: `s${i}`, ja: '' }))
-  const 出た順 = radioList(多い, 'seq', 'all').map((r) => r.en).join(',')
+  const 出た順 = radioDeck(多い, 'seq').map((r) => r.en).join(',')
   const 混ぜた = Array.from({ length: 8 },
-    () => radioList(多い, 'shuffle', 'all').map((r) => r.en).join(','))
+    () => radioDeck(多い, 'shuffle').map((r) => r.en).join(','))
   is(出た順 === 多い.map((r) => r.en).join(','), '「出た順」は、並べ替えない')
   is(混ぜた.some((x) => x !== 出た順), '「ランダム」は、並びが変わる')
   /* **渡す側が混ぜていないこと。** 二重に混ぜると「出た順」が効かなくなる */

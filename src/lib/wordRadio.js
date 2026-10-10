@@ -794,20 +794,97 @@ export function saveRadioOrder(id, where = 'word') {
 }
 
 /**
- * **流す一覧を作る**(第5.282節)。
+ * **流すものの束を作る**(第5.282節)。
  *
  * **混ぜてから、数で切る。** 逆にすると、いつも同じ先頭 N 個の中で
  * 並べ替えるだけになり、**「5問ずつ」では毎回同じ5問**が出る。
  * 利用者の指定「**問題数に関わらず**ランダム」は、この順のことである。
+ * **切るのは `radioChunk()` の役目**なので、ここは混ぜるまでで終わる。
  *
  * **混ぜ方は `qrOrder.js` の `shuffled()` 1か所**(書き写さない)。
- * **数え方も `takeCount()` 1か所**(`reviewScope.js`)。
  */
-export function radioList(rows, order = DEFAULT_RADIO_ORDER, take = 'all') {
+export function radioDeck(rows, order = DEFAULT_RADIO_ORDER) {
   const 読める = (rows ?? []).filter((r) => radioTextOf(r))
-  const 並べた = order === 'shuffle' ? shuffled(読める) : 読める
-  return 並べた.slice(0, takeCount(take, 並べた.length))
+  return order === 'shuffle' ? shuffled(読める) : 読める
 }
+
+/* ══════════════════════════════════════════════════════════════════
+ * **次の塊へ飛ぶ**(第5.443節・2026-10-10 利用者の指定)
+ *
+ *   > 聞き流しをしながら次の出す数の塊に飛ばすボタンがあると最高です。
+ *   > 例えば、今は10個選んでいるなら、その10個の中で前後にはいけますよね？
+ *   > そこに、次の10個に移動できるボタンです。その前の10個とか。
+ *
+ * **これまでは、いつも先頭の N 個しか流れなかった。**
+ * `radioList()` が `slice(0, N)` だけで、**11 番目から先へは
+ * 一生たどり着けなかった**(並べ方を「ランダム」にして混ぜ直すほかに
+ * 道が無かった)。**行き止まりである**(CLAUDE.md)。
+ *
+ * ── 混ぜるのは「ぜんぶ」に対して、1回だけ ─────────────────────
+ *
+ *   **塊に分ける前に混ぜる。** 塊ごとに混ぜると、
+ *   **塊を行き来するたびに中身が変わり**、同じ 10 個に戻れない。
+ *   だから `radioDeck()`(混ぜるところ)と `radioChunk()`(切るところ)を
+ *   **別の関数**にしてある —— 画面は束を `useMemo` で押さえ、
+ *   塊だけを動かす。
+ *
+ * ── はみ出した塊は、先頭へ回り込む ────────────────────────────
+ *
+ *   `prevIndex` / `nextIndex` とまったく同じ決まりである
+ *   (**数え方を2通り持たない**)。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * **塊はいくつあるか。**「ぜんぶ」や、1塊に収まるときは **1**。
+ *
+ * **数え方は `takeCount()` 1か所**(`reviewScope.js`)——
+ * ここで `take === 'all'` と書かない。
+ */
+export function chunkCount(total, take = 'all') {
+  const 丈 = Math.max(0, Number(total) || 0)
+  const 幅 = takeCount(take, 丈)
+  if (!丈 || !幅) return 1
+  return Math.ceil(丈 / 幅)
+}
+
+/** 塊の番号を、はみ出さない形に直す(回り込みは `stepChunk` が持つ) */
+export const clampChunk = (page, total, take = 'all') => {
+  const 数 = chunkCount(total, take)
+  const n = Math.trunc(Number(page) || 0)
+  return n < 0 ? 0 : (n > 数 - 1 ? 数 - 1 : n)
+}
+
+/**
+ * 塊を1つ送る / 戻す。**端では回り込む**(`nextIndex` と同じ)。
+ * `delta` は +1 / -1。
+ */
+export const stepChunk = (page, delta, total, take = 'all') => {
+  const 数 = chunkCount(total, take)
+  const n = clampChunk(page, total, take) + Math.trunc(Number(delta) || 0)
+  return ((n % 数) + 数) % 数
+}
+
+/** その塊が何番目から何番目か(人が読む 1 始まり)。`{ from, to }` */
+export function chunkRange(page, total, take = 'all') {
+  const 丈 = Math.max(0, Number(total) || 0)
+  const 幅 = takeCount(take, 丈)
+  const n = clampChunk(page, total, take)
+  const 頭 = n * 幅
+  return { from: 丈 ? 頭 + 1 : 0, to: Math.min(丈, 頭 + 幅) }
+}
+
+/** その塊の中身。**束(`radioDeck()` が返したもの)から切り出す** */
+export function radioChunk(deck, take = 'all', page = 0) {
+  const 束 = deck ?? []
+  const 幅 = takeCount(take, 束.length)
+  const n = clampChunk(page, 束.length, take)
+  return 束.slice(n * 幅, n * 幅 + 幅)
+}
+
+/* **`radioList()` は無くした**(第5.443節)。塊で送れるようにしたので、
+   「束を作って先頭だけ切る」1本道は**誰も通らなくなった。**
+   **道具を偽で残さない**(CLAUDE.md)—— 残すと、次に見た人が
+   「こちらを呼べばよいのか」と読み、塊が動かない画面をまた作る。 */
 
 /**
  * 覚えている間の長さ。**知らない値は既定に落とす**(行き止まりを作らない)。

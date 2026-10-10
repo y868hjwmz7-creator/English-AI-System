@@ -2407,7 +2407,7 @@ const SheetBody = () => (
   <div className="app">
     <ReviewSheet
       title={sheetTitle({ owner: 'Airi さん', book: 'shelf', shelves: ['business'] })}
-      note={sheetNote({ count: 5, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })}
+      note={sheetNote({ count: 5, unit: '語', group: '言える', narrowed: 2, date: '2026-09-12' })}
       lead="左の日本語を見て、すぐに英語で言いましょう。右が答えです。"
       sections={wordSheetSections(wordSheetPairs(SHEET_ROWS, { example: true }))}
     />

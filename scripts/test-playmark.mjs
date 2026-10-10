@@ -163,6 +163,9 @@ import {
   radioModesFor, radioSteps, radioTextOf, radioWarmups, saveBgmPlace, saveRadioGap,
   setBgmOn,
 } from '../src/lib/wordRadio.js'
+/* ★ **塊ごと送る**(第5.443節)。名前の一覧を読み取るために、
+   `wordRadio.js` を**まるごと**も取り込む(名前を書き写さないため) */
+import * as WR from '../src/lib/wordRadio.js'
 import {
   DEFAULT_BGM, DEFAULT_VOICE, VOL_STEP,
   bgmLevel, clampLevel, pctLabel, setBgmLevel, setVoiceLevel, voiceLevel,
@@ -2918,9 +2921,12 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '覚え具合 … 卒業の箱は `DONE_BOX` 1か所から決まる', `箱 ${DONE_BOX}`)
 
     /* **呼び名は `learnStage.js` 1か所。** 単語帳も Quick Response も同じ */
-    /* ★ **「学習中」は「覚えかけ」になった**(第5.437節・利用者の指定) */
-    ok(LEARN_STAGES.map((g) => g.label).join('/') === '未学習/苦手/覚えかけ/覚えた',
-      '覚え具合 … 呼び名は「未学習 / 苦手 / 覚えかけ / 覚えた」',
+    /* ★ **「学習中」→「覚えかけ」**(第5.437節)→ **「言える」**
+         (第5.443節・2026-10-10 利用者の指定「quick response と同じ
+         『言える』に」)。**ここは書き写してよい1本**である ——
+         呼び名が変わったこと自体を測っている(「All」と同じ作法) */
+    ok(LEARN_STAGES.map((g) => g.label).join('/') === '未学習/苦手/言える/覚えた',
+      '覚え具合 … 呼び名は「未学習 / 苦手 / 言える / 覚えた」',
       LEARN_STAGES.map((g) => g.label).join('/'))
     ok(LEARN_STAGES.length === 4, '覚え具合 … 4段階である')
 
@@ -3676,8 +3682,23 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '聞き流し … 読む語の絞り込みは `radioTextOf()` に任せている')
     ok(!/filter\(\(r\) => radioTextOf\(r\)\)/.test(radio),
       '聞き流し … 画面の中で絞り込みを書き写していない')
-    ok(/radioList\(rows, order, take\)/.test(radio),
-      '聞き流し … 流す一覧は `radioList()` 1か所から受け取る')
+    /* ★ **塊に分けた**(第5.443節)。**混ぜるところ(`radioDeck`)と
+         切るところ(`radioChunk`)を分けてある** —— 同じ関数で両方やると、
+         塊を行き来するたびに混ぜ直され、**同じ 10 個に戻れない。**
+         **呼び方の文字を書き写さない**(CLAUDE.md「式も、関数の名前も
+         書き写さない」)—— 名前を先に読み取ってから、その名前で見る */
+    {
+      const 出す = Object.keys(WR).filter((k) => /^radio(Deck|Chunk)$/.test(k))
+      ok(出す.length === 2, '聞き流し … 束を作るのと、塊に切るのが別の関数である',
+        出す.join('/'))
+      for (const 名 of 出す) {
+        ok(new RegExp(`${名}\\(`).test(radio),
+          `聞き流し … 画面は \`${名}()\` を呼んでいる`)
+      }
+      /* **画面の中で切らない。** `slice(` を書いた日に、数え方が2通りになる */
+      ok(!/\bdeck\s*\.slice\(|\brows\s*\.slice\(/.test(radio),
+        '聞き流し … 画面の中で一覧を切っていない')
+    }
     ok(/const en = radioTextOf\(row\)/.test(
       落とす(readFileSync(new URL('../src/lib/wordRadio.js', import.meta.url), 'utf8'))),
     '聞き流し … `radioSteps()` も同じ `radioTextOf()` を通る')
@@ -6209,8 +6230,8 @@ console.log('\nスピーチ練習(0054)')
   /* ── 副題(何を刷ったのかが、紙だけ見て分かる)── */
   ok(sheetNote({ count: 12, unit: '語' }) === '全 12 語',
     '紙 … 絞っていなければ、数だけ')
-  const note = sheetNote({ count: 3, unit: '語', group: '覚えかけ', narrowed: 2, date: '2026-09-12' })
-  ok(note.includes('全 3 語') && note.includes('覚えかけ')
+  const note = sheetNote({ count: 3, unit: '語', group: '言える', narrowed: 2, date: '2026-09-12' })
+  ok(note.includes('全 3 語') && note.includes('言える')
     && note.includes('絞り込み 2 件') && note.includes('2026-09-12'),
     '紙 … 絞っているときは、そう書く(黙って絞らない)')
   ok(!sheetNote({ count: 1, unit: '問', narrowed: 0 }).includes('絞り込み'),
@@ -13637,8 +13658,10 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        **数え方を2通り持たない** —— 札の一覧も数え方も `reviewScope.js` */
   {
     ok(/size = 'all',/.test(radio), '聞き流し … 何問ずつの初期値を受け取る')
-    /* **`radioList()` へ移した**(第5.282節)。数え方は変えていない */
-    ok(/takeCount\(take, 並べた\.length\)/.test(readS('src/lib/wordRadio.js')),
+    /* **`wordRadio.js` へ移した**(第5.282節)。数え方は変えていない。
+       **式を書き写さない**(CLAUDE.md)—— 変数の名前を変えた日に、
+       仕組みは1ミリも壊れていないのに赤くなる */
+    ok(/takeCount\(/.test(readS('src/lib/wordRadio.js')),
       '聞き流し … 数えるのは `takeCount()` 1か所(出しかたの札と同じ)')
     ok(!/takeCount\(/.test(radio),
       '聞き流し … 画面の中で数え直していない')
@@ -13655,11 +13678,54 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        (CLAUDE.md「名前が出てくるかで見ない」)。 */
     {
       const w = readS('src/lib/wordRadio.js')
-      const 本文 = w.slice(w.indexOf('export function radioList'))
-      const 混ぜる = 本文.indexOf('shuffled(')
-      const 切る = 本文.indexOf('.slice(')
-      ok(混ぜる > 0 && 切る > 0 && 混ぜる < 切る,
-        '聞き流し … 混ぜてから、数で切る(問題数に関わらずランダムになる)')
+      /* ★ **文字で順を見るのをやめ、本当に動かして測る**(第5.443節)。
+           もとは `radioList` の本文で `shuffled(` と `.slice(` の
+           どちらが先かを見ていたが、**塊に分けて2つの関数になった**ので、
+           その見方では測れない。**動かせば、名前が変わっても付いてくる。**
+
+           25 本のうち 10 本ずつにして、**11 本目から先のものが
+           1つめの塊に出てくるか**を見る。切ってから混ぜる形にすると、
+           1つめの塊には**いつも先頭の 10 本**しか入らないので赤くなる。 */
+      {
+        const 束 = Array.from({ length: 25 }, (_, i) => ({ display: `w${i + 1}` }))
+        const 後ろ = new Set(束.slice(10).map((r) => r.display))
+        let 出た = false
+        for (let i = 0; i < 40 && !出た; i++) {
+          出た = WR.radioChunk(WR.radioDeck(束, 'shuffle'), 10, 0)
+            .some((r) => 後ろ.has(r.display))
+        }
+        ok(出た, '聞き流し … 混ぜてから、数で切る(問題数に関わらずランダムになる)')
+      }
+
+      /* ★ **塊ごと送れるか**(第5.443節・2026-10-10 利用者の指定)。
+           **本当に動かして測る** —— 11 番目から先へ行けることが要である */
+      {
+        const 束 = Array.from({ length: 25 }, (_, i) => ({ display: `w${i + 1}` }))
+        const 名 = (a) => a.map((r) => r.display).join(',')
+        ok(WR.chunkCount(25, 10) === 3 && WR.chunkCount(25, 'all') === 1,
+          '聞き流し … 塊の数は「ぜんぶ」なら 1、10 ずつなら端数も1つに数える',
+          `${WR.chunkCount(25, 10)} / ${WR.chunkCount(25, 'all')}`)
+        ok(名(WR.radioChunk(束, 10, 1)) === 名(束.slice(10, 20)),
+          '聞き流し … 2つめの塊は 11〜20 番目(先頭の 10 本ではない)')
+        ok(WR.radioChunk(束, 10, 2).length === 5,
+          '聞き流し … 端数の塊は、残っているぶんだけ')
+        const r = WR.chunkRange(1, 25, 10)
+        ok(r.from === 11 && r.to === 20,
+          '聞き流し … 塊の行き先を「11〜20」と言える', `${r.from}〜${r.to}`)
+        ok(WR.stepChunk(2, 1, 25, 10) === 0 && WR.stepChunk(0, -1, 25, 10) === 2,
+          '聞き流し … 端では回り込む(「次へ」と同じ決まり)')
+        /* **はみ出した番号でも落ちない**(行き止まりを作らない) */
+        ok(WR.radioChunk(束, 10, 99).length === 5 && WR.radioChunk(束, 10, -3).length === 10,
+          '聞き流し … 知らない塊の番号は、端に寄せる')
+        /* ★ **いちばん危ない形**(CLAUDE.md)—— **「ぜんぶ」では塊が1つ**で、
+             送るボタンは出てはいけない。ここを 1 以外にすると、
+             押しても何も起きないボタンが出る */
+        ok(WR.radioChunk(束, 'all', 0).length === 25 && WR.chunkCount(25, 'all') === 1,
+          '聞き流し … 「ぜんぶ」のときは塊が1つだけ(送るボタンを出さない)')
+        /* **画面は、塊が2つ以上のときだけ出しているか** */
+        ok(/pages > 1 &&/.test(radio),
+          '聞き流し … 塊が1つなら、送る行ごと出さない')
+      }
       /* **混ぜ方は `shuffle.js` 1か所**(Quick Response の並べ方と同じもの) */
       ok(/from '\.\/shuffle\.js'/.test(w) && !/Math\.random\(\)/.test(w),
         '聞き流し … 混ぜ方を書き写していない(`shuffle.js` 1か所)')
@@ -16250,6 +16316,66 @@ console.log('\n▶ 覚えた にする(第5.438節)')
     '画面 … 「もう表示しない」を押したら、覚えてそのまま入れる')
   /* **やめる道がある**(行き止まりを作らない) */
   ok(/やめる/.test(qr), '画面 … 吹き出しから「やめる」で戻れる')
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘)
+ *
+ *   > どうしても単語帳と quick response の音声のロードが遅いです。
+ *   > 初めてだと3-4秒かかります。
+ *
+ * **練習の2画面だけが、先読みを1度も呼んでいなかった。**
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 次に鳴らすものを、先に温める(第5.443節) ──')
+  const { WARM_AHEAD, warmTargets } = await import('../src/lib/warmAhead.js')
+  const 読む = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* **説明の中の語に当たらないように、コメントを落としてから数える**
+     (CLAUDE.md「名前が出てくるかで見ない」) */
+  const 落として = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+
+  /* ── 算段(素の node で動かして測る)──────────────────────── */
+  const 束 = Array.from({ length: 8 }, (_, i) => ({ display: `w${i + 1}` }))
+  const 先 = warmTargets(束, 0)
+  /* **いま出ているものも温める** —— 開いた直後、まだ誰も温めていない */
+  ok(先[0] === 'w1', '先読み … いま出ているものも温める', 先.join(','))
+  ok(先.length === WARM_AHEAD,
+    '先読み … 本数は `WARM_AHEAD` 1か所から決まる', `${先.length} / ${WARM_AHEAD}`)
+  /* **末尾では回り込む** —— 回らないと、最後の数枚で温まらない */
+  ok(warmTargets(束, 7)[1] === 'w1', '先読み … 末尾では先頭へ回り込む',
+    warmTargets(束, 7).join(','))
+  /* ★ **いちばん危ない形を置く**(CLAUDE.md)。
+       空の行・同じ語ばかりでも、**温める本数は減らない** ——
+       「位置で数える」形に戻すと、ここが赤くなる */
+  const 混ぜ = [{ display: 'a' }, { display: '   ' }, { display: 'a' },
+    { display: 'b' }, { display: 'c' }, { display: 'd' }]
+  ok(warmTargets(混ぜ, 0).join(',') === 'a,b,c,d',
+    '先読み … 空の行と同じ語を飛ばしても、本数は減らない',
+    warmTargets(混ぜ, 0).join(','))
+  /* **一覧が無くても落ちない**(止まる条件を持たせる) */
+  ok(warmTargets([], 0).length === 0 && warmTargets(null, 0).length === 0,
+    '先読み … 一覧が空でも落ちない')
+  /* **英文の取り出しを書き写していない** —— `radioTextOf()` 1か所 */
+  {
+    const w = 落として(読む('src/lib/warmAhead.js'))
+    ok(/radioTextOf/.test(w) && !/display\s*\|\|/.test(w),
+      '先読み … 英文の取り出しは `radioTextOf()` に任せている')
+  }
+
+  /* ── 画面 ─────────────────────────────────────────────────── */
+  for (const [名, 道] of [
+    ['単語帳', 'src/components/Wordbook.jsx'],
+    ['Quick Response', 'src/components/QrReview.jsx'],
+  ]) {
+    const c = 落として(読む(道))
+    ok(/warmTargets\(/.test(c), `${名} … 温めるものを \`warmTargets()\` に訊いている`)
+    ok(/prepareRead\(/.test(c), `${名} … 温め方は \`prepareRead()\` 1か所`)
+    /* **話者と段を書き写していない** —— `prefetchClip` を直に呼ぶと、
+       鳴らす側の既定(話者・標準の段)を画面が持つことになり、
+       **温めた場所と鳴る場所が食い違う** */
+    ok(!/prefetchClip\(/.test(c), `${名} … \`prefetchClip()\` を直に呼んでいない`)
+  }
 }
 
 console.log(ng

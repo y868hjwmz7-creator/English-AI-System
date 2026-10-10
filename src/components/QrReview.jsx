@@ -89,7 +89,11 @@ import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
 import { listTracks } from '../lib/bgm.js'
 import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
-import { stopReading } from '../lib/readAloud.js'
+import { prepareRead, stopReading } from '../lib/readAloud.js'
+/* ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘
+   「音声のロードが遅いです。初めてだと3-4秒かかります」)。
+   **どれを温めるかは `warmAhead.js` 1か所**(単語帳と同じもの) */
+import { warmTargets } from '../lib/warmAhead.js'
 import { usePracticeLog } from '../lib/practice.js'
 import { answerFeedback } from '../lib/haptics.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
@@ -524,6 +528,23 @@ export default function QrReview({
 
   // 画面を離れるときは、鳴っているものを止める
   useEffect(() => () => stopReading(), [])
+
+  /**
+   * ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘)。
+   *
+   *   > どうしても単語帳と quick response の音声のロードが遅いです。
+   *   > 初めてだと3-4秒かかります。
+   *
+   * **この画面は、先読みを1度も呼んでいなかった。** 「聴く」を押した
+   * その瞬間に窓口へ頼んでいたので、学校じゅうで誰も鳴らしたことの無い
+   * 文だけ 3〜4 秒かかっていた(2回目からは置いてあるので、すぐ鳴る)。
+   *
+   * **カードが変わったときに温める。** 人が思い出している数秒を使う。
+   * **費用は増えない** —— どのみち押されたときに作るものである。
+   */
+  useEffect(() => {
+    for (const t of warmTargets(run, at)) prepareRead(t)
+  }, [run, at])
 
   const today = todayKey()
   /* 絞り込みは**手元で行う**(単語帳と同じ)。`qr_items()` は 500 件まで

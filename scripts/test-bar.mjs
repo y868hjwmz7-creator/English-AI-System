@@ -14539,6 +14539,93 @@ for (const [q2, 期待, 何] of [
       + `(題「${m.題}」・${m.札.join(' / ')})`)
   }
 }
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **塊ごと送れるか**(第5.443節・2026-10-10 利用者の指定)
+ *
+ *   > 聞き流しをしながら次の出す数の塊に飛ばすボタンがあると最高です。
+ *   > 今は10個選んでいるなら、その10個の中で前後にはいけますよね？
+ *   > そこに、次の10個に移動できるボタンです。その前の10個とか。
+ *
+ * **算段は `test:play` が測っている**(`radioChunk` を動かして)。
+ * ここで見るのは**画面に出ているか・押したら本当に中身が変わるか**である。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  const 開く = async (q2) => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } })
+    page.setDefaultTimeout(8000)
+    page.setDefaultNavigationTimeout(8000)
+    await page.route('**/rest/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '[]',
+    }))
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{}',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=qrradio${q2}`,
+      { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(700)
+    return page
+  }
+  const 読む = (page) => page.evaluate(() => ({
+    送り: [...document.querySelectorAll('.radio-chunks .btn')]
+      .map((b) => b.textContent.trim()),
+    英: (document.querySelector('.radio-en')?.textContent ?? '').trim(),
+    数: (document.querySelector('.drill-count')?.textContent ?? '').trim(),
+  }))
+
+  /* ── ① **「ぜんぶ」のときは出さない**(効かない操作を見せない)── */
+  {
+    const page = await 開く('&size=all')
+    const m = await 読む(page)
+    if (m.送り.length) {
+      ng('聞き流し 390px … 「ぜんぶ」なのに、塊を送るボタンが出ている',
+        m.送り.join(' / '))
+    } else ok('聞き流し 390px … 「ぜんぶ」のときは、塊を送るボタンを出さない')
+    await page.close()
+  }
+
+  /* ── ② **絞っているときは2つ出て、押すと中身が変わる** ── */
+  {
+    /* **数を書き写さない** —— いちばん小さい段で開く */
+    const 小 = Math.min(...SIZES.filter((x) => x !== 'all').map(Number))
+    const page = await 開く(`&size=${小}`)
+    const 前 = await 読む(page)
+    if (前.送り.length !== 2) {
+      ng(`聞き流し 390px … 塊を送るボタンが ${前.送り.length} 個(2つのはず)`,
+        前.送り.join(' / '))
+    } else {
+      /* **行き先を書いてある**(「11〜20」)。数は**骨組みの本数から組む** */
+      const 次の頭 = 小 + 1
+      if (!前.送り[1].includes(`${次の頭}〜`)) {
+        ng('聞き流し 390px … 「次の塊」のボタンに、行き先が書かれていない',
+          `${前.送り[1]} —— ${次の頭} から始まるはず`)
+      } else ok(`聞き流し 390px … 塊を送るボタンは2つで、行き先が出る(${前.送り.join(' / ')})`)
+
+      /* ★ **押して、本当に中身が変わるか。**
+           ここが要である —— ボタンだけ足して一覧が動かない形を捕まえる */
+      await page.click('.radio-chunks .btn:last-child')
+      await page.waitForTimeout(400)
+      const 後 = await 読む(page)
+      if (後.英 === 前.英) {
+        ng('聞き流し 390px … 次の塊を押しても、出ている文が変わらない',
+          `${前.英} → ${後.英}`)
+      } else ok(`聞き流し 390px … 次の塊を押すと、別の文になる(${前.英} → ${後.英})`)
+      /* **頭から始まる** —— 途中から始まると、聴き逃した文が出てこない */
+      if (後.数 !== 前.数) {
+        ng('聞き流し 390px … 次の塊が、1問目から始まっていない',
+          `${前.数} → ${後.数}`)
+      } else ok(`聞き流し 390px … 次の塊も1問目から始まる(${後.数})`)
+      /* **戻る道がある**(行き止まりを作らない)。押したら元の文に戻る */
+      await page.click('.radio-chunks .btn:first-child')
+      await page.waitForTimeout(400)
+      const 戻り = await 読む(page)
+      if (戻り.英 !== 前.英) {
+        ng('聞き流し 390px … 前の塊へ戻れない', `${後.英} → ${戻り.英}(元は ${前.英})`)
+      } else ok('聞き流し 390px … 前の塊へ戻れる')
+    }
+    await page.close()
+  }
+}
+
 /* **中で変えたら、その場で切り替わるか**(出る / 出ないの両方)。
    **「持ち込めている」だけを見ると、中で変えられなくても緑**になる */
 {
@@ -15284,7 +15371,7 @@ for (const [q2, 期待, 何] of [
     await page.keyboard.press('ArrowUp')
     await page.waitForTimeout(FLY_MS + 250)
     const 上の語 = await いまの語(page)
-    if (上の語 !== 後の語) ok('↑(覚えかけ)でも判定され、次の語になる', `${後の語} → ${上の語}`)
+    if (上の語 !== 後の語) ok('↑(言える)でも判定され、次の語になる', `${後の語} → ${上の語}`)
     else ng('↑ を押しても、判定されない', `${後の語} / ${上の語}`)
     await page.close()
   }
