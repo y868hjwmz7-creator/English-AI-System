@@ -15787,8 +15787,16 @@ for (const [q2, 期待, 何] of [
       ['指の端末', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, false],
     ]) {
       const page = await 単語帳を開く(opts)
-      const 字 = await page.evaluate(() => [...document.querySelectorAll('.wordcard-answers button')]
-        .map((b) => b.textContent.trim()))
+      /* ★ **どちらのボタンかは、色で見分ける**(第5.443節)。
+           もとは `t.startsWith('覚え')` と**文字を書き写して**いたので、
+           呼び名を「覚えかけ」から「言える」に変えた日に、
+           **仕組みは1ミリも壊れていないのに赤くなった**
+           (CLAUDE.md「式も、関数の名前も書き写さない」の、言葉の版)。
+           色の役は決まっている —— 灰(`btn--quiet`)= ならぶもの =「まだ」、
+           金(`btn--primary`)= 次に進む = 言えた側である。 */
+      const 答え = await page.evaluate(() => [...document.querySelectorAll('.wordcard-answers button')]
+        .map((b) => ({ 字: b.textContent.trim(), 金: b.classList.contains('btn--primary') })))
+      const 字 = 答え.map((a) => a.字)
       if (字.length < 2) { ng(`${名} … 答えのボタンが2つ出ていない`, JSON.stringify(字)); await page.close(); continue }
       /* **印は `KEY_MARK` から読み取って突き合わせる**(書き写さない) */
       const 印 = 字.filter((t) => Object.values(KEY_MARK).some((m) => t.includes(m)))
@@ -15812,15 +15820,16 @@ for (const [q2, 期待, 何] of [
           const k = Object.keys(矢印).find((x) => keyMove({ key: x }) === move)
           return k ? 矢印[k] : ''
         }
-        const まだ = 字.find((t) => t.startsWith('まだ')) ?? ''
-        const 覚え = 字.find((t) => t.startsWith('覚え')) ?? ''
-        if (印of('yet') && 印of('ok')
-          && まだ.includes(印of('yet')) && 覚え.includes(印of('ok'))) {
-          ok(`${名} … 「まだ」が ${印of('yet')} 、「覚え…」が ${印of('ok')}`
-            + '(キーの名前と突き合わせた)')
+        const まだ = 答え.find((a) => !a.金)?.字 ?? ''
+        const 言える = 答え.find((a) => a.金)?.字 ?? ''
+        if (印of('yet') && 印of('ok') && まだ && 言える
+          && まだ.includes(印of('yet')) && 言える.includes(印of('ok'))) {
+          ok(`${名} … 灰の「${まだ}」が ${印of('yet')} 、`
+            + `金の「${言える}」が ${印of('ok')}(キーの名前と突き合わせた)`)
         } else {
           ng(`${名} … 印とボタンの組が入れ替わっている`,
-            `${まだ} / ${覚え}(まだ = ${印of('yet')} / 覚え = ${印of('ok')} のはず)`)
+            `灰「${まだ}」/ 金「${言える}」`
+            + `(灰 = ${印of('yet')} / 金 = ${印of('ok')} のはず)`)
         }
       } else if (印.length === 0) {
         ok(`${名} … キーの印を出さない(押しようがないものを見せない)`, 字.join(' / '))
