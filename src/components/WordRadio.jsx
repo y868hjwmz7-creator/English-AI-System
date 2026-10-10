@@ -54,14 +54,16 @@ import VolumeRow from './VolumeRow.jsx'
    `SortIcon` は第5.275節で決めたつまみ3本で、**同じ働きの
    ボタンに同じ絵**を出す(呼び名・絵を2か所に書かない・CLAUDE.md) */
 import { CloseIcon, PlayIcon, SortIcon, StopIcon } from './Icons.jsx'
-import { prepareRead, readAloud, stopReading } from '../lib/readAloud.js'
+import { stopReading } from '../lib/readAloud.js'
 /* ★ **画面を消しても鳴り続ける**(第5.285節・2026-09-27 利用者の指定)。
    間を「時計」ではなく「無音」で置く。判断も作り方も `silentWav.js` /
    `audioClips.js` 1か所で、ここは呼ぶだけである */
 import { quietWait } from '../lib/audioClips.js'
 import { setMediaActions, setNowPlaying } from '../lib/mediaSession.js'
-import { JA_VOICE } from '../data/clipVoices.js'
-import { PREMIUM } from '../lib/voiceTier.js'
+/* ★ **鳴らす算段は `playRadioRow()` 1か所**(第5.445節)。
+   **練習のカードの「流す」も、まったく同じものを通る** ——
+   読む順・間の置き方・先読み・声の選び方を、画面に書き写さない */
+import { EMPTY, playRadioRow } from '../lib/radioPlay.js'
 import { setBgmVolume, startBgm, stopBgm } from '../lib/bgm.js'
 import {
   VOL_NO_TEXT, bgmLevel, setVoiceLevel, voiceLevel, volumeWorks,
@@ -80,9 +82,9 @@ import {
   RADIO_ORDERS, loadRadioOrder, saveRadioOrder,
   /* ★ **塊で送る**(第5.443節)。束を作るところと切るところを分けてある */
   chunkCount, chunkRange, radioChunk, radioDeck, stepChunk,
-  nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioGapsOf, radioJaOf,
+  nextIndex, prevIndex, radioGapLabelFor, radioGapsFor, radioJaOf,
   radioModesFor,
-  radioSteps, radioTextOf, radioVoiceOf, radioWarmups, saveRadioGap, saveRadioMode,
+  radioTextOf, saveRadioGap, saveRadioMode,
 } from '../lib/wordRadio.js'
 
 export default function WordRadio({
@@ -353,163 +355,41 @@ export default function WordRadio({
     liveRef.current = mine
     const alive = () => liveRef.current === mine
 
-    /* ★ **長い間は、音で置く**(第5.285節・2026-09-27 実機・利用者の指定)。
-
-         > 聞き流しの途中にスマホの電源を押して画面をオフにすると
-         > 音声も消えてしまいます。
-
-       画面を消すと端末は**このページの時計を止める。** だから
-       「鳴らす → 時計で待つ → 次を鳴らす」は、**いま鳴っている1本の
-       終わりで止まっていた。** 音が出せなくなったのではなく、
-       **次を鳴らす合図が来なくなっていた。**
-
-       無音を鳴らせば、終わりを知らせるのは `ended`(音の側)なので届く。
-       **判断は `silentNeeded()` 1か所**(画面の中で 150 と書かない)。
-       短い間(描き替えを1手待つ `wait(0)` など)は、これまでどおり時計。 */
-    const wait = (ms) => quietWait(ms, alive)
-    /* **3つの間は、選んだ秒から一度に出す**(`radioGapsOf()` 1か所)。
-       ここで `WORD_GAP_MS` を直に使うと、間を変えても
-       **語と語のあいだだけが動かない** */
-    const gaps = radioGapsOf(gap, mode)
-
     const run = async () => {
       while (alive()) {
         /* **控えから読む。** ここが「いま読んでいる語」である。
            1周のあいだ動かさないので、読んでいる語と画面が必ず一致する */
         const i = atRef.current
-        const row = list[i]
-        const steps = radioSteps(row, mode, gap)
-        /* **問が変わったら、答えは閉じる。** 前の問の英文が残っていると、
-           次の問の「言う番」に**前の答えが出たまま**になる */
-        setLine(null); setOpen(false)
-        /* **次の語は、いま鳴らしているあいだに用意する**
-           (2026-09 実機・利用者の指定「違う単語に移る際の間を
-           0.5 秒くらいまで縮められませんか」)。
+        /* ★ **鳴らす算段は `playRadioRow()` 1か所**(第5.445節)。
+             **練習のカードの「流す」も、まったく同じものを通る** ——
+             書き写すと、読む順・間の置き方・先読み・声の選び方が
+             **片方だけ古くなる**(CLAUDE.md「数え方を2通り持たない」)。
 
-           耳に届く間は**「決めた間 + 用意の待ち」**である。語が変わると
-           MP3 と文字ごとの時刻を取りに行くが、**同じ語の2回目には
-           起きない**(もう控えにある)。だから間の値だけを縮めても、
-           「別の語のときだけ長い」は半分しか直らない。
-
-           **1つ先だけ**(`readAloudSequence` の `ahead` と同じ作法)。
-           どのみち次に鳴らすものなので、**費用は増えない**。
-           失敗しても何もしない —— 先読みのために画面を止めない */
-        /* ══════════════════════════════════════════════════════
-           **訳も先読みする**(第5.251節・2026-09-23 利用者の指定)
-
-             > そしてそもそも日本が言われるまでの時間、これが今は長い。
-             > これも最速にしましょう。
-
-           **英語しか先読みしていなかった。** 言う練習は訳から始まるので、
-           問が変わるたびに**訳の MP3 を取りに行ってから**鳴っていた ——
-           これが「そもそも日本語が言われるまで」の正体である。
-           **間の値をいくら縮めても、ここは1ミリも縮まらない。**
-
-           **何を先読みするかは `radioWarmups()` が決める**
-           (歩みそのものから読む)。ここで「言う練習なら訳も」と
-           書くと、読む順を変えた日に先読みだけが古くなる。
-
-           **費用は増えない。** どのみち次に鳴らすもので、鍵が同じなら
-           0円である(CLAUDE.md「音声は鍵が同じなら 0 円」)。
-           **1つ先だけ**にしてあるので、鳴らす前に取り終わる ——
-           同じ瞬間に2回作りに行くことも無い。
-           ══════════════════════════════════════════════════════ */
-        /* ★ **声と段も、その行から読む**(第5.334節)。
-             応答問題の「正解の聞き流し」は、**その教材の声**で支度されて
-             いるので、ここで既定の声を取りに行くと**支度した MP3 に
-             1本も当たらない**(待つうえ、二度目の課金)。
-             **判断は `radioVoiceOf()` 1か所** —— 鳴らす側(下)と
-             同じものを通す(書き写すと先読みだけが別の声を取る) */
-        const 次の行 = list[nextIndex(i, list.length)]
-        for (const w of radioWarmups(次の行, mode)) {
-          prepareRead(w.text, w.ja
-            ? { clipVoice: JA_VOICE, clipTier: PREMIUM }
-            : radioVoiceOf(次の行))
-        }
-        if (!steps.length) {
-          /* **読むものが無い語は、待たずに次へ。**「読んだことにして」
-             間だけ置くと、無音の時間が延びるだけである。
-             **ただし少しだけ譲る** —— 一覧ぜんぶが空だったときに、
-             画面ごと固まらないようにする(`radioTextOf` で先に落として
-             あるので、ここへ来るのは行が入れ替わった一瞬だけ) */
+             ここに残っているのは**この画面だけの事情**である ——
+             どこまで来たかの控え(`atRef`)と、送り方(`move`)。 */
+        const 結果 = await playRadioRow(list[i], {
+          mode,
+          gap,
+          rate,
+          next: list[nextIndex(i, list.length)],
+          alive,
+          /* 「次へ」で送られたら、この行はもう読まない */
+          here: () => atRef.current === i,
+          onSay: setSay,
+          onLine: setLine,
+          onOpen: setOpen,
+          /* **進めるのは、間を置く前**(あちらがその順を持っている) */
+          onNext: () => move(nextIndex(i, list.length)),
+        })
+        if (!alive()) return
+        if (結果 === EMPTY) {
+          /* **読むものが無い行は、待たずに次へ。ただし少しだけ譲る** ——
+             一覧ぜんぶが空だったときに、画面ごと固まらないようにする
+             (`radioTextOf` で先に落としてあるので、ここへ来るのは
+             行が入れ替わった一瞬だけ) */
           move(nextIndex(i, list.length))
-          await wait(120)
-          continue
+          await quietWait(120, alive)
         }
-        for (const st of steps) {
-          if (!alive()) return
-          /* 「次へ」で移されたら、この語はもう読まない */
-          if (atRef.current !== i) break
-          /* **「言う番」は、ただの間ではない。** 画面にそう出す ——
-             黙って止まっていると、待たされているのか壊れたのか分からない */
-          if (st.kind === 'wait') {
-            setSay(st.you ? 'you' : null)
-            await wait(st.ms)
-            continue
-          }
-          setSay(st.kind)
-          /* **鳴らすものを、そのまま画面に出す。** かたまりのときは
-             かたまりが出る。ここで開く(答えは、鳴ってから見せる) */
-          setLine(st.text); setOpen(true)
-          /* **描き替えを1手待ってから鳴らす**(2026-09)。
-             React は `setLine()` をその場では描き替えないので、
-             すぐ鳴らすと**音が先、文字があと**になる ——
-             実測で「`Could you walk me through…` を読んでいるのに、
-             画面は1つ前のかたまり」だった(`npm run test:bar`)。
-             `setAt()` で踏んだのとまったく同じ落とし穴である。
-
-             **`requestAnimationFrame` は使わない** ——
-             別のタブへ移ると止まるので、そこで練習ごと固まる */
-          await wait(0)
-          if (!alive() || atRef.current !== i) return
-          /* **曲は、鳴っているあいだも小さくしない**(2026-09 利用者の指定
-             「英語音声が再生される時に自動で音楽の音量を下げる機能は
-             必要ありません」)。大きさは聴く人が左のメニューの下で決める */
-          /* ══════════════════════════════════════════════════════
-             **訳は、窓口の声でだけ読む**(2026-09 利用者の指定)。
-
-               > 日本語の声のIDです Shohei (male) ID IVNAqtksLGNGcgvh8Jez
-
-             2026-09 に日本語を外したのは「こえの質が悪すぎます!」
-             だったが、**あれは端末の声**である。あのとき
-             「窓口で作れるようになった日には戻す。
-             **端末の声には二度と戻さない**」と書き残してあった。
-
-             だから `clipOnly` を渡す —— 窓口で作れなかったときは
-             **鳴らさずに次へ**。落ちた先で悪い声が鳴るくらいなら、
-             一瞬だまるほうがよい。
-
-             **聞き流し(英語だけ)は1ミリも変えていない** ——
-             あちらに `ja` の段は1つも出ない(`radioSteps`)。
-             どの声で読むかは `JA_VOICE` 1か所である
-             ══════════════════════════════════════════════════════ */
-          await (st.kind === 'ja'
-            ? readAloud(st.text, {
-              rate,
-              clipVoice: JA_VOICE,
-              /* **良い段で頼む。** `JA_VOICE` は ElevenLabs にしかいないので、
-                 標準の段(Google / Azure)に落とすと**代役の英語の声**になる */
-              clipTier: PREMIUM,
-              clipOnly: true,
-            })
-            /* ★ **声と段は、その行から**(第5.334節)。
-               **渡っていなければ、これまでどおり**(単語帳と Quick Response
-               の行には `clipVoice` が無いので、1ミリも変わらない) */
-            : readAloud(st.text, { rate, ...radioVoiceOf(row) }))
-        }
-        if (!alive()) return
-        setSay(null)
-        /* 「次へ」で移されていたら、**語のあいだの間は置かない。**
-           押したのに 0.9 秒だまるのは、効いていないように見える */
-        if (atRef.current !== i) continue
-        /* **進めるのが先、間を置くのがあと。**
-           React は `setAt()` をその場では描き替えないので、
-           **間よりあとに進めると、音が出た時点で画面がまだ1つ前**になる
-           (実測: 「gist」を読んでいるのに画面は「take on」)。
-           先に進めておけば、語と語のあいだの 0.9 秒で必ず追いつく */
-        move(nextIndex(i, list.length))
-        await wait(gaps.word)
-        if (!alive()) return
       }
     }
     run()

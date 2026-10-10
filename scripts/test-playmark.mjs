@@ -3532,6 +3532,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     const wb = 落とす(readFileSync(
       new URL('../src/components/Wordbook.jsx', import.meta.url), 'utf8'))
+    /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+         練習のカードの「流す」と**同じものを通す**ためである。
+         **見張りも一緒に移す。弱めない**(第5.271節と同じ作法)—— 
+         ここから下で「読む順」「間」「先読み」を見ているものは、
+         **移した先**を見る */
+    const play = 落とす(readFileSync(
+      new URL('../src/lib/radioPlay.js', import.meta.url), 'utf8'))
     const radio = 落とす(readFileSync(
       new URL('../src/components/WordRadio.jsx', import.meta.url), 'utf8'))
     const bgmjs = 落とす(readFileSync(
@@ -3547,8 +3554,8 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     /* **出題とまったく同じ道で語を選ぶ**(数え方を2通り持たない) */
     ok(/const pool = poolNow\(\)/.test(wb) && /setRadio\(pool\)/.test(wb),
       '聞き流し … 読む語は、出題と同じ `poolNow()` から選んでいる')
-    ok(/= radioSteps\(row, mode, gap\)/.test(radio),
-      '聞き流し … 読む順も、間の長さも `radioSteps()` に任せている')
+    ok(/= radioSteps\(row, mode, gap\)/.test(play) && !/radioSteps\(/.test(radio),
+      '聞き流し … 読む順も、間の長さも `radioSteps()` に任せている(画面は呼ばない)')
 
     /* ── **いま読んでいる語は、控えが本体**(2026-09 実機・利用者の指摘)──
      *
@@ -3573,13 +3580,16 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
       '聞き流し … `setAt` だけで進めていない(控えと食い違う)')
     /* **進めるのが先、間を置くのがあと。** 逆にすると、音が出た時点で
        画面がまだ1つ前になる(実測: gist を読んでいるのに画面は take on) */
-    ok(/move\(nextIndex\(i, list\.length\)\)\s*\n\s*await wait\(gaps\.word\)/.test(radio),
+    /* ★ **その順も `radioPlay.js` が持つ**(第5.445節)——
+         2か所から呼ぶので、呼ぶ側に書かせると片方だけ古くなる。
+         **「次へ送る」のあとに「間を置く」が来ているか**で見る */
+    ok(/onNext\(\)\s*\n\s*await wait\(gaps\.word\)/.test(play),
       '聞き流し … 先に進めてから、語のあいだの間を置く(画面が追いつく)')
     /* **語と語のあいだも、選んだ間から出す。** ここで `WORD_GAP_MS` を
        直に使うと、間を変えても**そこだけ動かない**(しかも音は鳴る) */
     /* **読み方も渡す**(第5.251節)。渡さないと「言う練習」でも
        英語だけの道を通り、「すぐ」が既定の 1.5 秒に落ちる */
-    ok(/const gaps = radioGapsOf\(gap, mode\)/.test(radio) && !/wait\(WORD_GAP_MS\)/.test(radio),
+    ok(/const gaps = radioGapsOf\(gap, mode\)/.test(play) && !/wait\(WORD_GAP_MS\)/.test(play),
       '聞き流し … 3つの間を `radioGapsOf()` 1か所から、読み方ごとに出している')
     /* ── **次の語を、いま鳴らしているあいだに用意しているか**
      *   (2026-09 実機・利用者の指定「違う単語に移る際の間を…」)
@@ -3602,10 +3612,13 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
        仕組みは1ミリも壊れていない。
        見るのは性質 —— **先読みするのは「次の1つ」**で、
        **何を取りに行くかは `radioWarmups()` が決める** */
-    const 次の名 = radio.match(/const (\S+) = list\[nextIndex\(i, list\.length\)\]/)?.[1]
-    ok(!!次の名
-      && new RegExp(`for \\(const w of radioWarmups\\(${次の名}, mode\\)\\)`).test(radio),
-      '聞き流し … 次の1つを、いま鳴らしているあいだに用意している')
+    /* ★ **先読みも `radioPlay.js` が持つ**(第5.445節)。
+         渡された「次の行」を、`radioWarmups()` にそろえて温めているか。
+         **名前を先に読み取ってから**、その名前で見る */
+    const 次の名 = play.match(/radioWarmups\((\w+), mode\)/)?.[1]
+    ok(!!次の名 && new RegExp(`${次の名}\\s*[,=}]`).test(play)
+      && /next = null/.test(play),
+    '聞き流し … 次の1つを、いま鳴らしているあいだに用意している')
     /* **`readAloud()` と同じ既定で用意する。** `prefetchClip` を画面から
        直に呼ぶと、話者と段を**呼ぶ側が書き写す**ことになり、
        用意した場所と実際に鳴らす場所が食い違う(しかも音は鳴る) */
@@ -8342,7 +8355,10 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const ra = noNote(readD('src/lib/readAloud.js'))
   ok(/clipOnly = false/.test(ra), '**端末の声に落とさない**道は、渡されたときだけ効く(既定は落とす)')
   ok(/if \(clipOnly\) \{/.test(ra), '落とさないと言われたら、鳴らさずに終える')
-  const rj0 = noNote(readD('src/components/WordRadio.jsx'))
+  /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+       練習のカードの「流す」と同じものを通すためである。
+       **見張りも一緒に移す。弱めない**(第5.271節と同じ作法) */
+  const rj0 = noNote(readD('src/lib/radioPlay.js'))
   ok(/clipOnly: true/.test(rj0) && /clipVoice: JA_VOICE/.test(rj0),
     '訳は `JA_VOICE` で読み、端末の声には落とさない')
   ok(!/'ja-1'/.test(rj0), "画面に声の id を書き写していない(`'ja-1'` と書かない)")
@@ -8631,18 +8647,20 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   }
   {
     const rd = noNote(readD('src/components/WordRadio.jsx'))
+    /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+         **見張りも一緒に移す。弱めない** —— 先読みと間の出どころは
+         あちら(`rp`)、覚える欄・選ぶ欄はこちら(画面 `rd`)である */
+    const rp = noNote(readD('src/lib/radioPlay.js'))
     /* ★ **式を書き写さない**(上と同じ理由・第5.334節)。
        あわせて **声も同じ行から読んでいるか**を見る ——
        鳴らす側と先読みする側で別の行を見ると、
        **先読みだけが別の声を取りに行って二度課金**になる(第5.289節) */
-    const 次名 = rd.match(/const (\S+) = list\[nextIndex\(i, list\.length\)\]/)?.[1]
-    ok(!!次名
-      && new RegExp(`radioWarmups\\(${次名}, mode\\)`).test(rd)
-      && new RegExp(`radioVoiceOf\\(${次名}\\)`).test(rd),
+    const 次名 = rp.match(/radioWarmups\((\w+), mode\)/)?.[1]
+    ok(!!次名 && new RegExp(`radioVoiceOf\\(${次名}\\)`).test(rp),
       '聞き流し … 次の1つを、`radioWarmups()` にそろえて先読みする(声も同じ行から)')
-    ok(/clipVoice: JA_VOICE, clipTier: PREMIUM/.test(rd),
+    ok(/clipVoice: JA_VOICE, clipTier: PREMIUM/.test(rp),
       '訳の先読みも、鳴らすときと同じ声・同じ段(別の鍵で二度課金しない)')
-    ok(/radioGapsOf\(gap, mode\)/.test(rd),
+    ok(/radioGapsOf\(gap, mode\)/.test(rp),
       '聞き流し … 3つの間を、読み方ごとに出している')
     ok(/loadRadioGap\(where, mode\)/.test(rd) && /saveRadioGap\(ms, where, mode\)/.test(rd),
       '聞き流し … 間は読み方ごとに覚える')
@@ -8675,12 +8693,21 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   // ── 画面が呼んでいるか
   const rj = noNote(readD('src/components/WordRadio.jsx'))
   ok(/hidesAnswer\(mode\)/.test(rj), '画面が `hidesAnswer()` を呼んでいる(判断を書き写さない)')
-  ok(/setLine\(st\.text\)/.test(rj),
+  /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+       画面は `onLine` / `onOpen` / `onSay` を**渡すだけ**になったので、
+       **出す中身を決めているのは、あちら**である。
+       **見張りも一緒に移す。弱めない**(第5.271節と同じ作法) */
+  const rjp = noNote(readD('src/lib/radioPlay.js'))
+  ok(/onLine\(st\.text\)/.test(rjp),
     '**鳴っているものを、そのまま画面に出す**(かたまりのときはかたまり)')
-  ok(/setLine\(null\); setOpen\(false\)/.test(rj),
+  ok(/onLine\(null\); onOpen\(false\)/.test(rjp),
     '問が変わったら答えを閉じる(前の答えが残らない)')
-  ok(/st\.you \? 'you' : null/.test(rj),
+  ok(/st\.you \? 'you' : null/.test(rjp),
     '「言う番」を画面に出している(黙って止まらない)')
+  /* **画面が受け取って、本当に描いているか** —— あちらが渡しても、
+     画面が捨てていれば何も出ない(片側だけ見ない) */
+  ok(/onLine: setLine/.test(rj) && /onOpen: setOpen/.test(rj) && /onSay: setSay/.test(rj),
+    '聞き流し … 画面は、出す中身をそのまま受け取って描いている')
   const qv = noNote(readD('src/components/QrReview.jsx'))
   ok(/言う練習・聞き流し/.test(qv),
     '入口の名前が中身と合っている(聞き流しだけの場所ではなくなった)')
@@ -14304,11 +14331,15 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
 
   /* ── ② **待ちを音で置いているか**(画面と算段の両方)────────────── */
   {
-    const radio = noC5(read5('src/components/WordRadio.jsx'))
+    /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+         **見張りも一緒に移す。弱めない** */
+    const radio = noC5(read5('src/lib/radioPlay.js'))
     const aloud = noC5(read5('src/lib/readAloud.js'))
     /* ★ **間は `quietWait()` 1か所**(第5.285節)。聞き流しも読み上げも、
-       **呼ぶだけ** —— どちらかに書き写すと、直した日に片方だけ古くなる */
-    ok(/const wait = \(ms\) => quietWait\(ms, alive\)/.test(radio),
+       **呼ぶだけ** —— どちらかに書き写すと、直した日に片方だけ古くなる。
+       **差し替えられる口(`pause`)にしてある**ので、検証では偽物を渡せる。
+       既定が本物の `quietWait` であることを、ここで見る */
+    ok(/pause: ac\.quietWait/.test(radio) && /const wait = \(ms\) => 待つ\(ms, alive\)/.test(radio),
       '聞き流し … 長い間を、無音の音で置く(`quietWait()` に任せる)')
     /* **読み上げ**(本文・6Steps・集中モード。「全ての機能で同じ仕様に」) */
     ok(/const pause = \(ms\) => quietWait\(ms, alive\)/.test(aloud),
@@ -16429,6 +16460,102 @@ console.log('\n▶ 覚えた にする(第5.438節)')
   const 道具 = 読む2('src/components/Icons.jsx')
   ok(種類.length === 1 && new RegExp(`export function ${種類[0]}\\(`).test(道具),
     `聞き流し … その絵(${種類[0]})は \`Icons.jsx\` にある`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * **鳴らす順番を、本当に動かして測る**(第5.445節)
+ *
+ *   これまで聞き流しの算段は `WordRadio.jsx` の中にあり、
+ *   **素の node で1度も走らせられなかった**(CLAUDE.md
+ *   「描けないものは測れない」)。だから見張りは**書いてある文字**を
+ *   突き合わせるしかなく、「どの順で何が起きるか」は測れていなかった。
+ *
+ *   `radioPlay.js` へ出し、**鳴らす口を差し替えられる**ようにしたので、
+ *   偽物を渡して**順番そのもの**を確かめられる。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 鳴らす順番(第5.445節・本当に動かして測る) ──')
+  const { EMPTY, PLAYED, STOPPED, playRadioRow } = await import('../src/lib/radioPlay.js')
+
+  /** 呼ばれたものを、呼ばれた順に書き留める偽物 */
+  const 仕掛け = (o = {}) => {
+    const 跡 = []
+    return {
+      跡,
+      speak: async (t, opt) => { 跡.push(`鳴 ${t}${opt?.clipOnly ? '(窓口だけ)' : ''}`) },
+      warm: (t) => { 跡.push(`温 ${t}`) },
+      pause: async (ms) => { 跡.push(`間 ${ms}`) },
+      onSay: (k) => 跡.push(`札 ${k}`),
+      onLine: (t) => 跡.push(`字 ${t}`),
+      onOpen: (v) => 跡.push(`開 ${v}`),
+      onNext: () => 跡.push('送'),
+      ...o,
+    }
+  }
+  const 語 = { display: 'take on', meaning_ja: '引き受ける' }
+  const 次 = { display: 'gist', meaning_ja: '要点' }
+
+  /* ── ①「英語だけ」── */
+  {
+    const f = 仕掛け()
+    const r = await playRadioRow(語, { mode: 'en', gap: 900, next: 次, ...f })
+    ok(r === PLAYED, '順番 … ふつうに鳴り終わる', r)
+    const 鳴 = f.跡.filter((x) => x.startsWith('鳴'))
+    ok(鳴.length >= 1 && 鳴.every((x) => x.includes('take on')),
+      '順番 … 「英語だけ」では、その行の英語しか鳴らさない', 鳴.join(' / '))
+    /* **次の行を、鳴らす前に温める** —— あとだと間に合わない */
+    ok(f.跡.indexOf('温 gist') >= 0 && f.跡.indexOf('温 gist') < f.跡.findIndex((x) => x.startsWith('鳴')),
+      '順番 … 次の行は、鳴らしはじめる前に温める', f.跡.slice(0, 4).join(' / '))
+    /* ★ **進めるのが先、間を置くのがあと**(実測で踏んだところ)。
+         逆にすると、音が出た時点で画面がまだ1つ前になる */
+    const 送 = f.跡.lastIndexOf('送')
+    const 最後の間 = f.跡.length - 1 - [...f.跡].reverse().findIndex((x) => x.startsWith('間'))
+    ok(送 >= 0 && 送 < 最後の間,
+      '順番 … 次へ送ってから、語のあいだの間を置く', f.跡.slice(-3).join(' / '))
+  }
+
+  /* ── ②「言う練習」では、訳も鳴る(窓口の声でだけ)── */
+  {
+    const f = 仕掛け()
+    await playRadioRow(語, { mode: 'say', gap: 900, next: 次, ...f })
+    /* **鳴らした跡だけを見る。** 画面に出した跡(`字 …`)にも同じ語が
+       入っているので、そちらを拾うと**鳴っていなくても緑**になる */
+    const 訳 = f.跡.find((x) => x.startsWith('鳴') && x.includes('引き受ける'))
+    ok(!!訳, '順番 … 言う練習では、訳も鳴る', 訳 || '(鳴っていない)')
+    ok(訳 && 訳.includes('窓口だけ'),
+      '順番 … 訳は窓口の声でだけ読む(端末の声に落とさない)', 訳)
+    /* **「言う番」を画面に出している** */
+    ok(f.跡.includes('札 you'), '順番 … 「言う番」を画面に出す(黙って止まらない)',
+      f.跡.filter((x) => x.startsWith('札')).join(' / '))
+  }
+
+  /* ── ③ **いちばん危ない形**(CLAUDE.md)── */
+  {
+    const f = 仕掛け()
+    const r = await playRadioRow({ display: '   ' }, { mode: 'en', gap: 900, ...f })
+    ok(r === EMPTY && !f.跡.some((x) => x.startsWith('鳴')),
+      '順番 … 読むものが無い行は、1つも鳴らさずに終わる', `${r} / ${f.跡.join(' / ')}`)
+  }
+  {
+    const f = 仕掛け()
+    const r = await playRadioRow(語, { mode: 'en', gap: 900, alive: () => false, ...f })
+    ok(r === STOPPED && !f.跡.some((x) => x.startsWith('鳴')),
+      '順番 … 閉じていたら、1つも鳴らさずに終わる', `${r} / ${f.跡.join(' / ')}`)
+  }
+  {
+    /* **「次へ」で送られたら、その行はもう読まない** */
+    const f = 仕掛け()
+    const r = await playRadioRow(語, { mode: 'en', gap: 900, here: () => false, ...f })
+    ok(r === STOPPED && !f.跡.some((x) => x.startsWith('鳴')),
+      '順番 … 「次へ」で送られたら、その行はもう読まない', `${r}`)
+  }
+  {
+    /* **次の行が無くても落ちない**(いちばん最後の行) */
+    const f = 仕掛け()
+    const r = await playRadioRow(語, { mode: 'en', gap: 900, next: null, ...f })
+    ok(r === PLAYED && !f.跡.some((x) => x.startsWith('温')),
+      '順番 … 次の行が無ければ、温めない(落ちもしない)', r)
+  }
 }
 
 console.log(ng

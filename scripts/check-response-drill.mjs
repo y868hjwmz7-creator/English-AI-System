@@ -585,10 +585,15 @@ console.log('\n▶ 応答の聞き流し(第5.334節 / 第5.355節)')
   /* ★ **鳴らす側と先読みする側の両方が、同じ声を通っているか。**
        片方だけだと、**先読みが別の声を取りに行って二度課金**になる
        (`materialRestClips` で踏んだのと同じ形・第5.289節) */
-  const wr = noC(R('src/components/WordRadio.jsx'))
-  is(/readAloud\(st\.text, \{ rate, \.\.\.radioVoiceOf\(row\) \}\)/.test(wr),
+  /* ★ **鳴らす算段は `radioPlay.js` へ移した**(第5.445節)。
+       練習のカードの「流す」と同じものを通すためである。
+       **見張りも一緒に移す。弱めない**(第5.271節と同じ作法)。
+       **式を書き写さない** —— 名前を先に読み取ってから、その名前で見る */
+  const wr = noC(R('src/lib/radioPlay.js'))
+  is(/\(st\.text, \{ rate, \.\.\.radioVoiceOf\(row\) \}\)/.test(wr),
     '聞き流しが鳴らすとき、その行の声で鳴らす')
-  is(/prepareRead\(w\.text, w\.ja[\s\S]{0,120}: radioVoiceOf\(次の行\)\)/.test(wr),
+  const 次名 = wr.match(/radioWarmups\((\w+), mode\)/)?.[1]
+  is(!!次名 && new RegExp(`\\(w\\.text, w\\.ja[\\s\\S]{0,120}: radioVoiceOf\\(${次名}\\)\\)`).test(wr),
     '聞き流しが先読みするときも、同じ声を取りに行く')
   /* **骨組みは、本物と1文字も違えない**(CLAUDE.md)——
      応答問題の教材が骨組みに無いと、ボタンが1度も描かれない */
