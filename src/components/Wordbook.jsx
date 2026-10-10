@@ -2812,7 +2812,7 @@ export default function Wordbook({
                       ここで渡すのは残りの2つである。
                       **`btn--quiet`(灰)を渡すのは、色を決めている印**でもある
                       —— `toneOn()` は、呼ぶ側が色を持っていれば足さない */}
-                  <SpeakButton text={word} className="knob knob--say" />
+                  <SpeakButton text={word} className="knob" label={null} />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 覚えかけ。
