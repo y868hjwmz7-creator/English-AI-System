@@ -15987,17 +15987,26 @@ for (const [q2, 期待, 何] of [
         ng('Quick Response … 上の行と答えの行で、幅がそろっていない',
           `上 ${m.上.x}→${m.上.右} / 下 ${m.下.x}→${m.下.右}`)
       }
-      /* ★ **すき間も同じか**(となりどうしの間を、両方の行で測る) */
-      const すき間 = (r) => r.子.slice(1).map((c, i) => c.x - r.子[i].右)
-      const 上す = すき間(m.上)
-      const 下す = すき間(m.下)
-      const そろい = 上す.every((g) => 下す.every((h) => Math.abs(g - h) <= 1))
-      if (上す.length && 下す.length && そろい) {
-        ok('Quick Response … となりどうしのすき間も、上下で同じ',
-          `上 ${上す.join(' / ')} / 下 ${下す.join(' / ')}`)
+      /* ★ **操作の行は、絵だけ4つになった**(第5.441節)。
+
+           44px の丸い的を升目のまん中に置くので、**となりどうしの
+           すき間は、答えの行(横幅いっぱいのボタン)より必ず広くなる。**
+           第5.437節は「上下で同じすき間か」を見ていたが、
+           **いまの形では、そろえようがない。**
+
+           代わりに測るのは2つ。
+             ①**升目どうしが等間隔か**(ここ)
+             ②**両端が答えの行とそろっているか**(すぐ上で測っている)
+           どちらも「間も適切にバランスよく」の中身である。 */
+      const 一段 = m.上.子.filter((c) => c.上 === (m.上.子[0]?.上 ?? 0))
+      const 上す = 一段.slice(1).map((c, i) => c.x - 一段[i].右)
+      const 下す = m.下.子.slice(1).map((c, i) => c.x - m.下.子[i].右)
+      const 等間隔 = 上す.every((g) => Math.abs(g - 上す[0]) <= 1)
+      if (上す.length && 等間隔) {
+        ok('Quick Response … 操作の升目は等間隔', `${上す.join(' / ')}(答えの行は ${下す.join(' / ')})`)
       } else {
-        ng('Quick Response … 上下ですき間が違う',
-          `上 ${上す.join(' / ')} / 下 ${下す.join(' / ')}`)
+        ng('Quick Response … 操作の升目が等間隔でない',
+          `${上す.join(' / ')} / 答えの行は ${下す.join(' / ')}`)
       }
       /* ★ **折り返していないか**(3つとも1行に収まる) */
       if (m.上.段 === 1) ok('Quick Response … 上の行は1行に収まっている', `${m.上.子.length} つ`)
@@ -16532,7 +16541,18 @@ const 形 = {}
       d.remove()
       return v
     })()
-    const 升 = [...row.children].map((e) => {
+    /* ★ **測るのは `.knob` を着た升目だけ**(第5.441節の赤チェックで直した)。
+
+         この行には、**教材によってヒント / 訳を見るも並ぶ**
+         (字のボタン・枠線だけ・4つを超えたら次の段へ回る)。
+         行の子をぜんぶ数えると**あちらまで「操作の升目」として測られ**、
+         「高さがそろっていない(44 対 119)」のような
+         **直すところが無いのに赤くなる**赤が 12 本出た。
+
+         **守りたい決まりは「4つの操作がそろっているか」**なので、
+         相手は `.knob` である。ヒント / 訳は、すぐ下で
+         **「絵の升目のあいだに割り込んでいないか」**だけを見る。 */
+    const 升 = [...row.querySelectorAll(':scope > .knob')].map((e) => {
       const g = window.getComputedStyle(e)
       const b = e.getBoundingClientRect()
       const svg = e.querySelector('svg')
@@ -16562,7 +16582,14 @@ const 形 = {}
         絵のずれ: sb ? Math.round(((sb.x + sb.width / 2) - (b.x + b.width / 2)) * 10) / 10 : null,
       }
     })
-    return { 升, 金, 透明, 字ぜんぶ: row.textContent ?? '',
+    /* **`.knob` でないもの**(ヒント / 訳を見る)。
+       測るのは置き場所だけ —— 見た目は第5.441節の相手ではない */
+    const ほか = [...row.querySelectorAll(':scope > *:not(.knob)')].map((e) => {
+      const b = e.getBoundingClientRect()
+      return { 名: (e.getAttribute('aria-label') || e.textContent || '').trim(),
+        y: Math.round(b.y) }
+    })
+    return { 升, ほか, 金, 透明, 字ぜんぶ: row.textContent ?? '',
       プルダウン: row.querySelectorAll('select').length }
   }
 
@@ -16627,6 +16654,23 @@ const 形 = {}
       continue
     }
     ok(`${名} … 操作の升目は ${m.升.length} つ`, m.升.map((c) => c.名).join(' / '))
+    /* ★ **絵は、ぜんぶ同じ1段にいること**(第5.441節)。
+         1つでも次の段へ落ちたら、4つ並びが崩れている */
+    const 段 = new Set(m.升.map((c) => c.y))
+    if (段.size !== 1) {
+      ng(`${名} … 絵の升目が2段に分かれている`, m.升.map((c) => `${c.名}:y${c.y}`).join(' / '))
+    } else ok(`${名} … 絵の升目はぜんぶ同じ段(y${[...段][0]})`)
+    /* ★ **字のボタン(ヒント / 訳)が、絵のあいだに割り込んでいないこと。**
+         あちらは4つを超えたぶんなので、**絵より下の段**にいるはずである */
+    if (m.ほか.length) {
+      const 割り込み = m.ほか.filter((c) => c.y <= [...段][0])
+      if (割り込み.length) {
+        ng(`${名} … 字のボタンが絵の段に割り込んでいる`,
+          割り込み.map((c) => `${c.名}:y${c.y}`).join(' / '))
+      } else {
+        ok(`${名} … 字のボタン(${m.ほか.map((c) => c.名).join(' / ')})は、絵より下の段にいる`)
+      }
+    }
 
     // ① ぜんぶ同じ形(高さ・幅・角丸・枠線の太さ・絵の大きさ)
     for (const [何, 鍵] of [['高さ', '高さ'], ['幅', '幅'], ['角丸', '角'],
@@ -16710,7 +16754,8 @@ const 形 = {}
          **class 名を書き写さない** —— `toneOn(true)` から読み取る */
     const 鳴り = await page.evaluate(([s, cls]) => {
       const row = document.querySelector(s)
-      const listen = row.children[row.children.length - 1]
+      const 絵 = [...row.querySelectorAll(':scope > .knob')]
+      const listen = 絵[絵.length - 1]
       const on = row.querySelector('.chip--on')
       const g = (e) => { const c = window.getComputedStyle(e)
         return [c.backgroundColor, c.color] }
@@ -16838,8 +16883,10 @@ const 形 = {}
       .map((e) => { const b = e.getBoundingClientRect()
         return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)] }), 行)
     const 前 = await 場所()
+    /* **印を着せるのは `.knob` だけ** —— 字のボタンに着せると、
+       あちらの地色の話になってしまう(第5.441節の相手ではない)*/
     const 着せた = await page.evaluate((s) => {
-      const 中 = [...document.querySelector(s).children]
+      const 中 = [...document.querySelector(s).querySelectorAll(':scope > .knob')]
       /* **もとから印が付いていたものを覚えておく** —— 一律にはがすと、
          ランダム(既定で入っている)の印まで消えたまま先へ進む */
       window.__印 = 中.map((e) => e.classList.contains('chip--on'))
@@ -16848,7 +16895,7 @@ const 形 = {}
       return n
     }, 行)
     const 後 = await 場所()
-    await page.evaluate((s) => [...document.querySelector(s).children]
+    await page.evaluate((s) => [...document.querySelector(s).querySelectorAll(':scope > .knob')]
       .forEach((e, i) => { if (!window.__印[i]) e.classList.remove('chip--on') }), 行)
     if (着せた === 0) ng(`${名} … 印を1つも着せていない`, '見張りが働いていない')
     else if (JSON.stringify(前) !== JSON.stringify(後)) {
@@ -16863,7 +16910,9 @@ const 形 = {}
          **数は書かない** —— 左の余りと右の余りを比べるだけである */
     const 余り = await page.evaluate((s) => {
       const row = document.querySelector(s)
-      const 子 = [...row.children]
+      /* **絵の升目だけで測る** —— 字のボタンは次の段にいるので、
+         あれを混ぜると「右の余り」が1段ぶん大きく出る */
+      const 子 = [...row.querySelectorAll(':scope > .knob')]
       const r = row.getBoundingClientRect()
       const a = 子[0].getBoundingClientRect()
       const b = 子[子.length - 1].getBoundingClientRect()
@@ -16896,15 +16945,35 @@ const 形 = {}
       const 子 = [...row.children]
       if (!子.length) return { 空: true }
       const r = row.getBoundingClientRect()
-      const a = 子[0].getBoundingClientRect()
-      const b = 子[子.length - 1].getBoundingClientRect()
+      const 箱 = 子.map((e) => e.getBoundingClientRect())
       return {
-        左の余り: Math.round((a.left - r.left) * 10) / 10,
-        右の余り: Math.round((r.right - b.right) * 10) / 10,
+        左の余り: Math.round((箱[0].left - r.left) * 10) / 10,
+        右の余り: Math.round((r.right - 箱[箱.length - 1].right) * 10) / 10,
+        /* ★ **となりどうしのすき間**(第5.441節の赤チェックで足した)。
+             **行の `gap` から読み取る** —— 数を書き写さない */
+        きまり: Math.round(parseFloat(window.getComputedStyle(row).columnGap || '0') * 10) / 10,
+        すき間: 箱.slice(1).map((b, i) => Math.round((b.left - 箱[i].right) * 10) / 10),
         中身: 子.map((e) => (e.textContent || '').trim()).join(' / '),
       }
     })
     if (番 && !番.空) {
+      /* ★ **「左右の余りが同じ」だけでは、これを捕まえられない**
+           (第5.441節の赤チェックで分かった)。
+
+           `margin-left: auto` の物を1つ足すと、**番号は左端へ、
+           足した物は右端へ**行く —— すると左の余りも右の余りも 0 になり、
+           **いちばん悪い形が「まん中にそろっている」と出る。**
+
+           本当に見たいのは**「ひとまとまりになっているか」**である。
+           だから**となりどうしのすき間が、行の `gap` と同じか**を見る。
+           余りの左右も残す —— あちらは、片側だけ寄ったときに効く。 */
+      const 開き = 番.すき間.filter((g) => Math.abs(g - 番.きまり) > 1)
+      if (開き.length) {
+        ng(`${名} … 番号の行が、ひとまとまりになっていない`,
+          `すき間 ${番.すき間.join(' / ')} / 決まりは ${番.きまり} / ${番.中身}`)
+      } else {
+        ok(`${名} … 番号の行はひとまとまり(すき間はぜんぶ ${番.きまり}px)`)
+      }
       if (Math.abs(番.左の余り - 番.右の余り) > 1) {
         ng(`${名} … 番号の行がまん中にそろっていない`,
           `左の余り ${番.左の余り} / 右の余り ${番.右の余り} / ${番.中身}`)
