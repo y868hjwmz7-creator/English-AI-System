@@ -121,6 +121,50 @@ export function PlayIcon({ className = 'icon' }) {
 }
 
 /** 音楽(自作の BGM・0049)。**絵文字は使わない**(端末ごとに形が違う) */
+/**
+ * ★ **聞き流し**(第5.444節・2026-10-10 利用者の指定)。
+ *
+ * ── なぜ新しい絵が要ったか ────────────────────────────────
+ *
+ *   聞き流しのボタンは、**画面によって絵が違っていた** ——
+ *   単語帳は `MusicIcon`(♪)、Quick Response は `SpeakerIcon`。
+ *   **同じ働きのボタンには、同じ絵**(共通ルール)。
+ *
+ *   そのうえ **♪ は「曲」の絵でもある**(`BgmLibrary` の見出し)。
+ *   聞き流しの設定の中に「曲」が並ぶので、**同じ絵がすぐ近くで
+ *   2つの意味を持つ**ことになる —— 共通ルール
+ *   「違うものに同じ名前を付けない」の、絵の版である。
+ *
+ *   ヘッドホンなら、**スピーカー(= この1つを聴く)とも、
+ *   ♪(= 曲)とも別物**だと一目で分かる。
+ *
+ * ── なぜ太いか ────────────────────────────────────────
+ *
+ *   **帯のボタンの絵は 1文字ぶん(約14px)しかない**(`.icon` は `1em`)。
+ *   細い線はこの大きさで消える —— 実際、細い弧 + 小さな耳で描いた案は
+ *   「インパクトがイマイチ」と言われた。**塗りを増やし、箱いっぱいに使う。**
+ *
+ * ── なぜ耳が四角か(利用者の指定)────────────────────────
+ *
+ *   となりに並ぶ絵(卒業帽・札2枚・くり返しの矢印)が**直線的**なので、
+ *   丸い耳だと**この絵だけ家族から外れる。**
+ */
+export function HeadphoneIcon({ className = 'icon' }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      {/* 頭にかける弧。**この絵だけ太くする** —— 共通の 1.8 では
+          14px で消える。角の作法(`square` / `miter`)は下の `角` と同じだが、
+          **あれはこの行より後ろで宣言されている**ので、ここでは書き下す */}
+      <path d="M2.8 12V9.6a7.2 7.2 0 0 1 14.4 0V12"
+            fill="none" stroke="currentColor" strokeWidth="2.4"
+            strokeLinecap="square" strokeLinejoin="miter" />
+      {/* 耳当て。**塗りの四角**(丸めない) */}
+      <rect x="1.4" y="11.6" width="4.4" height="6.8" fill="currentColor" />
+      <rect x="14.2" y="11.6" width="4.4" height="6.8" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function MusicIcon({ className = 'icon' }) {
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true" focusable="false"

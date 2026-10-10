@@ -41,7 +41,9 @@ import { voiceTierFor } from '../lib/voiceTier.js'
 import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
 import QrCard from './QrCard.jsx'
-import { CloseIcon, SpeakerIcon } from './Icons.jsx'
+import {
+  CloseIcon, HeadphoneIcon,
+} from './Icons.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { usePracticeLog } from '../lib/practice.js'
 import { progressKey, useProgress } from '../lib/progress.js'
@@ -261,7 +263,7 @@ export default function QuickResponse({
                 aria-label={`聞き流し(${pairs.length} 問)`}
                 title={`聞き流し(${pairs.length} 問)`}
                 onClick={listen}>
-          <SpeakerIcon />聞き流し
+          <HeadphoneIcon />聞き流し
         </button>
         {onClose && !focus && (
           <button type="button" className="nav-icon-btn" onClick={onClose}

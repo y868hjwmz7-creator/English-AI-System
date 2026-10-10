@@ -116,7 +116,9 @@ import {
 import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { nextFilledBook } from '../lib/bookOpen.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
-import { CloseIcon, FocusIcon, MenuIcon, MusicIcon, PrintIcon, RepeatIcon } from './Icons.jsx'
+import {
+  CloseIcon, FocusIcon, HeadphoneIcon, MenuIcon, PrintIcon, RepeatIcon,
+} from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
@@ -1874,7 +1876,7 @@ export default function Wordbook({
             aria-label={`聞き流す(${restInScope} 語)`}
             title={`聞き流す(${restInScope} 語)`}
             onClick={listen}>
-      <MusicIcon />聞き流し
+      <HeadphoneIcon />聞き流し
     </button>
   )
 
@@ -1883,7 +1885,7 @@ export default function Wordbook({
     <button type="button" className="btn btn--quiet wb-listen"
             disabled={restInScope === 0}
             onClick={listen}>
-      <MusicIcon />聞き流す({restInScope} 語)
+      <HeadphoneIcon />聞き流す({restInScope} 語)
     </button>
   )
 

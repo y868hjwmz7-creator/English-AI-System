@@ -75,7 +75,9 @@ import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import WordRadio from './WordRadio.jsx'
-import { GraduateIcon, MusicIcon, PrintIcon, RepeatIcon, SpeakerIcon } from './Icons.jsx'
+import {
+  GraduateIcon, HeadphoneIcon, PrintIcon, RepeatIcon,
+} from './Icons.jsx'
 /* ★ **出しかたの3つ**(第5.437節)。単語帳と同じ部品を使う(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
 /* **吹き出しの入れ物は、すでにあるものを使う**(新しい箱を作らない) */
@@ -1128,7 +1130,7 @@ export default function QrReview({
             aria-label={`言う練習・聞き流し(${shown.length} 問)`}
             title={`言う練習・聞き流し(${shown.length} 問)`}
             onClick={listen}>
-      <SpeakerIcon />聞き流し
+      <HeadphoneIcon />聞き流し
     </button>
   )
 
@@ -1172,7 +1174,7 @@ export default function QrReview({
             ここは**聞き流しだけの場所ではない** —— 中に2つあり、
             もう1つが「日本語→英語」である(第5.251・5.253節)。
             **「チャンクで積む」は無くなった**(第5.251節) */}
-        <MusicIcon />言う練習・聞き流し({shown.length} 問)
+        <HeadphoneIcon />言う練習・聞き流し({shown.length} 問)
       </button>
       {paperBox}
     </div>
