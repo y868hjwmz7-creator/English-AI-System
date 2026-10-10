@@ -16842,7 +16842,13 @@ const 形 = {}
            ・矢印の骨(2本の棒)に届いていないか
 
          を測る。**矢印の位置も書き写さない** —— 棒(塗りつぶしでない
-         `path`)の箱から、左右の端を読み取る。 */
+         `path`)の箱から、左右の端を読み取る。
+
+         ★ **棒の太さを足し忘れていた**(2026-10-10)。`getBBox()` が返すのは
+           **線の中心**で、棒は太さのぶん**左右へ 0.9 ずつ太って描かれる。**
+           そのため「100」が**本当に矢印に接していた**のに緑のままだった
+           (描いた点どうしの隙間を測ると 0.00)。
+           **太さも書き写さない** —— `stroke-width` をその場で読む。 */
     const 数 = await page.evaluate(([s, 言葉]) => {
       const row = document.querySelector(s)
       const svg = [...row.querySelectorAll('svg')].find((e) => e.querySelector('text'))
@@ -16854,8 +16860,12 @@ const 形 = {}
         .filter((e) => window.getComputedStyle(e).fill === 'none')
         .map((e) => e.getBBox())
       if (棒.length !== 2) { return { 棒の数: 棒.length } }
-      const 骨左 = Math.min(...棒.map((b) => b.x))
-      const 骨右 = Math.max(...棒.map((b) => b.x + b.width))
+      /* **描かれている端**は、中心線より太さの半分だけ外側にある */
+      const 太さ = Math.max(...[...svg.querySelectorAll('path')]
+        .filter((e) => window.getComputedStyle(e).fill === 'none')
+        .map((e) => parseFloat(window.getComputedStyle(e).strokeWidth) || 0))
+      const 骨左 = Math.min(...棒.map((b) => b.x)) + 太さ / 2
+      const 骨右 = Math.max(...棒.map((b) => b.x + b.width)) - 太さ / 2
       const 箱 = svg.viewBox.baseVal
       const 結果 = []
       for (const w of 言葉) {
@@ -16866,7 +16876,7 @@ const 形 = {}
           上: Math.round(b.y * 100) / 100, 下: Math.round((b.y + b.height) * 100) / 100 })
       }
       t.textContent = 元
-      return { いま: 元.trim(), 骨左, 骨右, 結果,
+      return { いま: 元.trim(), 骨左, 骨右, 太さ, 結果,
         箱: [箱.x,箱.y, 箱.x + 箱.width, 箱.y + 箱.height] }
     }, [行, SIZES.map((n) => sizeLabel(n))])
     if (数.無い) ng(`${名} … くり返しの絵に、数が入っていない`)
@@ -16882,12 +16892,18 @@ const 形 = {}
         ng(`${名} … 数が絵の箱から出る(出たぶんは黙って切られる)`,
           切れ.map((r) => `${r.字}:${r.左}〜${r.右}`).join(' / '))
       } else ok(`${名} … ${数.結果.length} 通りの数ぜんぶが、絵の箱に収まる`)
-      const 当たり = 数.結果.filter((r) => r.左 <= 数.骨左 || r.右 >= 数.骨右)
+      const 内左 = Math.round(数.骨左 * 100) / 100
+      const 内右 = Math.round(数.骨右 * 100) / 100
+      const 当たり = 数.結果.filter((r) => r.左 <= 内左 || r.右 >= 内右)
       if (当たり.length) {
-        ng(`${名} … 数が矢印の骨に届いている`,
+        ng(`${名} … 数が矢印の棒に届いている`,
           当たり.map((r) => `${r.字}:${r.左}〜${r.右}`).join(' / ')
-          + ` / 骨は ${数.骨左}〜${数.骨右}`)
-      } else ok(`${名} … どの数も、矢印の骨(${数.骨左}〜${数.骨右})に届かない`)
+          + ` / 棒の内側は ${内左}〜${内右}(太さ ${数.太さ})`)
+      } else {
+        const 余裕 = Math.min(...数.結果.map((r) => Math.min(r.左 - 内左, 内右 - r.右)))
+        ok(`${名} … どの数も、矢印の棒(内側 ${内左}〜${内右}・太さ ${数.太さ})`
+          + ` に届かない。いちばん近いもので ${Math.round(余裕 * 100) / 100}`)
+      }
     }
 
     /* ★ ⑫ **押しても、1pxも動かない**(共通ルール)。

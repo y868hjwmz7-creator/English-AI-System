@@ -69,7 +69,7 @@ import { markPrint } from './lib/print.js'
 import WordbookFilter, { emptyFilter } from './components/WordbookFilter.jsx'
 /* ★ **本物と同じ判断を呼ぶ**(第5.414節)。札の光り方も、絞り込みの数も、
    **書き写さずに `reviewScope.js` から引く** */
-import { narrowedCount, pickIdOf, pickOf } from './lib/reviewScope.js'
+import { SIZES, narrowedCount, pickIdOf, pickOf } from './lib/reviewScope.js'
 import { LEARN_STAGES, stageLead, stageTally } from './lib/learnStage.js'
 import FocusFrame from './components/FocusFrame.jsx'
 import GrammarNote from './components/GrammarNote.jsx'
@@ -1804,6 +1804,69 @@ const RADIO = (
    **わざと長い文を入れてある** —— 短い文ばかりだと、
    字を落とすのをやめても**同じ高さになって緑のまま**になる
    (`?screen=radio` に長い語と長い訳を混ぜてあるのと同じ理由)。 */
+/** 骨組みの Quick Response を、**一覧の最大より1本多く**するための埋め合わせ。
+ *
+ *    **本数だけが要る**ので、中身は番号つきの短い文でよい。
+ *    必要な本数は `SIZES` から出す —— **ここに数を書かない。** */
+const QR_手書き = [
+  {
+    en: 'We decided to take on the project even though the deadline was extremely tight.',
+    ja: '締め切りが非常に厳しかったにもかかわらず、私たちはその案件を引き受けることにしました。',
+  },
+  {
+    en: 'Could you walk me through the numbers one more time?',
+    ja: '数字をもう一度説明していただけますか。',
+  },
+  { en: 'Let me get back to you on that.', ja: 'その件は、あらためてご連絡します。' },
+  { en: 'I am afraid that will not work for us.', ja: '申し訳ありませんが、それでは難しいです。' },
+  { en: 'Could you put that in writing?', ja: '書面にしていただけますか。' },
+  { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
+  { en: 'That makes a lot of sense.', ja: 'とても納得できます。' },
+  { en: 'I will look into it right away.', ja: 'すぐに調べます。' },
+  { en: 'Let us circle back to this next week.', ja: 'この件は来週あらためましょう。' },
+  { en: 'I am not sure I follow you.', ja: 'すみません、話が追えていません。' },
+  { en: 'Would Thursday morning work for you?', ja: '木曜の午前はご都合いかがですか。' },
+  { en: 'We will need a bit more time.', ja: 'もう少し時間が必要です。' },
+  { en: 'Thank you for bearing with us.', ja: 'お待たせして申し訳ありません。' },
+  { en: 'Let me double-check the figures.', ja: '数字をもう一度確かめます。' },
+  { en: 'That is outside our budget.', ja: 'それは予算を超えています。' },
+  { en: 'Could you send over the latest draft?', ja: '最新の原稿を送っていただけますか。' },
+  { en: 'I will keep you posted.', ja: '進み次第お知らせします。' },
+  { en: 'We are on the same page.', ja: '認識は合っています。' },
+  { en: 'Let me take that offline.', ja: 'その件は個別に話しましょう。' },
+  { en: 'I would rather hold off for now.', ja: 'いまは見送りたいです。' },
+  { en: 'Shall we wrap up here?', ja: 'ここで終わりにしましょうか。' },
+  { en: 'That is a fair point.', ja: 'それはもっともです。' },
+  { en: 'I will take care of it.', ja: '私が引き受けます。' },
+  { en: 'Could you clarify what you mean?', ja: 'どういう意味か教えていただけますか。' },
+  { en: 'We appreciate the quick turnaround.', ja: '早いご対応に感謝します。' },
+  /* ★ **一覧の最大が 30 になった**(第5.437節・「5問から選べ」)。
+       25 本では、30 をえらんでも 25 本のままになり、
+       **絞りを外しても緑**になる(「無ければ素通り」・CLAUDE.md)。
+       **いちばん大きい数より多く**しておく */
+  { en: 'Let us circle back on this next week.', ja: '来週あらためて相談しましょう。' },
+  { en: 'I am afraid that will not work.', ja: '申し訳ありませんが、それは難しいです。' },
+  { en: 'Could you walk me through the numbers?', ja: '数字を順に説明していただけますか。' },
+  { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
+  { en: 'Thanks for flagging that.', ja: '指摘してくださってありがとうございます。' },
+  { en: 'Let me double-check and get back to you.', ja: '確認して折り返します。' },
+  { en: 'That works on my end.', ja: 'こちらは問題ありません。' },
+]
+/* ★ **一覧の最大が 100 になった**(2026-10-10 利用者の指定
+     「選べる出す個数を 5, 10, 15, 20, 30, 50, 75, 100, All に」)。
+     ここから先は**手で書かない** —— 書くと、一覧を変えた日に
+     また足りなくなる。**`SIZES` の最大より1本多くなるまで**
+     機械で埋める(**数を書き写さない**・CLAUDE.md)。
+     手で書いたぶん(長い文・短い文)は上にそのまま残してある */
+const QR_埋め合わせ = Array.from(
+  { length: Math.max(0,
+    Math.max(...SIZES.filter((n) => Number.isFinite(n))) + 1 - QR_手書き.length) },
+  (_, i) => ({
+    en: `This is filler sentence number ${i + 1} for the listening practice.`,
+    ja: `聞き流しの埋め合わせ、${i + 1} 本目です。`,
+  }),
+)
+
 const QRRADIO = (
   <WordRadio
     where="qr"
@@ -1830,50 +1893,7 @@ const QRRADIO = (
        絞りを外しても緑のままになる。
        ★ **一覧の最小が 10 になった**(段階3)ので、8本では足りない。
          **いちばん大きい数(20)より多く**してある。 */
-    rows={[
-      {
-        en: 'We decided to take on the project even though the deadline was extremely tight.',
-        ja: '締め切りが非常に厳しかったにもかかわらず、私たちはその案件を引き受けることにしました。',
-      },
-      {
-        en: 'Could you walk me through the numbers one more time?',
-        ja: '数字をもう一度説明していただけますか。',
-      },
-      { en: 'Let me get back to you on that.', ja: 'その件は、あらためてご連絡します。' },
-      { en: 'I am afraid that will not work for us.', ja: '申し訳ありませんが、それでは難しいです。' },
-      { en: 'Could you put that in writing?', ja: '書面にしていただけますか。' },
-      { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
-      { en: 'That makes a lot of sense.', ja: 'とても納得できます。' },
-      { en: 'I will look into it right away.', ja: 'すぐに調べます。' },
-      { en: 'Let us circle back to this next week.', ja: 'この件は来週あらためましょう。' },
-      { en: 'I am not sure I follow you.', ja: 'すみません、話が追えていません。' },
-      { en: 'Would Thursday morning work for you?', ja: '木曜の午前はご都合いかがですか。' },
-      { en: 'We will need a bit more time.', ja: 'もう少し時間が必要です。' },
-      { en: 'Thank you for bearing with us.', ja: 'お待たせして申し訳ありません。' },
-      { en: 'Let me double-check the figures.', ja: '数字をもう一度確かめます。' },
-      { en: 'That is outside our budget.', ja: 'それは予算を超えています。' },
-      { en: 'Could you send over the latest draft?', ja: '最新の原稿を送っていただけますか。' },
-      { en: 'I will keep you posted.', ja: '進み次第お知らせします。' },
-      { en: 'We are on the same page.', ja: '認識は合っています。' },
-      { en: 'Let me take that offline.', ja: 'その件は個別に話しましょう。' },
-      { en: 'I would rather hold off for now.', ja: 'いまは見送りたいです。' },
-      { en: 'Shall we wrap up here?', ja: 'ここで終わりにしましょうか。' },
-      { en: 'That is a fair point.', ja: 'それはもっともです。' },
-      { en: 'I will take care of it.', ja: '私が引き受けます。' },
-      { en: 'Could you clarify what you mean?', ja: 'どういう意味か教えていただけますか。' },
-      { en: 'We appreciate the quick turnaround.', ja: '早いご対応に感謝します。' },
-      /* ★ **一覧の最大が 30 になった**(第5.437節・「5問から選べ」)。
-           25 本では、30 をえらんでも 25 本のままになり、
-           **絞りを外しても緑**になる(「無ければ素通り」・CLAUDE.md)。
-           **いちばん大きい数より多く**しておく */
-      { en: 'Let us circle back on this next week.', ja: '来週あらためて相談しましょう。' },
-      { en: 'I am afraid that will not work.', ja: '申し訳ありませんが、それは難しいです。' },
-      { en: 'Could you walk me through the numbers?', ja: '数字を順に説明していただけますか。' },
-      { en: 'We are running behind schedule.', ja: '予定より遅れています。' },
-      { en: 'Thanks for flagging that.', ja: '指摘してくださってありがとうございます。' },
-      { en: 'Let me double-check and get back to you.', ja: '確認して折り返します。' },
-      { en: 'That works on my end.', ja: 'こちらは問題ありません。' },
-    ]}
+    rows={[...QR_手書き, ...QR_埋め合わせ]}
     /* **曲を2つ以上入れておく**(第5.194節・2026-09 利用者の指定
        「複数登録した曲から選べるようにしてください」)。
        **1つだと選ぶ欄そのものが出ない**(`bgmChoices`)ので、
