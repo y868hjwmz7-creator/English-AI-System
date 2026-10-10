@@ -386,7 +386,7 @@ export default function QrCard({
                  渡すのは `knob` だけである。**色は渡さない** ——
                  鳴っているあいだの金は `.knob.btn--primary` が
                  `.chip--on` と同じ1か所から引く(第5.439節) */}
-          <SpeakButton text={pair.en} className="knob" label={null}
+          <SpeakButton text={pair.en} className="knob knob--say"
                        clipVoice={clipVoice} tier={tier} />
           {/* **ヒント**(2026-09 利用者の指定)。
               **ヒントを持たない問には出さない** —— ふだんの Quick Response と
