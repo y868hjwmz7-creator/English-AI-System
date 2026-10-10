@@ -56,7 +56,7 @@ const 組の呼び名 = () => INDUSTRY_GROUPS.map((g) => g.label)
 import { RIZAP_BOOKS } from '../src/data/rizapBooks.js'
 import { SIX_STEPS } from '../src/lib/sixSteps.js'
 /* **色の一覧を書き写さない**(第5.242節)。3つの色は `btnTone.js` 1か所 */
-import { hasTone } from '../src/lib/btnTone.js'
+import { hasTone, toneOn } from '../src/lib/btnTone.js'
 /* **通しで鳴らすボタンの文字は `wholePlay.js` 1か所**(第5.290節)。
    ここに `'全体を聞く'` と書き写すと、**名前を変えた日に見張りだけが古くなる**
    (値を書き写さない。性質で見る・CLAUDE.md) */
@@ -6130,7 +6130,14 @@ export default defineConfig({
     /* 30 問ぜんぶ「まだ」で答える = **全部が終わりの一覧に出る**(いちばん長い形) */
     for (let i = 0; i < 40; i += 1) {
       if (await page.locator('.qr-result').count()) break
-      const やめ = page.locator('.qr-actions .btn--quiet').first()
+      /* ★ **答えの行(`.qr-answers`)の中だけを狙う**(第5.439節)。
+           以前は `.qr-actions .btn--quiet` と書いていたが、
+           **操作の升目(`.qr-peek`)も `.qr-actions` の中**にいる ——
+           4つを灰(`btn--quiet`)でそろえた日から、`.first()` が
+           **問数のプルダウンに当たって**、一度も答えられなくなった
+           (CLAUDE.md「置き換える前に `grep -n` で数える」の、
+           選び手での破れ方である)。 */
+      const やめ = page.locator('.qr-answers .btn--quiet').first()
       if (!(await やめ.count())) break
       await やめ.click()
       await page.waitForTimeout(25)
@@ -16455,6 +16462,285 @@ for (const [q2, 期待, 何] of [
     else ok(`帯 … 始めるボタンが帯にある(${帯.始める})`)
   }
   await page.close()
+}
+
+const 形 = {}
+/* ══════════════════════════════════════════════════════════════════
+   ★ **4つの操作を、1つの形にそろえる**(第5.439節・2026-10-09 利用者の指摘)
+
+     > カード下部にある「出題数」「シャッフル」「リピート」「音声再生」の
+     > 操作群を、単語帳画面とQuick Response画面で統一感のある
+     > デザインにしてください。現状は各ボタンの高さ・幅・色・枠線の
+     > ルールが揃っておらず、特に単語帳画面では「英語を聴く」の文字が
+     > 縦に折り返されて見た目が崩れています
+     > 選択中・有効状態は、控えめな金色の背景または金色のアイコンで示す。
+     > 通常状態はニュートラルなグレー系に統一する
+     > 状態によってボタンのサイズや位置が変わらないようにする
+
+   **2つの画面を、別々に描いて測る。** 単語帳の崩れは
+   **単語帳にしか無かった**(あちらだけが `label="英語を聴く"` を
+   渡していた)ので、**片方だけ測ると素通りする。**
+
+   【値を書き写さない】
+     高さも角丸も金の色も、**ここには1つも書いていない。**
+     4つを**互いに突き合わせ**、色は**その場で `var(--accent)` /
+     `var(--quiet-bg)` を引いた見本**と比べる ——
+     配色を変えた日も、ボタンの形を変えた日も、ついてくる。
+   ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 4つの操作の形(第5.439節) ──')
+  /* 升目を1つずつ測る。**押せるものの中(`.knob`)だけを見る** */
+  const 測る = (選び) => {
+    const row = document.querySelector(選び)
+    if (!row) return null
+    /* ★ **色の見本は、その場で引く**(値を書き写さない)。
+         `--accent` は配色でも紙でも変わるので、**同じ画面の中で**作る */
+    const 見本 = (色) => {
+      const d = document.createElement('span')
+      d.style.color = 色
+      row.appendChild(d)
+      const v = window.getComputedStyle(d).color
+      d.remove()
+      return v
+    }
+    const 金 = 見本('var(--accent)')
+    const 灰 = 見本('var(--quiet-bg)')
+    const 升 = [...row.children].slice(0, 4).map((e) => {
+      const g = window.getComputedStyle(e)
+      const b = e.getBoundingClientRect()
+      return {
+        名: (e.getAttribute('aria-label') || e.querySelector('.knob-face')?.textContent
+             || e.textContent || '').trim(),
+        knob: e.classList.contains('knob'),
+        x: Math.round(b.x), y: Math.round(b.y),
+        幅: Math.round(b.width), 高さ: Math.round(b.height),
+        角: g.borderRadius, 枠: g.borderTopWidth, 字: g.fontSize,
+        地: g.backgroundColor, 色: g.color,
+        折返し: g.whiteSpace,
+        はみ出し: e.scrollWidth - e.clientWidth,
+        印: e.classList.contains('chip--on'),
+      }
+    })
+    /* ★ **問数のぜんぶの言葉で、はみ出しを測る**(いちばん長いぶんで測る)。
+         短い例だけで測ると、**超えていても緑のまま**である(CLAUDE.md) */
+    const 面 = row.querySelector('.knob-face')
+    const 選 = row.querySelector('.knob-pick')
+    const 問数のはみ出し = []
+    if (面 && 選) {
+      const 元 = 面.firstChild.textContent
+      for (const o of [...選.options]) {
+        面.firstChild.textContent = o.textContent
+        const k = 面.closest('.knob')
+        問数のはみ出し.push([o.textContent, k.scrollWidth - k.clientWidth])
+      }
+      面.firstChild.textContent = 元
+    }
+    return { 升, 金, 灰, 問数のはみ出し, 字ぜんぶ: row.textContent ?? '' }
+  }
+
+  for (const [名, 入口, 待つ, 行, 答え] of [
+    ['Quick Response', 'qrrev', '.qr-peek', '.qr-peek', '.qr-answers'],
+    ['単語帳', 'wordbook', '.wordcard-peek', '.wordcard-peek', '.wordcard-answers'],
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 320, height: 900 } })
+    /* **単語帳は、語が1つも無いと1問目が出ない。** 偽の語を返す
+       (test-bar の中でもう一度やっている形・外へは1度も出ない)。
+       **思い出す**の向きにしないと、この行そのものが描かれない */
+    await page.addInitScript(() => {
+      try { localStorage.setItem('eas.review.word.form', 'recall') } catch { /* 使えなくても困らない */ }
+    })
+    await page.route('**/rest/v1/**', (r) => {
+      const u = r.request().url()
+      let body = []
+      if (u.includes('review_words')) {
+        body = Array.from({ length: 8 }, (_, i) => ({
+          word_norm: `word${i}`, word: `word${i}`, status: 'unknown', box: 2,
+          due_on: '2020-01-01', added_at: '2026-09-01', meaning_ja: `意味${i}`,
+          seen_in: 'Not knowing the answer, the new engineer stayed quiet.',
+          seen_in_ja: '答えを知らなかったので、黙っていた。',
+          material_id: null, material_title: null, industry: 'it', topic: null,
+        }))
+      }
+      if (u.includes('vocab_week')) body = [{ days: 3, answered: 20, correct: 15, weeks: 5 }]
+      if (u.includes('weekly_goal')) body = [{ words_goal: 0, words_done: 0, sent_goal: 0, sent_done: 0 }]
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    })
+    await page.route('**/auth/v1/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json', body: '{"data":{"user":null}}',
+    }))
+    await page.goto(`http://localhost:${PORT}/__bar.html?screen=${入口}`,
+      { waitUntil: 'networkidle' })
+    try { await page.waitForSelector(待つ, { timeout: 15000 }) } catch {
+      ng(`${名} … 操作の行(${待つ})が1度も描かれない`,
+        '語を読めていないか、行ごと無くなった')
+      await page.close()
+      continue
+    }
+    await page.waitForTimeout(200)
+
+    const m = await page.evaluate(測る, 行)
+    if (!m || m.升.length !== 4) {
+      ng(`${名} … 操作の升目が4つ無い`, `${m?.升.length ?? 0} 個`)
+      await page.close()
+      continue
+    }
+
+    // ① 4つとも同じ形(高さ・角丸・枠線の太さ・字の大きさ)
+    for (const [何, 鍵] of [['高さ', '高さ'], ['角丸', '角'], ['枠線の太さ', '枠'], ['字の大きさ', '字']]) {
+      const 種 = new Set(m.升.map((c) => String(c[鍵])))
+      if (種.size !== 1) {
+        ng(`${名} … 4つの${何}がそろっていない`,
+          m.升.map((c) => `${c.名}:${c[鍵]}`).join(' / '))
+      } else ok(`${名} … 4つの${何}が同じ(${[...種][0]})`)
+    }
+
+    // ② 折り返さない・はみ出さない(利用者の指摘そのもの)
+    const 折れ = m.升.filter((c) => c.折返し !== 'nowrap')
+    if (折れ.length) ng(`${名} … 折り返す升目がある`, 折れ.map((c) => `${c.名}:${c.折返し}`).join(' / '))
+    else ok(`${名} … 4つとも折り返さない`)
+    const 出 = m.升.filter((c) => c.はみ出し > 0)
+    if (出.length) ng(`${名} … 枠からはみ出している升目がある`, 出.map((c) => `${c.名}:+${c.はみ出し}px`).join(' / '))
+    else ok(`${名} … 4つとも枠からはみ出していない`)
+    const 問出 = m.問数のはみ出し.filter(([, v]) => v > 0)
+    if (!m.問数のはみ出し.length) ng(`${名} … 問数のプルダウンが升目に無い`)
+    else if (問出.length) {
+      ng(`${名} … 問数の言葉がはみ出す`, 問出.map(([t, v]) => `${t}:+${v}px`).join(' / '))
+    } else ok(`${名} … 問数のぜんぶの言葉(${m.問数のはみ出し.length} 通り)が収まる`)
+
+    // ③ 「英語を聴く」のような長い字を使っていない
+    if (m.字ぜんぶ.includes(`英語を${SPEAK_LISTEN}`)) {
+      ng(`${名} … 「英語を${SPEAK_LISTEN}」という長い字が残っている`,
+        `升目は ${m.升[0].幅}px しか無い`)
+    } else ok(`${名} … 長い字(「英語を${SPEAK_LISTEN}」)を使っていない`)
+
+    // ④ 入っている印は金・休んでいるものは灰(**その場で引いた見本と比べる**)
+    const 印 = m.升.filter((c) => c.印)
+    const 休み = m.升.filter((c) => !c.印)
+    if (!印.length) ng(`${名} … 入っている印(金)の升目が1つも無い`, '測れていない')
+    else if (印.some((c) => c.色 !== m.金)) {
+      ng(`${名} … 入っている印が、金(\`--accent\`)になっていない`,
+        `${印.map((c) => c.色).join(' / ')} / 金は ${m.金}`)
+    } else ok(`${名} … 入っている印は金(${m.金})`)
+    if (休み.some((c) => c.色 === m.金)) {
+      ng(`${名} … 休んでいる升目が金になっている`, 休み.map((c) => `${c.名}:${c.色}`).join(' / '))
+    } else ok(`${名} … 休んでいる升目は金ではない`)
+    if (休み.some((c) => c.地 !== m.灰)) {
+      ng(`${名} … 休んでいる地色が、灰(\`--quiet-bg\`)でそろっていない`,
+        `${休み.map((c) => `${c.名}:${c.地}`).join(' / ')} / 灰は ${m.灰}`)
+    } else ok(`${名} … 休んでいる升目の地色は灰でそろっている(${m.灰})`)
+
+    /* ★ **鳴っているあいだも、となりの印とまったく同じ金か**
+         (利用者の指定「選択中・有効状態は、控えめな金色」)。
+         **音は鳴らせない**ので、`btnTone.js` が鳴っているときに付ける
+         class を**その場で着せて**、色を測る。
+         **class 名を書き写さない** —— `toneOn(true)` から読み取る */
+    const 鳴り = await page.evaluate(([s, cls]) => {
+      const row = document.querySelector(s)
+      const listen = row.children[3]
+      const on = row.querySelector('.chip--on')
+      const g = (e) => { const c = window.getComputedStyle(e)
+        return [c.backgroundColor, c.color, c.borderTopColor] }
+      listen.classList.add(...cls.split(/\s+/).filter(Boolean))
+      const 鳴 = g(listen)
+      listen.classList.remove(...cls.split(/\s+/).filter(Boolean))
+      return { 鳴, 印: on ? g(on) : null }
+    }, [行, toneOn(true)])
+    if (!鳴り.印) ng(`${名} … 突き合わせる「入っている印」が無い`, '測れていない')
+    else if (JSON.stringify(鳴り.鳴) !== JSON.stringify(鳴り.印)) {
+      ng(`${名} … 鳴っているあいだの色が、となりの印と違う`,
+        `鳴り ${鳴り.鳴.join(' / ')} / 印 ${鳴り.印.join(' / ')}`)
+    } else ok(`${名} … 鳴っているあいだも、となりの印とまったく同じ金`)
+
+    // ⑤ 「聴く」も同じ組を着ている(`.knob`)
+    if (m.升.some((c) => !c.knob)) {
+      ng(`${名} … \`.knob\` を着ていない升目がある`,
+        m.升.filter((c) => !c.knob).map((c) => c.名).join(' / '))
+    } else ok(`${名} … 4つとも \`.knob\` を着ている`)
+
+    // ⑥ 押しても、升目の大きさとまわりの場所が1pxも動かない
+    const 場所 = () => page.evaluate((s) => [...document.querySelectorAll(`${s} > *`)]
+      .map((e) => { const b = e.getBoundingClientRect()
+        return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)] }), 行)
+    const 前 = await 場所()
+    let 押した = 0
+    for (const 名札 of ['ランダム', 'くり返す']) {
+      const t = page.locator(`${行} [aria-label="${名札}"]`)
+      if (await t.count()) { await t.first().click(); 押した += 1 }
+    }
+    const 後 = await 場所()
+    /* **1つも押していなければ赤**(押していない見張りは、何もしていない) */
+    if (押した === 0) ng(`${名} … 文字や色が変わるボタンを1つも押していない`, '見張りが働いていない')
+    else if (JSON.stringify(前) !== JSON.stringify(後)) {
+      ng(`${名} … 押したら、まわりの物の場所か大きさが動いた`,
+        `${JSON.stringify(前)} → ${JSON.stringify(後)}`)
+    } else ok(`${名} … ${押した} つ押しても、1pxも動かない`)
+
+    /* ★ **休んでいる側も、4つぜんぶ測る**(第5.439節の赤チェックで見つけた抜け)。
+
+         シャッフルは**既定で入っている**ので、はじめの1回では
+         **あちらの灰が1度も測られない** —— `btn--quiet` を外しても
+         緑のままだった。**押して裏返す手では足りない**(骨組みの
+         Quick Response は、押しても状態を持たない)。
+
+         だから**入っている印をその場で全部はがして**測る。
+         こうすれば、**どの升目も「休んでいるときは灰」**であることが、
+         2つの画面とも確かめられる。
+         **class 名は `.chip--on` 1か所**から取る(書き写していない)。 */
+    const 灰だけ = await page.evaluate((s) => {
+      const row = document.querySelector(s)
+      const 印 = [...row.querySelectorAll('.chip--on')]
+      if (!印.length) return { 印が無い: true }
+      印.forEach((e) => e.classList.remove('chip--on'))
+      const g = (e) => { const c = window.getComputedStyle(e)
+        return { 名: (e.getAttribute('aria-label')
+                      || e.querySelector('.knob-face')?.textContent
+                      || e.textContent || '').trim(),
+                 地: c.backgroundColor, 色: c.color } }
+      const d = document.createElement('span')
+      d.style.color = 'var(--quiet-bg)'
+      row.appendChild(d)
+      const 灰 = window.getComputedStyle(d).color
+      d.remove()
+      const 升 = [...row.children].slice(0, 4).map(g)
+      印.forEach((e) => e.classList.add('chip--on'))
+      return { 升, 灰, はがした: 印.length }
+    }, 行)
+    if (灰だけ.印が無い) ng(`${名} … 入っている印が無いので、休んでいる側を測れない`)
+    else {
+      const 外れ = 灰だけ.升.filter((c) => c.地 !== 灰だけ.灰)
+      if (外れ.length) {
+        ng(`${名} … 印をはがすと、灰でない升目がある`,
+          `${外れ.map((c) => `${c.名}:${c.地}`).join(' / ')} / 灰は ${灰だけ.灰}`)
+      } else ok(`${名} … 印を ${灰だけ.はがした} つはがすと、4つとも灰(${灰だけ.灰})`)
+    }
+
+    // ⑦ 両端が、下の答えの行とそろっている
+    const 端 = await page.evaluate(([a, b]) => {
+      const f = (s) => { const e = document.querySelector(s); if (!e) return null
+        const r = e.getBoundingClientRect()
+        return [Math.round(r.left), Math.round(r.right)] }
+      return { 操作: f(a), 答え: f(b) }
+    }, [行, 答え])
+    if (!端.操作 || !端.答え) ng(`${名} … 操作の行か答えの行が無い`)
+    else if (端.操作[0] !== 端.答え[0] || 端.操作[1] !== 端.答え[1]) {
+      ng(`${名} … 操作の行と答えの行で両端がそろっていない`,
+        `操作 ${端.操作.join('–')} / 答え ${端.答え.join('–')}`)
+    } else ok(`${名} … 両端が答えの行とそろっている(${端.操作.join('–')})`)
+
+    形[名] = m.升.map((c) => [c.高さ, c.角, c.枠, c.字])
+    await page.close()
+  }
+
+  /* ⑧ **2つの画面で、まったく同じ形になっているか**(利用者の指定
+       「共通コンポーネントや共通スタイルが使える場合は、同じ見た目に」)。
+     **幅は入れない** —— 囲みの広さが違う(320 / 360px)ので、
+     そこだけで必ず食い違う(**見比べる相手は、できるだけ近いもの**) */
+  const 二つ = Object.keys(形)
+  if (二つ.length !== 2) ng('2つの画面 … 片方しか測れていない', 二つ.join(' / '))
+  else if (JSON.stringify(形[二つ[0]]) !== JSON.stringify(形[二つ[1]])) {
+    ng('2つの画面 … 升目の形が食い違っている',
+      `${二つ[0]} ${JSON.stringify(形[二つ[0]])} / ${二つ[1]} ${JSON.stringify(形[二つ[1]])}`)
+  } else ok('2つの画面 … 升目の形(高さ・角丸・枠線・字)がまったく同じ')
 }
 
 await browser.close()

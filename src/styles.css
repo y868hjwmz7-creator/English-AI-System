@@ -3315,7 +3315,22 @@ html, body { overflow-x: clip; }
 /* 選んでいる印。**べた塗りにしない**(2026-08「塗りつぶしがダサい」)。
    うすい地色 + 同じ色の文字 + 枠線の3つで示す。
    **色だけに頼らない。** 太字にもするので、プレインでも見分けられる */
-.chip--on {
+/* ★ **「鳴っている」も、同じ金で示す**(第5.439節・2026-10-09 利用者の指定)。
+ *
+ *     > 選択中・有効状態は、控えめな金色の背景または金色のアイコンで示す。
+ *     > 通常状態はニュートラルなグレー系に統一する
+ *
+ *   「聴く」は鳴っているあいだ `btn--primary`(濃い金の塗りつぶし)になる ——
+ *   `btnTone.js` の `toneOn()` が、どの画面の Listen も**そうしている。**
+ *   ところが操作の升目では、となりのシャッフル / リピートが**うすい金**
+ *   なので、1つだけ濃いと**4つがそろって見えない。**
+ *
+ *   **升目の中(`.knob`)だけ、うすい金にそろえる。**
+ *   ほかの画面の Listen は1つも変えていない(**言われた場所だけ**)。
+ *   **値はここ1か所** —— `.chip--on` と同じ宣言を使うので、
+ *   金を変えた日に片方だけ古くなることがない(CLAUDE.md)。 */
+.chip--on,
+.knob.btn--primary {
   background: var(--accent-soft); border-color: var(--accent-line);
   color: var(--accent); font-weight: 700;
 }
@@ -10957,8 +10972,7 @@ button.wbfilter-ctl { text-align: left; }
 /* **プルダウンは中身なりの幅。** 全体に掛かっている
    `input, select, textarea { width: 100% }` を、ここで打ち消す
    (CLAUDE.md「その見た目が、どこで決まっているのかを先に読む」) */
-.rscope-size > select,
-.knob-size > select { width: auto; min-width: 0; }
+.rscope-size > select { width: auto; min-width: 0; }
 /* **絵だけのスイッチ。** 中身が1つでも、押せる的は小さくしない */
 .rscope-sw { padding-left: 0; padding-right: 0; min-width: 44px; }
 .rscope-start { width: 100%; }
@@ -12265,14 +12279,74 @@ button.wbfilter-ctl { text-align: left; }
    升目(`.qr-peek` / `.wordcard-peek`)の1つぶんに、そのまま収まる。
    **絵だけのボタンでも、押せる的は小さくしない。**
    ══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   ★ **4つを、1つの形にそろえる**(第5.439節・2026-10-09 利用者の指摘)
+
+     > 現状は各ボタンの高さ・幅・色・枠線のルールが揃っておらず、
+     > 特に単語帳画面では「英語を聴く」の文字が縦に折り返されて
+     > 見た目が崩れています
+     > 4つの操作ボタンを、同じ高さ・角丸・枠線の太さで揃える
+
+   **高さ・角丸・枠線・色は、1つも書かない。** 4つとも
+   `btn btn--small btn--quiet` を着ているので、**そこから来る** ——
+   ボタンの形を変えた日に、ここだけ古くなることがない
+   (CLAUDE.md「呼び名・色・幅を2か所に書かない」)。
+   プルダウンは `<label>` だが、class は要素を選ばないのでそのまま着せられる。
+
+   ここに書くのは、**升目に収めるために足りないぶんだけ**である。
+   ══════════════════════════════════════════════════════════════════ */
 .knob {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding-left: 0; padding-right: 0; min-width: 0;
+  /* **升目(1fr)いっぱいに広がる。** `.btn--small` の `flex-shrink: 0` を
+     打ち消す —— 縮まないと、狭い画面で4つめが次の段へ落ちる */
+  display: inline-flex; width: 100%; min-width: 0; flex-shrink: 1;
+  /* **狭い画面(320px)では、升目は 59px しか無い**(実測)。
+     ふつうのボタンの余白(左右 10px)と絵との間(6px)のままだと、
+     「聴く」(鳴っているあいだは `Stop`)が **2px はみ出す**(実測
+     `scrollWidth` 59 / `clientWidth` 57)。**詰めて入れる** ——
+     左右の余白は升目の `gap` が持っているので、中では要らない */
+  gap: var(--sp-4); padding-left: 2px; padding-right: 2px;
 }
-.knob-size > select {
-  /* **升目いっぱいに広げる。** 字は中央にそろえる(となりの絵と釣り合う) */
-  width: 100%; min-width: 0; text-align: center;
-  padding-left: var(--sp-6); padding-right: var(--sp-6);
+/* ★ **字も絵も、折り返さない・はみ出さない**(利用者の指定)。
+     **升目の幅は中身で決まらない**(`repeat(4, 1fr)`)ので、
+     長い言葉が来たら**折り返す前に、外へ出る**。両方塞ぐ */
+.knob, .knob > * { white-space: nowrap; }
+.knob { overflow: hidden; }
+
+/* ── **何問ずつ(プルダウン)** ───────────────────────────────
+   **素の `<select>` のままでは、3つとそろわない。** 理由は2つある。
+
+     ①狭い画面では `font-size: 16px` を強いている —— iOS が
+       16px 未満の入力欄に触れると画面を拡大するためである
+       (styles.css の「iPhone・iPad で画面が勝手に拡大されるのを防ぐ」)。
+       となりの3つは `--fs-13` なので、**字の大きさが違って見える**
+     ②Safari では矢印を自分で描くので `padding-right: 28px` が要る。
+       狭い画面の升目(実測 72px)では「10 問」が入り切らない
+
+   だから**見えている面は `<span>` で描き、`<select>` は透明にして
+   升目いっぱいに重ねる。** 押せば端末の選ぶ画面が出る ——
+   本物の `<select>` なので、読み上げもキーボードもそのまま効く。
+   **16px のままなので、iOS も拡大しない。** */
+.knob-size { position: relative; }
+.knob-face { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* 矢印。**三角形を CSS で描く** —— `currentColor` なので、
+   明るい配色でも暗い配色でも、金に変わったときも**字と同じ色**になる
+   (Safari のプルダウンを描き直した節と、まったく同じ考え方) */
+.knob-caret {
+  width: 0; height: 0; flex: 0 0 auto;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+}
+/* **重ねる本体。** 透明だが、押せる的は升目まるごとである */
+.knob-pick {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0; background: none;
+  opacity: 0; cursor: pointer;
+}
+/* **キーで来た人に、どこが選ばれているか見せる。**
+   `opacity: 0` にすると `:focus-visible` の枠も消えるので、
+   **外側の升目に出し直す**(色だけに頼らない・共通ルール) */
+.knob-size:has(.knob-pick:focus-visible) {
+  outline: 2px solid var(--accent); outline-offset: 2px;
 }
 /* **見出しの行の右端**(「もう出さない」)。流れの中なので重ならない */
 .qr-corner { margin-left: auto; }

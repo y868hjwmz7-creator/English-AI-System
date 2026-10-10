@@ -19,6 +19,17 @@
  *   `ShuffleIcon` / `RepeatIcon` は `Icons.jsx` 1か所にある。
  *   **ここで描き直さない** —— 描き直すと、片方だけ形が変わる。
  *
+ * 【見た目は、4つとも1つの形】(第5.439節・2026-10-09 利用者の指摘)
+ *
+ *   > 現状は各ボタンの高さ・幅・色・枠線のルールが揃っておらず(略)
+ *   > 4つの操作ボタンを、同じ高さ・角丸・枠線の太さで揃える
+ *
+ *   **高さ・角丸・枠線・色を、ここで決めない。** 3つとも
+ *   `btn btn--small btn--quiet`(ふつうのボタン・小さめ・灰)を着せ、
+ *   足りないぶんだけ `.knob` が足す。**4つめの「聴く」も同じ組**を着る
+ *   (呼ぶ側が `SpeakButton` に渡している)ので、**ひとりでにそろう** ——
+ *   **数も色も書き写さない**(CLAUDE.md)。
+ *
  * 【字を出さないので、読み上げには `aria-label` で届ける】
  *
  *   絵だけにしたのは、**鳴っている最中に「聴く」→「Stop」で幅が
@@ -41,10 +52,37 @@ export default function PracticeKnobs({
 }) {
   return (
     <>
-      {/* **何問ずつ。** 一覧も言い方も `reviewScope.js` 1か所 */}
-      <label className="knob knob-size">
-        <span className="sr-only">{`何${unit}ずつ`}</span>
-        <select value={String(size)} onChange={(e) => onSize(sizeOfValue(e.target.value))}>
+      {/* ★ **何問ずつ。プルダウンだが、見た目はとなりの3つとまったく同じ**
+             (第5.439節・2026-10-09 利用者の指摘「高さ・幅・色・枠線の
+             ルールが揃っておらず」)。
+
+             **素の `<select>` をそのまま置くと、3つとそろわない。**
+             理由は2つ。
+
+               ①狭い画面では `font-size: 16px` を強いている(iOS が
+                 16px 未満の入力欄に触れると画面を拡大するため・CLAUDE.md)。
+                 となりのボタンは 13px なので、**字の大きさが違う**
+               ②Safari の矢印のぶんの `padding-right: 28px` が要る。
+                 72px の升目では「10 問」が入り切らない
+
+             だから**見えている面は `<span>` で描き、`<select>` は
+             透明にして升目いっぱいに重ねる。** 押すと端末の選ぶ画面が出る
+             —— 本物の `<select>` なので、読み上げもキーボードもそのまま効く。
+             **16px のままなので、iOS も拡大しない。**
+
+             **言葉は `sizePickLabel()` 1か所**(見えている面と、
+             中の選択肢の両方が、同じところから来る) */}
+      <label className="btn btn--small btn--quiet knob knob-size">
+        <span className="knob-face">
+          {sizePickLabel(size, unit)}
+          <span className="knob-caret" aria-hidden="true" />
+        </span>
+        <select
+          className="knob-pick"
+          aria-label={`何${unit}ずつ`}
+          value={String(size)}
+          onChange={(e) => onSize(sizeOfValue(e.target.value))}
+        >
           {SIZES.map((n) => (
             <option key={String(n)} value={String(n)}>{sizePickLabel(n, unit)}</option>
           ))}
@@ -56,7 +94,7 @@ export default function PracticeKnobs({
           aria-pressed={shuffle}
           aria-label="ランダム"
           title="ランダム"
-          className={`btn btn--quiet knob${shuffle ? ' chip--on' : ''}`}
+          className={`btn btn--small btn--quiet knob${shuffle ? ' chip--on' : ''}`}
           onClick={() => onShuffle(!shuffle)}
         >
           <ShuffleIcon />
@@ -68,7 +106,7 @@ export default function PracticeKnobs({
           aria-pressed={repeat}
           aria-label="くり返す"
           title="くり返す"
-          className={`btn btn--quiet knob${repeat ? ' chip--on' : ''}`}
+          className={`btn btn--small btn--quiet knob${repeat ? ' chip--on' : ''}`}
           onClick={() => onRepeat(!repeat)}
         >
           <RepeatIcon />

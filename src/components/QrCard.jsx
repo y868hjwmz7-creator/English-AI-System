@@ -357,7 +357,13 @@ export default function QrCard({
 
                **英語を出さなくても、答えの音は聞ける**(2026-09 利用者の指定)——
                口に出して言ってから、耳で答え合わせをする */}
-          <SpeakButton text={pair.en} className="btn--ghost"
+          {/* ★ **見た目も、となりの3つと同じ組を着せる**(第5.439節・
+                 2026-10-09 利用者の指定「4つの操作ボタンを、同じ高さ・
+                 角丸・枠線の太さで揃える」)。`btn btn--small` は
+                 `SpeakButton` が自分で着るので、渡すのは残りの2つである。
+                 **`btn--quiet`(灰)を渡すのは、色を決めている印**でもある
+                 —— `toneOn()` は、呼ぶ側が色を持っていれば足さない */}
+          <SpeakButton text={pair.en} className="knob btn--quiet"
                        clipVoice={clipVoice} tier={tier} />
           {/* **ヒント**(2026-09 利用者の指定)。
               **ヒントを持たない問には出さない** —— ふだんの Quick Response と
