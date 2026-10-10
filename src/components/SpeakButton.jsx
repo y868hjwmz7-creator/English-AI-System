@@ -51,6 +51,20 @@ export default function SpeakButton({
   text, label = SPEAK_LISTEN, rate = null, className = '', voice: given = null,
   clipVoice = null, tier = STANDARD, onPlayingChange = null, onWord = null,
   /**
+   * ★ **絵を出すか**(第5.440節・2026-10-10 利用者の指定)。
+   *
+   *   > あとは聴くの横のスピーカーのアイコンをなくしましょう。
+   *   > 他と統一のデザインにします
+   *
+   * **練習の升目**では、となりの3つが「字だけ(10 問)」か
+   * 「絵だけ(シャッフル・リピート)」のどちらかである。
+   * 「聴く」だけが**絵と字の両方**を持っていて、そこだけ賑やかだった。
+   *
+   * **既定は出す側のまま。** ほかの画面の Listen は1つも変わらない
+   * (**言われた場所だけを直す**・CLAUDE.md)。
+   */
+  icon = true,
+  /**
    * **くり返し鳴らすか**(2026-09 利用者の指定・ディクテーション)。
    * 止めるまで、少し間を置いて何度でも読み直す。
    * 書き取りは1回では聞き取れないので、押し直す手間をなくす。
@@ -241,7 +255,7 @@ export default function SpeakButton({
             className={`btn btn--small no-print ${toneOn(playing, className)} ${className}`
               + (waiting ? ' is-waiting' : '')}
             onClick={play}>
-      {playing ? <StopIcon /> : <SpeakerIcon />}
+      {icon && (playing ? <StopIcon /> : <SpeakerIcon />)}
       <SteadyLabel keep={[label, SPEAK_STOP]}>{playing ? SPEAK_STOP : label}</SteadyLabel>
     </button>
   )

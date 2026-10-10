@@ -16651,6 +16651,38 @@ const 形 = {}
         `鳴り ${鳴り.鳴.join(' / ')} / 印 ${鳴り.印.join(' / ')}`)
     } else ok(`${名} … 鳴っているあいだも、となりの印とまったく同じ金`)
 
+    /* ★ **升目の中身は、字だけか絵だけ**(第5.440節・2026-10-10 利用者の指定)。
+
+         > あとは聴くの横のスピーカーのアイコンをなくしましょう。
+         > 他と統一のデザインにします
+
+       「聴く」だけが**絵と字の両方**を持っていた。
+       **両方の側を見る** —— 「聴くに絵が無い」だけだと、
+       **シャッフルの絵まで消した形**でも緑になる。 */
+    const 絵 = await page.evaluate((s) => [...document.querySelector(s).children]
+      .slice(0, 4).map((e) => ({
+        名: (e.getAttribute('aria-label')
+             || e.querySelector('.knob-face')?.textContent
+             || e.textContent || '').trim(),
+        絵: e.querySelectorAll('svg').length,
+        字: ((e.querySelector('.knob-face') || e).textContent || '').trim().length,
+      })), 行)
+    const 両方 = 絵.filter((c) => c.絵 > 0 && c.字 > 0)
+    if (両方.length) {
+      ng(`${名} … 絵と字の両方を持つ升目がある`,
+        両方.map((c) => `${c.名}:絵${c.絵}・字${c.字}`).join(' / '))
+    } else ok(`${名} … 4つとも「字だけ」か「絵だけ」`)
+    const 空 = 絵.filter((c) => c.絵 === 0 && c.字 === 0)
+    if (空.length) ng(`${名} … 中身が空の升目がある`, `${空.length} 個`)
+    else {
+      const え = 絵.filter((c) => c.絵 > 0).length
+      const じ = 絵.filter((c) => c.字 > 0).length
+      /* **絵だけの升目も、字だけの升目も、両方あること。**
+         片方に寄せた形(ぜんぶ絵・ぜんぶ字)でも緑にしない */
+      if (!え || !じ) ng(`${名} … 絵の升目と字の升目が、片方しか無い`, `絵 ${え} / 字 ${じ}`)
+      else ok(`${名} … 絵の升目 ${え} つ・字の升目 ${じ} つ`)
+    }
+
     // ⑤ 「聴く」も同じ組を着ている(`.knob`)
     if (m.升.some((c) => !c.knob)) {
       ng(`${名} … \`.knob\` を着ていない升目がある`,
