@@ -24,6 +24,21 @@ import { chunkDrills } from '../data/chunkKinds.js'
 /* 例文(第5.254節)。**そろえ方は  1か所** */
 import { wordExamples } from '../data/exerciseTypes.js'
 import { alignedSentences } from './sentencePair.js'
+/* ★ **声と段を、本文とまったく同じ道で決める**(第5.446節・2026-10-11
+   利用者の指定「復習はその時の声のキャラで構いません。その方が頭に残ります」)。
+
+   **書き写さない。** 本文(`LessonView`)が使っているのと**同じ関数**を通す
+   —— `castClipSpeakers()`(その節に出てくる順で役に声を当てる)/
+   `voiceFor()`(役 → 声)/ `voiceTierFor()`(良い段か標準か)。
+   **同じ声・同じ段なら、置き場所も同じ**(`tts/<版>/<段>/<声>/<指紋>.mp3`)
+   なので、**一度作ったものに当たる = 0円**である。
+
+   ここで性別を推測し直したり、1人目の声で代用したりすると、
+   **置き場所が1文字ずれて二度課金になる**(CLAUDE.md
+   「数え方を2通り持たない」で4度踏んだところ)。 */
+import { castClipSpeakers, voiceFor } from './voiceCast.js'
+import { resolveVoices } from '../data/clipVoices.js'
+import { voiceTierFor } from './voiceTier.js'
 
 /**
  * 演習の種類ごとに、「日本語(出す側)」と「英語(答え)」がどの欄にあるか。
@@ -215,6 +230,14 @@ export const qrSourceOfBook = (book) => (
  */
 export function quickResponsePairs(material, mode = null) {
   const out = []
+  /* ★ **声の並びと弱点タグは、教材のもの1つ**(第5.446節)。
+       `voiceIds` の綴りが2通りあるのは、読む道によって
+       `voiceIds` / `voice_ids` で届くためである(画面の側がそうしている)。
+       **ここで1度だけ受けて、下では使うだけ**にする */
+  const voiceIds = material?.voiceIds ?? material?.voice_ids
+  /** 役の無い教材(ドリルなど)でも、1つめの声で読む(本文と同じ) */
+  const soloVoice = resolveVoices(voiceIds)[0]
+  const tagIds = material?.tagIds ?? []
   for (const sec of material?.sections ?? []) {
     /* ★ **1つの演習が、2通りの対になることがある**(第5.329節)。
          リスニングは「訳 → 応答」と「質問 → 応答」の2つを出す。
@@ -231,6 +254,30 @@ export function quickResponsePairs(material, mode = null) {
          添削した文章の段は、演習の種類を借りているだけなので
          「記事」と出ては困る。**持っていない段はこれまでどおり** */
     const from = sec.qrFrom || exerciseLabel(sec.exercise_type)
+    /* ★ **役ごとの声は、節ごとに割り当てる**(第5.446節)。
+         本文も節ごとに作っている(`secClipCast`)—— **出てくる順**で
+         当てるので、節をまたいで作ると順がずれて別の声になる。
+         **本文と1文字も違えない**ことが、そのまま「0円」の条件である */
+    const secClipCast = castClipSpeakers(
+      (sec.items ?? []).map((it) => it.speaker), voiceIds,
+    )
+    /* ★ **段も節ごと**(本文の `secTier` と同じ引数)。
+         記事・会話・リスニング・発音/リズムの弱点なら良い段になる */
+    const secTier = voiceTierFor({
+      exerciseType: sec.exercise_type, tags: tagIds, voiceIds,
+    })
+    /**
+     * ★ **その役の声と段**(第5.446節)。対は**3か所**で作られる
+     * (1文ずつにほどいたぶん / かたまりの練習 / 例文)ので、
+     * **ここ1つに持つ** —— 書き写すと、どれか1つだけ標準のままになり、
+     * **その対だけ別の MP3 が作られる**(二重課金)。
+     *
+     * 役の無い教材では `soloVoice`(1つめの声)に落ちる —— 本文と同じ。
+     */
+    const 声と段 = (sp) => ({
+      clipVoice: voiceFor(secClipCast, sp, soloVoice),
+      tier: secTier,
+    })
     /* ★ **組の数だけ、同じ道をたどる**(第5.329節)。
          鍵(`key`)には組を混ぜる —— 混ぜないと、2通りの問が
          **同じ鍵**になって片方しか描かれない。
@@ -269,6 +316,7 @@ export function quickResponsePairs(material, mode = null) {
         if (!pair.aligned) return
         out.push({
           ja: pair.ja, en: pair.en, from, speaker, group: map.group,
+          ...声と段(speaker),
           key: 鍵(`${key}-${k}`, map.group),
           ...(askEn ? { askEn } : {}),
           ...(表現 ? { ...表現, isHead: true } : {}),
@@ -317,6 +365,7 @@ export function quickResponsePairs(material, mode = null) {
       chunkDrills(it).forEach((d, k) => {
         out.push({
           ja: d.ja, en: d.en, from, speaker, group: 中の組,
+          ...声と段(speaker),
           key: `${key}-d${k}`, ...表現,
         })
       })
@@ -325,6 +374,7 @@ export function quickResponsePairs(material, mode = null) {
       wordExamples(it).forEach((x, k) => {
         out.push({
           ja: x.ja, en: x.en, from, speaker, group: 中の組,
+          ...声と段(speaker),
           key: `${key}-x${k}`, ...表現,
         })
       })

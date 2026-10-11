@@ -61,6 +61,17 @@ function FrameTag({ form }) {
 }
 
 export default function QrCard({
+  /**
+   * ★ **声と段は、まず対そのものから取る**(第5.446節・2026-10-11
+   * 利用者の指定「復習はその時の声のキャラで構いません」)。
+   *
+   * 教材の中の対は `quickResponsePairs()` が、本文とまったく同じ道で
+   * **役ごと・節ごと**に当ててある(`pair.clipVoice` / `pair.tier`)。
+   *
+   * **props は受け皿**である —— 復習の Quick Response 帳の行は、
+   * まだ声を持っていない(③で持たせる)。
+   * **渡されなければ、これまでどおり**(既定は、いままでと同じ側)。
+   */
   pair, no, level = null, clipVoice = null, tier = 'premium',
   wordStatuses = null, onMarkWord = null,
   onAnswer,
@@ -401,9 +412,12 @@ export default function QrCard({
                  `.chip--on` と同じ1か所から引く(第5.439節) */}
           {/* ★ **流しているあいだは ■ になり、押すと止まる**
                  (第5.445節・②)。**渡されなければ、これまでどおりの「聴く」** */}
+          {/* ★ **対が持っていれば、そちらが勝つ**(第5.446節)——
+                 会話教材では、その台詞を言った役の声で鳴る */}
           <ListenKnob text={pair.en}
                       radioOn={radioOn} onRadioStop={onRadioStop}
-                      clipVoice={clipVoice} tier={tier} />
+                      clipVoice={pair.clipVoice ?? clipVoice}
+                      tier={pair.tier ?? tier} />
           {/* **ヒント**(2026-09 利用者の指定)。
               **ヒントを持たない問には出さない** —— ふだんの Quick Response と
               Native Flow の行は `hint` が `null` なので、ボタンごと出ない

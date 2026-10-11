@@ -37,8 +37,9 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   QR_MODES, qrSaves, qrSourceOf, quickResponseCounts, quickResponsePairs,
 } from '../lib/quickResponse.js'
-import { voiceTierFor } from '../lib/voiceTier.js'
-import { resolveVoices } from '../data/clipVoices.js'
+/* ★ **声と段は、ここで求めない**(第5.446節)。
+   `quickResponsePairs()` が本文と同じ道で対ごとに当てている ——
+   ここで持つと、置き場所が食い違って二度課金になる */
 import { stopReading } from '../lib/readAloud.js'
 import QrCard from './QrCard.jsx'
 import {
@@ -180,13 +181,18 @@ export default function QuickResponse({
   useEffect(() => () => stopReading(), [])
 
   const card = pairs[at] ?? null
-  // 本文は良い声で読む。判断は `voiceTier.js` 1か所
-  const tier = voiceTierFor({
-    exerciseType: 'article',
-    tags: material?.tagIds,
-    voiceIds: material?.voiceIds ?? material?.voice_ids,
-  })
-  const clipVoice = resolveVoices(material?.voiceIds ?? material?.voice_ids)[0]
+  /* ★ **声と段は、対そのものが持っている**(第5.446節・2026-10-11
+       利用者の指定「復習はその時の声のキャラで構いません」)。
+
+     もとはここで**教材ぜんぶに1つ**を求めていた ——
+     `exerciseType: 'article'` の決め打ちと、**1人目の声**である。
+     そのため**会話教材でも、どの台詞も1人目の声**で鳴っていた。
+
+     いまは `quickResponsePairs()` が、本文とまったく同じ道
+     (`castClipSpeakers()` / `voiceFor()` / `voiceTierFor()`)で
+     **役ごと・節ごと**に当てている。ここで求め直すと
+     **置き場所が食い違って二度課金**になる(CLAUDE.md
+     「数え方を2通り持たない」)。 */
 
   const answer = (ok) => {
     /* **押した手応えを返す**(2026-09 利用者の指定)。
@@ -356,7 +362,9 @@ export default function QuickResponse({
            教材の中では言葉づかいを「まだ / 言えた」のままにする
            (2026-09 利用者の指定。復習の画面だけ「まだ / 言える」) */
         <QrCard pair={card} no={at + 1} level={material?.level}
-                clipVoice={clipVoice} tier={tier}
+                /* ★ **声と段は渡さない**(第5.446節)—— 対そのものが
+                   持っており、`QrCard` がそこから取る(受け皿の props に
+                   同じものを入れると、**2か所に同じ値**を持つことになる) */
                 wordStatuses={wordStatuses} onMarkWord={markWord}
                 /* ★ **流しているあいだ、4つめの絵は ■**(第5.445節・②)。
                    **絵は4つのまま** —— 5つめを足さない(利用者の指摘) */

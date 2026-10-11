@@ -16776,6 +16776,143 @@ console.log('\n▶ 覚えた にする(第5.438節)')
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **Quick Response の対が、本文とまったく同じ声・同じ段で鳴る**
+ *   (第5.446節・2026-10-11 利用者の指定)
+ *
+ *   > 復習はその時の声のキャラで構いません。その方が頭に残ります
+ *
+ * ============================================================================
+ * 【なぜ「同じ」でなければならないか】
+ *
+ *   音声の置き場所は **`tts/<版>/<段>/<声>/<英文の指紋>.mp3`** である。
+ *   **段と声が1文字でも違えば、別の MP3 が作られる = 二度課金。**
+ *
+ *   直す前はこうなっていた。
+ *
+ *   | どこ | 段 | 声 |
+ *   |---|---|---|
+ *   | 教材の中の「聴く」 | 良い段(`exerciseType: 'article'` の決め打ち) | **1人目** |
+ *   | 教材の中の「聞き流し」 | **標準**(行に何も入っていない) | 既定 |
+ *
+ *   同じ1文に**2本**作られていた。しかも会話教材では、
+ *   **どの台詞も1人目の声**で鳴っていた。
+ *
+ * 【測り方】
+ *   `quickResponsePairs()` は Supabase を引き連れていないので、
+ *   **素の node で本当に動かせる。** 偽の教材を通して、出てきた対の
+ *   声と段を**本文と同じ関数**(`castClipSpeakers()`)の答えと突き合わせる。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── Quick Response の声と段(第5.446節) ──')
+  const { quickResponsePairs } = await import('../src/lib/quickResponse.js')
+  const { castClipSpeakers, voiceFor } = await import('../src/lib/voiceCast.js')
+  const { resolveVoices } = await import('../src/data/clipVoices.js')
+  const { PREMIUM, STANDARD } = await import('../src/lib/voiceTier.js')
+
+  /** 会話(良い段)と和文英訳(標準の段)を1つの教材に入れる */
+  const 会話 = [
+    { id: 'i1', speaker: 'Taro', prompt_en: 'I will take care of it.', prompt_ja: '私が引き受けます。' },
+    { id: 'i2', speaker: 'Hanako', prompt_en: 'That would be great.', prompt_ja: '助かります。' },
+    { id: 'i3', speaker: 'Taro', prompt_en: 'No problem at all.', prompt_ja: '問題ありません。' },
+  ]
+  const 教材 = {
+    voiceIds: ['us-1', 'us-2'],
+    tagIds: [],
+    sections: [
+      { id: 's1', exercise_type: 'dialogue', items: 会話 },
+      /* **標準の段になる節も入れる**(「出る」と「出ない」の両方・CLAUDE.md)
+         —— 片方だけだと、**全部 premium に書き換えても緑**になる */
+      { id: 's2', exercise_type: 'translate_ja_en', items: [
+        { id: 'j1', prompt_ja: '念のため確認します。', answer: 'Let me double-check.' },
+      ] },
+      /* **かたまりの節**。対は「その表現」「練習」「例文」の**3か所**で
+         作られるので、1つでも声が落ちていないかを見る */
+      { id: 's3', exercise_type: 'vocab_note', items: [
+        {
+          id: 'k1',
+          prompt_en: 'take care of',
+          prompt_ja: '引き受ける',
+          practice: [{ en: 'I can take care of that.', ja: '私がやれます。' }],
+          examples: [{ en: 'He took care of it.', ja: '彼がやりました。' }],
+        },
+      ] },
+    ],
+  }
+  const 対 = quickResponsePairs(教材)
+  ok(対.length >= 5, '声と段 … 対が5件以上とれている(比べる相手がある)', `${対.length} 件`)
+
+  /* ── ① **役ごとに、別の声** ── */
+  const 声の = (en) => 対.find((p) => p.en === en)?.clipVoice
+  ok(声の('I will take care of it.') && 声の('That would be great.')
+    && 声の('I will take care of it.') !== 声の('That would be great.'),
+  '声と段 … 会話は、役ごとに別の声で鳴る(1人目に寄せていない)',
+  `${声の('I will take care of it.')} / ${声の('That would be great.')}`)
+  /* **同じ役は、同じ声**(台詞が飛んでも変わらない) */
+  ok(声の('I will take care of it.') === 声の('No problem at all.'),
+    '声と段 … 同じ役の台詞は、同じ声のまま',
+    `${声の('I will take care of it.')} / ${声の('No problem at all.')}`)
+
+  /* ── ② **本文とまったく同じ割り当てか** ──
+       **値を書き写さない**(CLAUDE.md)。本文が使っているのと同じ関数を
+       独立に呼んで突き合わせる —— 1人目に寄せる形へ戻せば赤くなる */
+  {
+    const 本文の割り当て = castClipSpeakers(会話.map((x) => x.speaker), 教材.voiceIds)
+    const solo = resolveVoices(教材.voiceIds)[0]
+    const 食い違い = 対
+      .filter((p) => 会話.some((x) => x.prompt_en.includes(p.en) || p.en === x.prompt_en))
+      .filter((p) => p.clipVoice !== voiceFor(本文の割り当て, p.speaker, solo))
+    ok(食い違い.length === 0,
+      '声と段 … 本文とまったく同じ道で声を当てている(置き場所が食い違わない)',
+      食い違い.map((p) => `${p.speaker}:${p.clipVoice}`).join(' / ') || 'なし')
+  }
+
+  /* ── ③ **段は節ごと**(良い段と標準の段が、両方出る)── */
+  const 段の = (en) => 対.find((p) => p.en === en)?.tier
+  ok(段の('I will take care of it.') === PREMIUM,
+    '声と段 … 会話は良い段(ElevenLabs)', String(段の('I will take care of it.')))
+  ok(段の('Let me double-check.') === STANDARD,
+    '声と段 … 和文英訳は標準の段のまま(良い段に全部寄せていない)',
+    String(段の('Let me double-check.')))
+
+  /* ── ④ **3か所の対、ぜんぶに付いているか** ──
+       1文ずつほどいたぶん / かたまりの練習 / 例文。
+       **1つ落ちると、その対だけ別の MP3 が作られる** */
+  const 抜け = 対.filter((p) => !p.clipVoice || !p.tier)
+  ok(抜け.length === 0, '声と段 … どの対にも、声と段が付いている',
+    抜け.map((p) => p.en).join(' / ') || 'なし')
+  ok(対.some((p) => p.en === 'I can take care of that.')
+    && 対.some((p) => p.en === 'He took care of it.'),
+  '声と段 … かたまりの練習と例文も、対として出ている(測る相手がある)')
+
+  /* ── ⑤ **いちばん危ない形。** 声を1つも選んでいない教材 ──
+       「無ければ素通り」にしない(CLAUDE.md)。既定の声が入ること */
+  {
+    const 声なし = quickResponsePairs({
+      tagIds: [], sections: [{ id: 'x', exercise_type: 'article', items: [
+        { id: 'y', prompt_en: 'This is a test.', prompt_ja: 'これは試験です。' },
+      ] }],
+    })
+    ok(声なし.length === 1 && Boolean(声なし[0].clipVoice),
+      '声と段 … 声を1つも選んでいない教材でも、既定の声が入る(落ちない)',
+      String(声なし[0]?.clipVoice))
+  }
+
+  /* ── ⑥ **画面が求め直していない** ──
+       `exerciseType: 'article'` の決め打ちと1人目の声が戻っていないか */
+  {
+    const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ')
+    const qr = 落とす(readFileSync(
+      new URL('../src/components/QuickResponse.jsx', import.meta.url), 'utf8'))
+    ok(!/voiceTierFor\(/.test(qr) && !/resolveVoices\(/.test(qr),
+      '声と段 … 教材の画面は、声も段も求め直していない(対から取る)')
+    const card = 落とす(readFileSync(
+      new URL('../src/components/QrCard.jsx', import.meta.url), 'utf8'))
+    ok(/pair\.clipVoice \?\? clipVoice/.test(card) && /pair\.tier \?\? tier/.test(card),
+      '声と段 … カードは、対が持っている声と段を先に見る')
+  }
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
