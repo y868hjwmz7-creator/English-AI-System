@@ -57,8 +57,14 @@ import CardMove, { MoveArrow } from './CardMove.jsx'
 import { isCoarse, keyLabel } from '../lib/cardMove.js'
 import ReviewScope from './ReviewScope.jsx'
 import ReviewStats from './ReviewStats.jsx'
-import WordRadio from './WordRadio.jsx'
-import { listTracks } from '../lib/bgm.js'
+/* ★ **聞き流しは、練習のカードの上の状態**(第5.445節・②・
+   2026-10-10 利用者の指摘)。もとは `WordRadio`(別の画面)へ飛んでいた。
+   回し続ける算段は `useRadioRun()` 1か所、1枚ぶんを鳴らすのは
+   `playRadioRow()` 1か所、送り方は `cardCursor.js` 1か所である */
+import useRadioRun from '../lib/useRadioRun.js'
+import { rotateCursor } from '../lib/cardCursor.js'
+import RadioToggle from './RadioToggle.jsx'
+import RadioSettings from './RadioSettings.jsx'
 import { loadRateId, rateOf } from '../lib/speechRate.js'
 /* ★ **出しかたは「何を出す」4つ + 問数3つ + スイッチ2つ**(第5.414節・段階3)。
      範囲(`scope`)と段階(`stage`)を1つの操作にまとめたのが `pick` である */
@@ -82,6 +88,10 @@ import { NO_GOAL, loadWeeklyGoal } from '../lib/goals.js'
 import { shortDate } from '../lib/format.js'
 import { useWide } from '../lib/nav.js'
 import SpeakButton from './SpeakButton.jsx'
+/* ★ **4つめの絵は `ListenKnob` 1か所**(第5.445節・②)。
+   ふだんは「聴く」(1枚だけ鳴って止まる)で、**聞き流しを流している
+   あいだだけ ■** になる —— 絵は4つのままである(利用者の指定) */
+import ListenKnob from './ListenKnob.jsx'
 /* ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘
    「音声のロードが遅いです。初めてだと3-4秒かかります」)。
    **どれを温めるかは `warmAhead.js` 1か所**(Quick Response と同じもの)。
@@ -117,7 +127,7 @@ import { loadBasicWordbook } from '../lib/basicReviews.js'
 import { nextFilledBook } from '../lib/bookOpen.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
 import {
-  CloseIcon, FocusIcon, HeadphoneIcon, MenuIcon, PrintIcon, RepeatIcon,
+  CloseIcon, FocusIcon, MenuIcon, PrintIcon, RepeatIcon,
 } from './Icons.jsx'
 import { lockScroll } from '../lib/scrollLock.js'
 import ReviewSheet from './ReviewSheet.jsx'
@@ -435,11 +445,10 @@ export default function Wordbook({
   const [running, setRunning] = useState(false)
   /* **聞き流し**(2026-09 利用者の指定「音楽を流しながらどんどん登録されて
      いる単語が読まれるモード」)。答える練習ではないので、
-     **記録は1ミリも動かさない**(`WordRadio` の中でも呼んでいない) */
-  const [radio, setRadio] = useState(null)      // 読む語の一覧。null なら出さない
-  const [tracks, setTracks] = useState([])      // 曲(無ければ音楽は流れない)
-  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
-  const [tracksError, setTracksError] = useState(null)
+     **記録は1ミリも動かさない**(`useRadioRun` の中でも呼んでいない)。
+     ★ **別の画面へ飛ぶのをやめた**(第5.445節・②)—— 読む語の控えも、
+     曲の控えも要らなくなった。流すのは**いま出ているカードそのもの**で、
+     曲は `useRadioRun()` が押されたときに引く */
   /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
      中身は刷る一瞬だけ描く —— 1,200 語を常に描くと画面が重くなる
      (教材のカードの `printId` とまったく同じ作法・CLAUDE.md) */
@@ -465,6 +474,30 @@ export default function Wordbook({
      絞り込みは手元で行う。選ぶたびに聞き直さない */
   const [filter, setFilter] = useState(emptyFilter)
   const [queue, setQueue] = useState([])        // いまの10語
+  /**
+   * ★ **いまの並びは、控えが本体である**(第5.445節・②)。
+   *
+   * **画面を消すと React は描き直さない**(第5.285節)。聞き流しは
+   * 間を無音の音で置いているので鳴り続けるが、**「次へ」を `setQueue`
+   * だけで書くと、次に鳴らす語を読んだときまだ前の並び**になり、
+   * 同じ語を何度も鳴らす(2026-09 に実機で踏んだ)。
+   *
+   * **並びを書き替えるのは `putQueue()` 1か所**で、控えと画面を
+   * 必ず一緒に動かす。
+   */
+  const queueRef = useRef([])
+  const putQueue = (q) => { queueRef.current = q; setQueue(q) }
+  /**
+   * ★ **送り方は `cardCursor.js` 1か所**(第5.445節・②)。
+   *
+   * 矢印キー ← → ・紙の左右の余白クリック・◀▶ のボタン・
+   * ロック画面の送り・**聞き流しの「鳴り終わったら次へ」**が、
+   * ぜんぶここを通る —— **置く場所の数だけ食い違う**(CLAUDE.md)。
+   *
+   * **記録は1ミリも動かさない。** その回の並びを回すだけである ——
+   * 覚え具合も、箱も、期限も、`answer()` を通ったときにだけ変わる。
+   */
+  const 送り = rotateCursor({ get: () => queueRef.current, set: putQueue })
   const [result, setResult] = useState(null)    // 終わったときの結果
   const [counts, setCounts] = useState({ due: 0, unknown: 0, learning: 0, known: 0 })
   const [week, setWeek] = useState({ days: 0, answered: 0, correct: 0, weeks: 0 })
@@ -847,7 +880,7 @@ export default function Wordbook({
          冊を替えた直後の1回で**前の冊の語のまま**判断してしまう */
       rowsBookRef.current = book
       sendGrown(got)
-      setQueue([])
+      putQueue([])
       doneRef.current = []
       setResult(null)
       setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
@@ -922,7 +955,7 @@ export default function Wordbook({
     /* **どの冊の語を控えたか**(第5.200節・上と同じ) */
     rowsBookRef.current = book
     sendGrown(got)
-    setQueue([])
+    putQueue([])
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
@@ -1144,7 +1177,7 @@ export default function Wordbook({
       { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) })
     /* ★ **この回の語を控える**(第5.436節)。「繰り返す」が回す相手である */
     roundRef.current = list
-    setQueue(list)
+    putQueue(list)
     doneRef.current = []
     setResult(null)
     setShown(false); setDeep(false); setJudged(null); setSeenOpen(false)
@@ -1172,7 +1205,7 @@ export default function Wordbook({
   const again = useCallback(() => {
     const list = roundRef.current ?? []
     if (!list.length) return
-    setQueue(buildSession(list, list.length,
+    putQueue(buildSession(list, list.length,
       { shuffleAll: shuffle, order: orderToUse(WORD_ORDERS, { shuffle, order }) }))
     doneRef.current = []
     setResult(null)
@@ -1180,29 +1213,12 @@ export default function Wordbook({
     setPickedChoice(null)
   }, [order, shuffle])
 
-  /**
-   * **聞き流しを始める**(2026-09 利用者の指定)。
-   *
-   *   > 音楽を流しながらどんどん登録されている単語が読まれるモード
-   *
-   * **読む語は、出題とまったく同じ道で選ぶ**(`poolNow()`)——
-   * 範囲の札も絞り込みも、そのまま効く。**数え方を2通り持たない。**
-   * ただし**語数では切らない。** 聞き流しは終わりを決めずに回すものである。
-   *
-   * 曲は**押したときに引く**(開いた瞬間ではない)。押さない人には
-   * 1回も問い合わせが飛ばない。**曲が0本でも聞き流しは始まる**
-   * (音楽が鳴らないだけ・**行き止まりを作らない**)。
-   */
-  const listen = useCallback(async () => {
-    const pool = poolNow()
-    if (!pool.length) return
-    setRadio(pool)
-    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
-       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
-    const { data, error: 曲error } = await listTracks()
-    setTracks(data ?? [])
-    setTracksError(曲error ?? null)
-  }, [poolNow])
+  /* ★ **読む語を、別に組むのをやめた**(第5.445節・②)。
+       流すのは**いま練習している並び(`queue`)そのもの**である ——
+       範囲の札・絞り込み・並べ方・シャッフル・語数は、すでにあれに
+       当たっている。**数え方を2通り持たない**(CLAUDE.md)。
+       **始める道は、下の `listen()`**(`radio` を使うので、
+       あちらが出来てから書く)。 */
 
   /**
    * **復習の最中に「出しかた」を変えたら、その場で組み直す**
@@ -1276,15 +1292,11 @@ export default function Wordbook({
   /**
    * **冊を替えても、聞き流しを続ける**(第5.283節・2026-09-27 利用者の指定)。
    *
-   * `dropRun()` は `setRadio(null)` を含むので、冊を替えると
-   * **聞き流しから放り出される。** 替えたのは「次はあの冊を聴きたい」
-   * からであって、やめたいわけではない。
-   *
-   * **`dropRun()` は変えない** —— 帯の `冊名 ▾` から替えた人は、
-   * これまでどおり練習へ降りる。**どちらから替えたかを、この印で分ける。**
-   * **Quick Response とまったく同じ作り**(`QrReview.jsx`)。
+   * ★ **印は、もう要らない**(第5.445節・②)。聞き流しは**カードの上の
+   * 状態**になったので、`dropRun()`(やりかけを捨てる)を通っても
+   * **流す印は倒れない。** 新しい冊の語が届いたところから、そのまま
+   * 鳴り続ける —— **道が1本になったので、持ち越す細工が消えた。**
    */
-  const keepRadioRef = useRef(false)
 
   /**
    * **開いた瞬間に1問目**(第5.167節・2026-09 利用者の提案)。
@@ -1316,7 +1328,6 @@ export default function Wordbook({
        第5.191節・第5.200節で踏んだのと、まったく同じ抜け方である。
        **`opened` を立てる前に返す**(立ててから戻すと、
        届かなかったときに描き直しが止まらない) */
-    if (keepRadioRef.current && rowsBookRef.current !== book) return
     /* **判断が済んだことを、必ず先に立てる。** ここを「始めたときだけ」に
        すると、1語も無い帳面で**帯1本のまま止まる**(第5.172節) */
     setOpened(true)
@@ -1345,18 +1356,7 @@ export default function Wordbook({
       }
       /* **出すものが無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
-      /* **聞き流しへ戻れないなら、印も下ろす**(持ち越すと、
-         次に冊を替えたときに勝手に聞き流しが始まる) */
-      keepRadioRef.current = false
       setRunning(false)
-      return
-    }
-    /* ★ **聞き流しの中で冊を替えた人は、聞き流しのまま**(第5.283節)。
-         新しい冊の語が届いたので、ここで開き直す。
-         **`listen()` を呼ぶ** —— 読む語の選び方を書き写さない */
-    if (keepRadioRef.current) {
-      keepRadioRef.current = false
-      listen()
       return
     }
     start()
@@ -1396,9 +1396,11 @@ export default function Wordbook({
   /* **指の端末か**(第5.236節)。**幅で見分けない。** 判断は
      `isCoarse()` 1か所で、ここはキーの印を出すかどうかにだけ使う */
   const coarse = isCoarse()
-  const goNext = () => setQueue((q) => (q.length > 1 ? [...q.slice(1), q[0]] : q))
-  const goPrev = () => setQueue((q) => (
-    q.length > 1 ? [q[q.length - 1], ...q.slice(0, -1)] : q))
+  /* ★ **向きの決まりは `cardCursor.js` 1か所**(第5.445節・②)——
+       ここで `[...q.slice(1), q[0]]` と書かない。
+       **聞き流しの「鳴り終わったら次へ」も、同じ道を通る** */
+  const goNext = () => { 送り.go() }
+  const goPrev = () => { 送り.back() }
   /**
    * **いくつ終えて、ぜんぶでいくつか**(第5.180節でカードの中へ移した)。
    *
@@ -1609,12 +1611,13 @@ export default function Wordbook({
        もとは表を直に数えた `counts` を手で足し引きしていた。
        いまはどちらも `allRows` ひとつから出る。
        `counts` は「ぜんぶ読めているか」を見るためだけに残してある */
-    setQueue((q) => {
-      const rest = q.slice(1)
+    /* **控えから数える。** `setQueue((q) => …)` だと控えが付いてこない */
+    {
+      const rest = queueRef.current.slice(1)
       // **10語で区切る。** 終わったら結果を出す
       if (!rest.length) setResult([...doneRef.current])
-      return rest
-    })
+      putQueue(rest)
+    }
   }
 
   /**
@@ -1672,8 +1675,11 @@ export default function Wordbook({
        呼ぶ側それぞれに書くと、道を1つ足した日にそこだけ落ちる。
 
        **聞き流しが開いていないときは、これまでどおり**(印は立たない)。 */
-    if (radio) keepRadioRef.current = true
-    setStarted(false); setRadio(null)
+    /* ★ **聞き流しは倒さない**(第5.445節・②)。あれは**カードの上の
+       状態**なので、やりかけを捨てても流す印はそのまま残る ——
+       新しい冊の語が届いたところから、そのまま鳴り続ける
+       (第5.288節の「持ち越す印」は、道が1本になって要らなくなった) */
+    setStarted(false)
     /* 冊が変われば語も変わる。**判断からやり直す** */
     setOpened(false)
     /* **`running` は倒さない**(第5.173節)。倒すと出題の箱ごと消えて、
@@ -1681,7 +1687,7 @@ export default function Wordbook({
        中身(`queue` / `result`)だけを空にすれば、
        箱はそのままで**帯の下だけが帯1本に入れ替わる** */
     setSwitching(true)
-    setQueue([]); setResult(null)
+    putQueue([]); setResult(null)
     doneRef.current = []
     setFilter(emptyFilter)
     gradedRef.current = new Set()
@@ -1826,6 +1832,36 @@ export default function Wordbook({
      いま何を出しているのかが2か所に散る。
      **何で絞っているのかは、呼ぶ側が言う**(0053)—— ここで書き写さない */
   const shownLabel = onlyNow ? `${onlyWhat}だけ ${rows.length} 語` : drillLabel
+
+  /**
+   * ★ **聞き流しは、練習のカードの上の状態**(第5.445節・②)。
+   *
+   * **題は、画面に出ているものをそのまま**渡す(`shownLabel`)——
+   * ロック画面に出るので、書き写すと冊を替えた日だけ古くなる(第5.264節)。
+   */
+  const radio = useRadioRun({
+    cursor: 送り,
+    where: 'word',
+    label: shownLabel,
+    /* **速さは、端末に覚えさせたものをそのまま**(もとの聞き流しと同じ)。
+       速さは鳴らし方だけで、**置き場所(= 課金)には関係しない** */
+    rate: rateOf(loadRateId()),
+  })
+  /**
+   * **聞き流しを始める**(2026-09 利用者の指定)。
+   *
+   *   > 音楽を流しながらどんどん登録されている単語が読まれるモード
+   *
+   * ★ **押すと、このカードのまま流れ始める**(第5.445節・③)。
+   * **始まっていなければ、その場で始める** —— 一覧の下から押した人を
+   * 空のまま待たせない(**行き止まりを作らない**・CLAUDE.md)。
+   * 曲は `useRadioRun()` が引く(押さない人には1回も問い合わせが飛ばない)。
+   */
+  const listen = () => {
+    if (!queueRef.current.length) start()
+    setRunning(true)
+    radio.start()
+  }
   /**
    * **帳面の名前と、進み具合**(第5.180節・2026-09 実機・利用者の指定)。
    *
@@ -1866,27 +1902,24 @@ export default function Wordbook({
        「聞き流すは上部バーのボタンに一本化する」)。
        **中身はここ1か所** —— 一覧の下にも、練習中の上の帯にも、
        これを置く(**書き写さない**) */
+  /* ★ **押すと、このカードのまま流れ始める**(第5.445節・③)。
+       もとは**別の画面へ飛んでいた。** 流しているあいだは「とめる」に
+       なり、金が入る —— **中身は `RadioToggle` 1か所**である
+       (帯にも、一覧の下にも、これを置く)。
+       **帯を2段にしない**(第5.316節)—— 帯のぶんは語数を字に出さず、
+       読み上げと吹き出しの側に残す(**消さない**)。あの切り分けも
+       `RadioToggle` が持っている(`wide`) */
   const listenBtn = (
-    <button type="button" className="btn btn--ghost btn--small wb-top-listen"
-            disabled={restInScope === 0}
-            /* **帯を2段にしない**(第5.316節)。帯には ☰ / 冊名 ▾ /
-               これ / 出しかた の4つが並ぶので、**語数まで入れると
-               320px で折り返した**(実測 帯 57px / ボタン 34px)。
-               **数は読み上げと吹き出しの側に残す** —— 消さない */
-            aria-label={`聞き流す(${restInScope} 語)`}
-            title={`聞き流す(${restInScope} 語)`}
-            onClick={listen}>
-      <HeadphoneIcon />聞き流し
-    </button>
+    <RadioToggle className="wb-top-listen" unit="語"
+                 on={radio.on} onToggle={radio.on ? radio.stop : listen}
+                 count={restInScope} disabled={restInScope === 0} />
   )
 
   /** 一覧の下に置くぶん。**語数まで出す**(ここは幅に余裕がある) */
   const listenWide = (
-    <button type="button" className="btn btn--quiet wb-listen"
-            disabled={restInScope === 0}
-            onClick={listen}>
-      <HeadphoneIcon />聞き流す({restInScope} 語)
-    </button>
+    <RadioToggle className="wb-listen" unit="語" wide
+                 on={radio.on} onToggle={radio.on ? radio.stop : listen}
+                 count={restInScope} disabled={restInScope === 0} />
   )
 
   /* ★ **紙に出すのは、右上の「出しかた」の中**(2026-10-09 利用者の指定)。
@@ -2250,6 +2283,10 @@ export default function Wordbook({
                しかも**0件になるまで見えなかった**ので、
                ここに常に出るほうが届きやすい(行き止まりも作らない)。 */
             <ReviewScope
+              /* ★ **始める前からでも、聞き流しの設定は開ける**(第5.445節・④)。
+                 一覧の下の「聞き流し(◯ 語)」を押す前に、読み方や間を
+                 決められる(**行き止まりを作らない**・CLAUDE.md) */
+              radio={<RadioSettings uid="wb-radio-pre" {...radio.settings} />}
               /* ★ **段階を当てる前の一覧を渡す**(第5.414節)。
                  札の数は「押したら何件出るか」なので、
                  いま選んでいる段階で絞ったものを渡してはいけない */
@@ -2303,43 +2340,11 @@ export default function Wordbook({
           `.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」 */}
       {isQuiz && !loading && !card && rows.length > 0 && toolsBox}
 
-      {radio && (
-        <WordRadio
-          rows={radio}
-          /* **聞き流しの中でも、教材(冊)をえらべる**(第5.283節・
-             2026-09-27 利用者の指定)。**一覧は `books` 1つ**
-             (帯の `冊名 ▾` と同じもの・書き写さない) */
-          books={books}
-          book={book}
-          /* ★ **冊の中の区切りも、そのまま渡す**(第5.288節)。
-             帯の `冊名 ▾` の中で使っているものと**同じ1つ**である ——
-             段(基礎単語)・棚の冊・チャンクの段と組を、聞きながら選び直せる */
-          sub={bookSub}
-          onBook={(id) => {
-            /* **聞き流しのまま、次の冊へ** —— 印は `dropRun()` が立てる
-               (第5.288節・1か所に寄せた)。
-               ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
-            pickedBookRef.current = true
-            setBookWanted(id); dropRun()
-          }}
-          /* **練習の画面に出している題を、そのまま渡す**(第5.264節)。
-             `shownLabel` は「◯◯だけ 12 語」まで含んだもの ——
-             **画面に出ているものと1文字も違わない** */
-          label={shownLabel}
-          tracks={tracks}
-          tracksError={tracksError}
-          /* **「出しかた」で選んでいる数を、そのまま持ち込む**
-             (第5.262節・2026-09-26 利用者の指定)。
-             5問に絞って練習していた人には、そのまま5問が回る。
-             **聞き流しの中で変えられる**ので、ここは始めの値だけである */
-          size={size}
-          rate={rateOf(loadRateId())}
-          learnerId={learnerId}
-          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
-          onMenu={onMenu}
-          onClose={() => setRadio(null)}
-        />
-      )}
+      {/* ★ **聞き流しの画面は、もう無い**(第5.445節・②・
+          2026-10-10 利用者の指摘「そのままのデザインでできないのですか？」)。
+          流すのは**このままのカード**で、重ねるものは1つも無い ——
+          冊も、冊の中の区切りも、上の帯の `冊名 ▾` がそのまま見えている
+          (別画面だったから中へ写していた・第5.283節 / 第5.288節)。 */}
 
       {/* **とじたあとの戻り道**(2026-09)。集中モードは画面ぴったりなので、
           出ていると一覧が見えない。出ていないときは、ここから入り直す */}
@@ -2444,6 +2449,10 @@ export default function Wordbook({
                     onStart={start}
                     /* ★ **紙に出すのは、ここ(右上)の中**(2026-10-09) */
                     tools={paperBox}
+                    /* ★ **聞き流しの設定は、ここの中**(第5.445節・④・
+                       2026-10-10 利用者の指定「聞き流しの設定は右上に
+                       しましょう」)。**欄の形は `RadioSettings` 1か所** */
+                    radio={<RadioSettings uid="wb-radio-run" {...radio.settings} />}
                   >
                     <WordbookFilter rows={rows} value={filter} onChange={setFilter} />
                   </ReviewScope>
@@ -2495,11 +2504,11 @@ export default function Wordbook({
                 上の帯にも、下のタブバーにも、下のボタンにもかからない
                 (利用者の指定「上部バーの部分は余白としてとらえない」)。 */}
           <CardMove
-            /* ★ **聞き流しが開いているあいだは、1つも効かせない** ——
-                 矢印キーを聞いているのは窓(`window`)なので、
-                 上に重ねた画面で ← → を押しても**裏のカードが飛ぶ。**
-                 **既定は「できない」側**にする(CLAUDE.md) */
-            on={!radio}
+            /* ★ **聞き流しの最中も効く**(第5.445節・②)。
+                 もとは「上に重ねた画面の裏でカードが飛ぶ」のを防ぐため
+                 `on={!radio}` にしていたが、**重ねる画面そのものが無くなった。**
+                 流している最中に ← → を押したら、そこへ飛んで鳴り直す ——
+                 **送る道は `送り` 1本**なので、音と画面が食い違わない */
             onPrev={goPrev} onNext={goNext}
             /* **どの訊き方でも効く**(2026-10-07 利用者の指定)——
                4択・つづりでも、自分の申告が機械の判定より優先される。
@@ -2838,7 +2847,12 @@ export default function Wordbook({
                       ここで渡すのは残りの2つである。
                       **`btn--quiet`(灰)を渡すのは、色を決めている印**でもある
                       —— `toneOn()` は、呼ぶ側が色を持っていれば足さない */}
-                  <SpeakButton text={word} className="knob" label={null} />
+                  {/* ★ **流しているあいだは ■ になり、押すと止まる**
+                      (第5.445節・②)。**絵は4つのまま** —— 5つめを足さない
+                      (利用者の指摘「アイコン5個はうるさいと感じます」)。
+                      **中身は `ListenKnob` 1か所**(Quick Response と同じ) */}
+                  <ListenKnob text={word}
+                              radioOn={radio.on} onRadioStop={radio.stop} />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 言える。

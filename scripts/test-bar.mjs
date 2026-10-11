@@ -7837,19 +7837,48 @@ export default defineConfig({
         .map((b) => b.textContent.trim()).join(' / '))
       ng('教材の Quick Response … 聞き流しのボタンが無い', 並ぶもの || '(ボタンが1つも無い)')
     } else {
+      /* ★ **押しても、画面はこのまま**(第5.445節・②・2026-10-10
+           利用者の指摘「そのままのデザインでできないのですか？」)。
+           **見るのは3つ** —— ①問のカードが消えていない
+           ②ボタンが「とめる」になった ③4つめの絵が ■(金が入った)。
+           **言葉は `radioLabel.js` から読む**(書き写さない) */
+      const { RADIO_STOP } = await import('../src/lib/radioLabel.js')
+      const 前 = await page.evaluate(() => ({
+        カード: !!document.querySelector('.qr-card'),
+        幅: document.querySelector('.qr-top-listen')?.getBoundingClientRect().width ?? 0,
+      }))
       await 押す.first().click()
       await page.waitForTimeout(900)
       const 開いた = await page.evaluate(() => {
-        const card = document.querySelector('.radio-card')
+        const 押せる = document.querySelector('.qr-top-listen')
+        const つまみ = [...document.querySelectorAll('.knob')].filter((x) => x.offsetParent)
         return {
-          ある: !!card,
-          題: document.querySelector('.focus-top')?.textContent?.trim().slice(0, 40) ?? '',
-          文: document.querySelector('.radio-en')?.textContent?.trim() ?? '',
+          カード: !!document.querySelector('.qr-card'),
+          帯: (押せる?.textContent ?? '').trim(),
+          幅: 押せる?.getBoundingClientRect().width ?? 0,
+          とまる: つまみ.some((x) => x.className.includes('chip--on')
+            && !x.getAttribute('aria-label')?.includes('ランダム')
+            && !x.getAttribute('aria-label')?.includes('くり返す')),
+          重なり: !!document.querySelector('.radio-card'),
         }
       })
-      if (!開いた.ある) ng('教材の Quick Response … 押しても聞き流しが開かない')
-      else if (!開いた.文) ng('教材の Quick Response … 聞き流しは開いたが、文が出ていない')
-      else ok(`教材の Quick Response … 聞き流しが開く(「${開いた.文.slice(0, 28)}」)`)
+      if (!前.カード || !開いた.カード) {
+        ng('教材の Quick Response … 流すと、問のカードが消える',
+          `押す前 ${前.カード} → 押した後 ${開いた.カード}`)
+      } else if (開いた.重なり) {
+        ng('教材の Quick Response … 聞き流しの画面を重ねている(カードのままにする)')
+      } else if (!開いた.帯.includes(RADIO_STOP)) {
+        ng('教材の Quick Response … 押しても「とめる」にならない', 開いた.帯)
+      } else if (!開いた.とまる) {
+        ng('教材の Quick Response … 4つめの絵が ■ にならない(とめる道が無い)')
+      } else if (Math.abs(開いた.幅 - 前.幅) > 0.5) {
+        /* **押しても、まわりの物が動かない**(共通ルール) */
+        ng('教材の Quick Response … 押すとボタンの幅が変わる',
+          `${前.幅.toFixed(1)}px → ${開いた.幅.toFixed(1)}px`)
+      } else {
+        ok(`教材の Quick Response … カードのまま流れる(帯「${開いた.帯}」`
+          + ` / 4つめは ■ / 幅 ${開いた.幅.toFixed(1)}px のまま)`)
+      }
     }
     await page.close()
   }
@@ -8351,11 +8380,14 @@ export default defineConfig({
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
     const qr = readFileSync(new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')
-    if (!/<WordRadio\b/.test(src)) {
-      ng('聞き流し … 単語帳から入れない')
-    } else if (!/onClick=\{listen\}/.test(src)) {
-      ng('聞き流し … 入口のボタンが無い')
-    } else if (!/<WordRadio\b/.test(qr) || !/onClick=\{listen\}/.test(qr)) {
+    /* ★ **別の画面へ飛ぶのをやめた**(第5.445節・②)。
+         いま見るのは「回す仕掛けを呼んでいるか」と
+         「流す / とめるのボタンが在るか」である */
+    if (!/useRadioRun\(\{/.test(src)) {
+      ng('聞き流し … 単語帳が、回す仕掛けを呼んでいない')
+    } else if (!/<RadioToggle/.test(src)) {
+      ng('聞き流し … 単語帳に、流す / とめるのボタンが無い')
+    } else if (!/useRadioRun\(\{/.test(qr) || !/<RadioToggle/.test(qr)) {
       /* **Quick Response からも入れるか。** 検証の入り口だけ直しても、
          利用者の画面からは入れない(単語帳とまったく同じ落とし穴) */
       ng('聞き流し … Quick Response から入れない')
@@ -11199,25 +11231,60 @@ for (const W of [1280, 794, 453, 390, 320]) {
        (「練習の画面から押しても、何も出ない」が出ていた)。
        **どちらの画面でも押せるように、両方を並べる**
        (片方しか無いので、取り違えようがない)。 */
+  /* ★ **聞き流しの設定は「出しかた」の中**(第5.445節・④・2026-10-10
+       利用者の指定「聞き流しの設定は右上にしましょう」)。
+       **読み方の欄か間の欄が、あの中に在るか**を数える ——
+       「聞き流し」の文字で探すと、見出しにも当たる(数えたことにならない) */
+  await page.evaluate(() => { document.querySelector('.rscope-sort')?.click() })
+  await page.waitForTimeout(500)
+  const 設定 = await page.evaluate(() => [...document.querySelectorAll(
+    '.sheet .rscope-radio select, .setpop .rscope-radio select',
+  )].map((x) => x.className))
+  await page.evaluate(() => { document.querySelector('.sheet-back')?.click() })
+  await page.waitForTimeout(300)
+
+  /* ★ **押すと、画面はこのまま**(第5.445節・②③)。
+       **見るのは「カードが消えていないか」と「とめるになったか」** ——
+       もとは `.radio`(別の画面)が出るかを見ていた */
+  const { RADIO_STOP } = await import('../src/lib/radioLabel.js')
+  const 前幅 = await page.evaluate(() => document
+    .querySelector('.wb-top-listen, .qr-top-listen')?.getBoundingClientRect().width ?? 0)
   await page.evaluate(() => {
     document.querySelector('.wb-top-listen, .qr-top-listen')?.click()
   })
   await page.waitForTimeout(1500)
-  const 流 = await page.evaluate(() => ({
-    ある: !!document.querySelector('.radio'),
-    文: (document.querySelector('.radio')?.textContent ?? '').replace(/\s+/g, ' ').slice(0, 120),
-  }))
+  const 流 = await page.evaluate(() => {
+    const 押せる = document.querySelector('.wb-top-listen, .qr-top-listen')
+    return {
+      重なり: !!document.querySelector('.radio'),
+      カード: !!document.querySelector('.qr-card, .wordcard'),
+      帯: (押せる?.textContent ?? '').trim(),
+      幅: 押せる?.getBoundingClientRect().width ?? 0,
+    }
+  })
   if (紙.length === 0) {
     ng('出しかた … 印刷 / PDF が無い(右上のメニューに入れる・第5.436節)')
   } else if (道具.length !== 0) {
     ng('聞き流し … 「出しかた」に聞き流しが残っている(上の帯へ移した)',
       道具.join(' / '))
-  } else if (!流.ある) {
-    ng('聞き流し … 練習の画面から押しても、何も出ない',
-      '**押す場所と、受け取る場所は同じ数だけ要る**(第5.191節)')
+  } else if (設定.length === 0) {
+    ng('聞き流し … 「出しかた」の中に、聞き流しの設定(読み方・間)が無い',
+      '第5.445節・④「聞き流しの設定は右上にしましょう」')
+  } else if (流.重なり) {
+    ng('聞き流し … 聞き流しの画面を重ねている(カードのままにする)')
+  } else if (!流.カード) {
+    ng('聞き流し … 流すと、練習のカードが消える')
+  } else if (!流.帯.includes(RADIO_STOP)) {
+    ng('聞き流し … 練習の画面から押しても、「とめる」にならない',
+      流.帯 || '(ボタンが見つからない)')
+  } else if (Math.abs(流.幅 - 前幅) > 0.5) {
+    ng('聞き流し … 押すとボタンの幅が変わる(まわりの物が動く)',
+      `${前幅.toFixed(1)}px → ${流.幅.toFixed(1)}px`)
   } else {
-    ok(`聞き流し … 練習の画面からも開ける(${流.文.slice(0, 40)}…)`)
+    ok(`聞き流し … 練習の画面から、カードのまま流せる(帯「${流.帯}」`
+      + ` / 幅 ${流.幅.toFixed(1)}px のまま)`)
     ok(`出しかた … 印刷 / PDF は右上のメニューの中にある(${紙.join(' / ')})`)
+    ok(`出しかた … 聞き流しの設定も、その中にある(${設定.length} 欄)`)
   }
   await page.close()
 }
@@ -11901,7 +11968,9 @@ for (const W of [1280, 794, 453, 390, 320]) {
     return {
       札: Number((document.querySelector('.wb-tally .num, .tally-n')?.textContent ?? '')
         .replace(/[^0-9]/g, '')) || null,
-      聞き流し: 拾う(/聞き流す\((\d+)語\)/),
+      /* ★ **言い方は `radioLabel.js` 1か所になった**(第5.445節・③)。
+           「聞き流す(◯ 語)」→「聞き流し(◯ 語)」—— **どちらでも拾う** */
+      聞き流し: 拾う(/聞き流[すし]\((\d+)語\)/),
       紙: 拾う(/印刷\/PDFで保存\((\d+)語\)/),
       題: (document.querySelector('.drill-title')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
     }

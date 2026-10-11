@@ -58,6 +58,9 @@ import {
      「何を出す」の「苦手」「未学習」も、ここの段そのものである */
 import { LEARN_STAGES, stageTally } from '../lib/learnStage.js'
 import SettingsSheet from './SettingsSheet.jsx'
+/* **見出しの言葉は `radioLabel.js` 1か所**(第5.445節)——
+   上の帯のボタンと同じ言葉を、ここに書き写さない */
+import { RADIO_LISTEN } from '../lib/radioLabel.js'
 import {
   ChevronIcon, CloseIcon, FocusIcon, RepeatIcon, ShuffleIcon, SortIcon,
 } from './Icons.jsx'
@@ -108,6 +111,20 @@ export default function ReviewScope({
    * **渡されなければ、その段ごと出ない**(効かない操作を見せない)。
    */
   tools = null,
+  /**
+   * ★ **聞き流しの設定**(第5.445節・④・2026-10-10 利用者の指定)。
+   *
+   *   > そうですね、聞き流しの設定は右上にしましょう
+   *
+   * 読み方・間・曲・音量。**聞き流しが別の画面だったころ**は、
+   * あの画面の右上に自分の設定を持っていた(第5.274節)。
+   * 画面を分けるのをやめた(第5.445節・②)ので、**ここへ入れる。**
+   *
+   * **中身は呼ぶ側が渡す**(`RadioSettings`)—— 覚えておくのは
+   * 画面の役目で、ここは置き場所と区切りだけを決める。
+   * **渡されなければ、その段ごと出ない**(効かない操作を見せない)。
+   */
+  radio = null,
 }) {
   const today = todayKey()
   /* ★ **期限は、札ではなくスイッチが決める**(第5.437節)。
@@ -290,6 +307,17 @@ export default function ReviewScope({
    */
   const 道具 = tools ? <div className="rscope-tools">{tools}</div> : null
 
+  /* ★ **聞き流しの設定**(第5.445節・④)。**線で区切って、見出しを置く**
+       —— 上の段は「何を出す」で、ここから下は「流すときの読み方」である。
+       区切りの出し方は `.rscope-more` / `.rscope-tools` とまったく同じ
+       (**新しい見た目を作らない**・CLAUDE.md) */
+  const 聞き流しの設定 = radio ? (
+    <div className="rscope-radio">
+      {見出し('radio', RADIO_LISTEN)}
+      {radio}
+    </div>
+  ) : null
+
   /** この欄の呼び名。**絵だけにしたので、言葉はここ1か所が持つ** */
   const 出しかたと呼ぶ = '出しかた'
 
@@ -410,6 +438,7 @@ export default function ReviewScope({
           <div className="rscope-scroll">
             {上の3段}
             {詳しくしぼる}
+            {聞き流しの設定}
             {道具}
             {/* **押したら何が起きるかを1行で言う。** 箱の番号は出さない */}
             <p className="tip card-hint rscope-lead">

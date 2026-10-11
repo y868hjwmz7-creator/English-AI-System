@@ -3550,10 +3550,21 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
     const app = 落とす(readFileSync(
       new URL('../src/App.jsx', import.meta.url), 'utf8'))
 
-    ok(/<WordRadio/.test(wb), '聞き流し … 単語帳から入れる')
-    /* **出題とまったく同じ道で語を選ぶ**(数え方を2通り持たない) */
-    ok(/const pool = poolNow\(\)/.test(wb) && /setRadio\(pool\)/.test(wb),
-      '聞き流し … 読む語は、出題と同じ `poolNow()` から選んでいる')
+    /* ★ **聞き流しは、練習のカードの上の状態**(第5.445節・②)。
+         別の画面(`<WordRadio>`)へ飛ぶのをやめたので、見るのは
+         **回す仕掛けを呼んでいるか**と、**流す道を1本しか持っていないか**
+         である(第5.271節と同じ作法で、見張りも一緒に移す・弱めない) */
+    ok(/useRadioRun\(\{/.test(wb) && /<RadioToggle/.test(wb),
+      '聞き流し … 単語帳は、カードのまま流す(別の画面へ飛ばない)')
+    ok(!/<WordRadio/.test(wb),
+      '聞き流し … 単語帳に、聞き流しの画面を重ねていない')
+    /* **出題とまったく同じ並びを鳴らす**(数え方を2通り持たない)。
+       **別の一覧を組んでいない**こと ——
+       もとは `poolNow()` をもう一度呼んで控えを作っていた */
+    ok(/rotateCursor\(\{ get: \(\) => queueRef\.current/.test(wb),
+      '聞き流し … 鳴らすのは、いま練習している並び(`queue`)そのもの')
+    ok(!/setRadio\(/.test(wb),
+      '聞き流し … 流す一覧を、別に組んでいない(道を2本持たない)')
     ok(/= radioSteps\(row, mode, gap\)/.test(play) && !/radioSteps\(/.test(radio),
       '聞き流し … 読む順も、間の長さも `radioSteps()` に任せている(画面は呼ばない)')
 
@@ -3662,28 +3673,41 @@ console.log('\n▶ 届いた語に、ゲストが気づけるか')
      */
     const qr = 落とす(readFileSync(
       new URL('../src/components/QrReview.jsx', import.meta.url), 'utf8'))
-    ok(/<WordRadio/.test(qr), '聞き流し … Quick Response から入れる')
-    ok(/where="qr"/.test(qr),
+    /* ★ **こちらもカードの上の状態**(第5.445節・②) */
+    ok(/useRadioRun\(\{/.test(qr) && /<RadioToggle/.test(qr),
+      '聞き流し … Quick Response も、カードのまま流す')
+    ok(!/<WordRadio/.test(qr),
+      '聞き流し … Quick Response に、聞き流しの画面を重ねていない')
+    ok(/where: 'qr'/.test(qr),
       '聞き流し … Quick Response は自分の持ちもの(間の長さ)で鳴る')
-    ok(/onClick=\{listen\}/.test(qr), '聞き流し … Quick Response に入口のボタンがある')
-    /* **出題とまったく同じ道で文を選ぶ**(数え方を2通り持たない)。
-       `shown` は範囲の札と絞り込みを当てたあとの一覧である */
-    ok(/const listen[\s\S]{0,400}?shown\.map\(qrPairOf\)/.test(qr),
-      '聞き流し … 読む文は、出題と同じ `shown` から選んでいる')
+    /* **出題とまったく同じ並びを鳴らす**(数え方を2通り持たない)。
+       `run` は範囲の札・絞り込み・並べ方・問数を当てたあとの一覧である */
+    ok(/indexCursor\(\{\s*\n\s*list: \(\) => runRef\.current/.test(qr),
+      '聞き流し … 鳴らすのは、いま練習している `run` そのもの')
+    ok(!/setRadio\(/.test(qr),
+      '聞き流し … Quick Response も、流す一覧を別に組んでいない')
     /* ★ **並べ方は `orderToUse()` 1か所を通る**(第5.436節)。
        **式を書き写さない**(CLAUDE.md)—— 呼び方を数えて、
        **どの呼びも** あれを通っていることを見る。
        生の `order` を渡す道が1本でも残ると、そこだけ
        シャッフルのスイッチが効かない(聞き流しで実際にそうなっていた) */
     const 並べ呼び = qr.split('orderQrPairs(').slice(1)
-    ok(並べ呼び.length >= 3,
-      `聞き流し … 並べ方を呼ぶ場所が ${並べ呼び.length} か所ある(出題・もう一度・聞き流し)`)
+    /* ★ **聞き流しのぶんは消えた**(第5.445節・②)—— 鳴らすのは
+         `run` そのものなので、並べるのは出題と「もう一度」の2か所だけ。
+         **1つになっていたら赤くする**(道が1本減ったのではなく、
+         どちらかが落ちたことを意味する) */
+    ok(並べ呼び.length >= 2,
+      `聞き流し … 並べ方を呼ぶ場所が ${並べ呼び.length} か所ある(出題・もう一度)`)
     ok(並べ呼び.every((x) => x.slice(0, 160).includes('orderToUse(')),
       '聞き流し … どの呼びも、並べ方を `orderToUse()` から受け取っている')
     /* **記録は1ミリも動かさない**(答える練習ではない)。
        `listen()` の中で `markQr` を呼んでいないこと */
-    ok(!/const listen[\s\S]{0,400}?markQr/.test(qr),
-      '聞き流し … Quick Response でも、箱も次に出す日も動かさない')
+    /* ★ **回す仕掛けの中で、記録を1つも動かさない**(第5.445節・②)。
+         `listen()` は消えたので、**`useRadioRun.js` そのもの**を見る */
+    const run = 落とす(readFileSync(
+      new URL('../src/lib/useRadioRun.js', import.meta.url), 'utf8'))
+    ok(!/markQr|markWord|answer\(/.test(run),
+      '聞き流し … 流しているあいだ、箱も次に出す日も動かさない')
     /* 「読むものがあるか」の判断を書き写さない —— 空白だけの語が残ると、
        鳴らす側が待たずに回り続けて画面ごと固まる。
 
@@ -8709,8 +8733,17 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   ok(/onLine: setLine/.test(rj) && /onOpen: setOpen/.test(rj) && /onSay: setSay/.test(rj),
     '聞き流し … 画面は、出す中身をそのまま受け取って描いている')
   const qv = noNote(readD('src/components/QrReview.jsx'))
-  ok(/言う練習・聞き流し/.test(qv),
+  /* ★ **言葉は `radioLabel.js` 1か所へ移した**(第5.445節・③)——
+       4か所に出るので、書き写すとどこかだけ古くなる。
+       **前置きを渡しているか**と、**その前置きの中身**を別々に見る */
+  const rlb = noNote(readD('src/lib/radioLabel.js'))
+  ok(/lead=\{RADIO_SAY_LEAD\}/.test(qv),
     '入口の名前が中身と合っている(聞き流しだけの場所ではなくなった)')
+  ok(/RADIO_SAY_LEAD = '言う練習・'/.test(rlb),
+    'その前置きは「言う練習・」である(読み方に日本語 → 英語がある)')
+  /* **単語帳には付けない**(あちらは「英語だけ」1つきり) */
+  ok(!/RADIO_SAY_LEAD/.test(noNote(readD('src/components/Wordbook.jsx'))),
+    '単語帳には、その前置きを付けていない')
   const css = readD('src/styles.css')
   const you = css.match(/\.radio-en--you \{[^}]*\}/)?.[0] ?? ''
   ok(/border:/.test(you) && /background:/.test(you),
@@ -8823,8 +8856,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* ★ **上の帯のぶんは、絵 + 短い言葉**(第5.316節「帯を1段に」)。
        一覧の下のぶんは語数まで出す(幅に余裕がある)。
        **言葉は2つでも、押した先は `listen` 1つ** —— 道を2つ作らない */
+  /* ★ **押す先は `radio` 1つ**(第5.445節・③)。もとは `listen()` を
+       2か所から呼んでいた。いまは**流す / とめる**の切り替えなので、
+       **2つとも同じ1つの状態**を見ている(道を2つ作らない) */
   ok(/const listenBtn = \(/.test(wb) && /const listenWide = \(/.test(wb)
-    && (wb.match(/onClick=\{listen\}/g) ?? []).length === 2,
+    && (wb.match(/onToggle=\{radio\.on \? radio\.stop : listen\}/g) ?? []).length === 2,
   '単語帳の聞き流すが、上の帯にもある(押す先は1つ)')
   ok(/const listenBtn = \(/.test(qr) && uses(qr, 'listenBtn') >= 1,
     'Quick Response の聞き流すも、上の帯にある')
@@ -8911,7 +8947,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   /* **聞き流しには、単語帳と Quick Response の両方から入る。**
      片方だけ渡すと、そちらからは ☰ が出ない */
   /* ★ **道具は連れて行かない**(2026-10-09)。`onMenu` は、そのまま渡す */
-  ok((wb.match(/onMenu=\{onMenu\}/g) ?? []).length >= 1
+  /* ★ **単語帳が渡す先は、自分の帯の ☰ だけ**(第5.445節・②)——
+       聞き流しの画面へ渡していた口が消えたので、`onClick={onMenu}` で見る */
+  ok((wb.match(/onClick=\{onMenu\}/g) ?? []).length >= 1
     && (qr.match(/onMenu=\{onMenu\}/g) ?? []).length >= 1
     && !/onMenu\(paperBox\)/.test(wb) && !/onMenu\(paperBox\)/.test(qr),
   '☰ には、道具を連れて行かない(渡すのは「開く」だけ)')
@@ -9195,17 +9233,23 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
        いまは「何かの絵のすぐ後ろに文字が来ているか」と
        「それが曲の絵でないか」で見る —— **どの絵にそろえても付いてくる。**
        **ぜんぶの画面で同じ絵か**は、この回のいちばん下で別に測っている。 */
-  const 帯listen = qr.slice(qr.indexOf('const listenBtn'),
-    qr.indexOf('</button>', qr.indexOf('const listenBtn')))
-  /* **`aria-label` にも「聞き流し」と書いてある。**
-     `/聞き流し/` だけで見ると、**文字を消しても緑**になる ——
-     だから**絵のすぐ後ろに文字が来ているか**を、続きで見る */
-  const 帯の絵 = (帯listen.match(/<([A-Za-z]+Icon) \/>聞き流し/) ?? [])[1] ?? ''
+  /* ★ **ボタンそのものは `RadioToggle` 1か所へ移した**(第5.445節・③)。
+       **見張りも一緒に移す。弱めない**(第5.271節と同じ作法)——
+       「流していないときの絵」と「そのすぐ後ろに出す言葉」を、
+       **あちらから読み取って**突き合わせる(名前を書き写さない) */
+  const tgl = noNote(readD('src/components/RadioToggle.jsx'))
+  const 帯の絵 = (tgl.match(/<StopIcon \/> : <([A-Za-z]+Icon) \/>/) ?? [])[1] ?? ''
   const 曲の絵 = (readD('src/components/BgmLibrary.jsx')
     .match(/<([A-Za-z]+Icon) \/>音楽/) ?? [])[1] ?? ''
   ok(帯の絵 && 曲の絵 && 帯の絵 !== 曲の絵,
     '帯の聞き流しは、絵のすぐ後ろに「聞き流し」の文字(曲の絵ではない)',
     `帯 ${帯の絵 || '(絵なし)'} / 曲 ${曲の絵 || '(絵なし)'}`)
+  /* **絵のすぐ後ろに言葉が来ている。** 言葉は `radioLabel.js` から引く
+     —— `'聞き流し'` と書き写すと、言い方を変えた日に赤くなる */
+  const 描く = tgl.slice(tgl.indexOf('return ('))
+  ok(描く.includes(帯の絵) && 描く.indexOf(帯の絵) < 描く.indexOf('SteadyLabel')
+    && /<SteadyLabel[\s\S]*RADIO_LISTEN/.test(描く),
+  '帯の聞き流しは、絵のすぐ後ろに言葉が来ている')
   /* **縮ませない。** 狭い画面では帯そのものが折り返す(`flex-wrap: wrap`) */
   ok(/\.qr-top-listen \{[^}]*flex: 0 0 auto/.test(st)
     && /\.focus-top \{[^}]*flex-wrap: wrap/.test(st),
@@ -9214,9 +9258,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     'Quick Response の帯は、いちばん右端が「出しかた」(絞り込み)')
   /* **押すのは `listen()` 1か所。** 「出しかた」の中のボタンと
      同じものを呼ぶ(同じことをする道を2つ作らない・CLAUDE.md) */
-  ok((qr.match(/onClick=\{listen\}/g) ?? []).length === 2,
-    'Quick Response の聞き流しは、帯からも「出しかた」からも同じ `listen()` を呼ぶ',
-    `${(qr.match(/onClick=\{listen\}/g) ?? []).length} か所`)
+  ok((qr.match(/onToggle=\{radio\.toggle\}/g) ?? []).length === 2,
+    'Quick Response の聞き流しは、帯からも「出しかた」からも同じ1つを押す',
+    `${(qr.match(/onToggle=\{radio\.toggle\}/g) ?? []).length} か所`)
   ok(!/focus-count|qrrev-at|qrrev-head/.test(qr),
     '帯にも紙にも「1 / 30」は無い(進み具合の帯が言う)')
   ok(!/focus-top-right/.test(qr) && !/\.focus-top-right \{/.test(st),
@@ -9294,8 +9338,11 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     '🔊 と絞り込みは、同じ太さの線で描いてある',
     [...new Set([...太さ(speaker), ...太さ(sort)])].join(' / '))
     /* **ボタンの地と枠もそろえる。** となりの聞き流しは `btn--ghost` である */
+    /* ★ **聞き流しの着せ方は `RadioToggle` 1か所**(第5.445節・③)。
+         帯のぶん(`wide` でない側)は `btn--ghost` である */
     ok(/btn btn--small btn--ghost rscope-sort/.test(sc)
-      && /qr-top-listen/.test(qr) && /btn--ghost btn--small qr-top-listen/.test(qr),
+      && /className="qr-top-listen"/.test(qr)
+      && /wide \? 'btn--quiet' : 'btn--ghost'/.test(tgl),
     '帯の2つのボタン(聞き流し / 絞り込み)は、同じ地・同じ枠')
     /* **絞り込みは、文字を出さない**(2026-09「文字をなくしてください」)。
        そろえるのは形と絵の描き方だけである */
@@ -10854,9 +10901,11 @@ console.log('\n── セッションの記録を上へ(第5.219節)──')
   ok((qr.match(/\{overlays\}/g) ?? []).length === 2,
     '聞き流しと紙は、練習の枝と始める前の枝の両方に置いてある',
     `${(qr.match(/\{overlays\}/g) ?? []).length} か所`)
-  /* **`{radio &&` が `overlays` の外に無い**(2か所に描くと片方が古くなる) */
-  ok((qr.match(/\{radio && \(/g) ?? []).length === 1,
-    '聞き流しを描いているのは1か所だけ')
+  /* ★ **聞き流しは、重ねるものを1つも持たない**(第5.445節・②)——
+       `overlays` に残っているのは紙(`printing`)だけである。
+       **描く枝が増えていないか**を見る(増えたら、また片方が古くなる) */
+  ok(!/\{radio && \(/.test(qr) && (qr.match(/\{printing && \(/g) ?? []).length === 1,
+    '聞き流しを描いているのは1か所だけ(いまは重ねるものが無い)')
 
   /* ② **届いてから組む。** `busy` だけでは、替えた直後の1回をすり抜ける */
   ok(/const poolKey = \[/.test(qr), 'いま読んである中身の鍵を持っている(`poolKey`)')
@@ -13822,10 +13871,8 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        | `q.get('books') === 'one'` | **本棚の骨組み**(同じ合図を使う) |
 
        **どれも、直したところを消しても緑のまま**だった。 */
-    const 聞き流しへ渡す = (src) => {
-      const i = src.indexOf('<WordRadio')
-      return i < 0 ? '' : src.slice(i, src.indexOf('/>', i) + 2)
-    }
+    /* ★ **「聞き流しへ渡す欄」の切り出しは要らなくなった**
+       (第5.445節・②)—— 練習の画面は `<WordRadio>` を描かない */
     /* **開く仕掛け**(`setOpened(true)` を持つ `useEffect`)だけを見る */
     const 開く仕掛け = (src) => {
       const j = src.indexOf('setOpened(true)')
@@ -13839,10 +13886,12 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     /* **見るところが取れていることを、先に確かめる**(CLAUDE.md
        「無ければ素通りする形の検証を書かない」)—— 切り出しに失敗すると
        空文字になり、**下の「無い」を見る見張りが全部緑になる** */
-    ok(聞き流しへ渡す(wb2).includes('onClose') && 聞き流しへ渡す(qr2).includes('onClose')
-      && 開く仕掛け(wb2).includes('setOpened(true)') && 開く仕掛け(qr2).includes('setOpened(true)')
+    /* ★ **練習の画面は、もう `<WordRadio>` を描かない**(第5.445節・②)。
+         切り出すのは**開く仕掛け**と**骨組み**の2つだけである
+         (聞き流しの画面そのものは、応答問題の正解を流すのに残っている) */
+    ok(開く仕掛け(wb2).includes('setOpened(true)') && 開く仕掛け(qr2).includes('setOpened(true)')
       && 骨組み('RADIO').includes('<WordRadio') && 骨組み('QRRADIO').includes('<WordRadio'),
-    '聞き流し … 見張りが、見るところ(聞き流しへ渡す欄・開く仕掛け・骨組み)を取れている')
+    '聞き流し … 見張りが、見るところ(開く仕掛け・骨組み)を取れている')
 
     /* ── 欄そのもの ── */
     ok(/radio-set-pick--book/.test(radio) && /books\.map\(\(b\) =>/.test(radio),
@@ -13867,30 +13916,27 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     for (const [名, src] of [['単語帳', wb2], ['Quick Response', qr2]]) {
       /* **`<WordRadio` に渡しているか。** ファイル全体で探すと
          **帯の `BookPick`** に当たる(上の表) */
-      const 渡す = 聞き流しへ渡す(src)
-      ok(/books=\{books\}/.test(渡す) && /book=\{book\}/.test(渡す)
-        && /onBook=\{\(id\) => \{/.test(渡す),
-      `聞き流し … ${名}が、冊の一覧といまの冊を渡している`)
-      /* ★ **冊を替えても、聞き流しを続ける。** `dropRun()` は
-         `setRadio(null)` を含むので、印を立てないと**放り出される**。
-
-         **印を立てる場所は `dropRun()` 1か所へ移した**(第5.288節)——
-         冊を替える道も、冊の中で絞る道も、どれもあそこを通るためである。
-         **弱めずに、移し先を見る** —— ①冊をえらぶ道が `dropRun()` を
-         通ること ②その `dropRun()` が、聞き流しが開いているときだけ
-         印を立てること。**両方**が要る */
-      ok(/onBook=\{\(id\) => \{\s*pickedBookRef\.current = true\s*setBookWanted\(id\); dropRun\(\)/
-        .test(src) && /if \(radio\) keepRadioRef\.current = true/.test(src),
-      `聞き流し … ${名}は、冊を替えても聞き流しのままにする印を立てる`)
-      /* **印を見て `listen()` を呼ぶ**(`start()` に落とさない)。
-         **読む文の選び方は書き写さない** —— `listen()` 1か所である */
-      ok(/if \(keepRadioRef\.current\) \{\s*keepRadioRef\.current = false\s*listen\(\)\s*return/
-        .test(開く仕掛け(src)),
-      `聞き流し … ${名}は、新しい冊で聞き流しを開き直す`)
-      /* **空の冊に当たったら、印を下ろす**(持ち越すと、次に冊を
-         替えたときに**勝手に聞き流しが始まる**) */
-      ok(/keepRadioRef\.current = false\s*set(Live|Running)\(false\)/.test(開く仕掛け(src)),
-        `聞き流し … ${名}は、聞き流しへ戻れないときは印を下ろす`)
+      /* ★ **冊は、上の帯の `冊名 ▾` でえらぶ**(第5.445節・②)。
+         聞き流しが別画面だったころは、帯が見えないので**設定の中へ
+         写していた**(第5.283節)。いまは帯がそのまま見えているので、
+         **写しを持たない** —— 持つと、必ず片方だけ古くなる */
+      ok(/<BookPick/.test(src) && !/<WordRadio/.test(src),
+        `聞き流し … ${名}は、冊を帯の \`冊名 ▾\` でえらぶ(写しを持たない)`)
+      /* ★ **冊を替えても、流れたまま。** `dropRun()`(やりかけを捨てる)を
+         通っても、**流す印を倒さない** —— 聞き流しは**カードの上の状態**
+         なので、持ち越す細工そのものが要らなくなった(第5.288節の印)。
+         **「倒していない」ことを名指しで見る** ——
+         `radio.stop()` を1行足せば、また放り出される */
+      const 捨てる = src.slice(src.indexOf('const dropRun = () => {'),
+        src.indexOf('\n  }', src.indexOf('const dropRun = () => {')))
+      ok(捨てる.includes('setStarted(false)') || 捨てる.includes('setRun(null)'),
+        `聞き流し … ${名}の「やりかけを捨てる」が取れている(比べる相手がある)`)
+      ok(!/radio\.stop\(\)|setRadio\(null\)|keepRadioRef/.test(捨てる),
+        `聞き流し … ${名}は、冊を替えても流れたまま(印を倒さない)`)
+      /* **持ち越す細工を、どこにも残していない**(残すと
+         「まだ何かを守っている」と誤読される・CLAUDE.md) */
+      ok(!/keepRadioRef/.test(src),
+        `聞き流し … ${名}は、聞き流しを持ち越す細工を持たない(道が1本)`)
     }
     /* ★ **新しい冊の中身が届くまで、開き直さない。**
        届く前に `listen()` を呼ぶと**前の冊の文を読み続ける** ——
@@ -13899,8 +13945,11 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
        2つとも名指しで見る */
     ok(/if \(loaded !== poolKey\) return/.test(開く仕掛け(qr2)),
       '聞き流し … Quick Response は、新しい冊の問が届くまで待つ')
-    ok(/if \(keepRadioRef\.current && rowsBookRef\.current !== book\) return/.test(開く仕掛け(wb2)),
-      '聞き流し … 単語帳は、新しい冊の語が届くまで待つ')
+    /* ★ **単語帳の待ち方**(第5.200節)。聞き流しの印で待つ道は消えたが、
+         **冊を移った直後の1回を待つ**仕掛けは残っている(そこを見る) */
+    ok(/if \(triedBooksRef\.current\.size && rowsBookRef\.current !== book\) return/
+      .test(開く仕掛け(wb2)),
+    '聞き流し … 単語帳は、新しい冊の語が届くまで待つ')
 
     /* ── **骨組みも渡しているか**(骨組みは本物と1文字も違えない)── */
     for (const [名, 骨] of [['単語帳', 'RADIO'], ['Quick Response', 'QRRADIO']]) {
@@ -14470,13 +14519,18 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
   /* ── ② **教材の中の Quick Response にも聞き流し**(第5.287節)── */
   {
     const qr6 = noC6(read6('src/components/QuickResponse.jsx'))
-    /* **部品は `WordRadio` 1つ**(復習の Quick Response と同じもの) */
-    ok(/import WordRadio from '\.\/WordRadio\.jsx'/.test(qr6) && /<WordRadio/.test(qr6),
-      '教材の聞き流し … 部品は `WordRadio` 1つ(作り直していない)')
-    ok(/where="qr"/.test(qr6),
+    /* ★ **ここもカードの上の状態**(第5.445節・②)。
+         回す仕掛けは `useRadioRun()` 1か所、送り方は `cardCursor.js`
+         1か所で、復習の Quick Response・単語帳と**同じものを通る** */
+    ok(/import useRadioRun from '\.\.\/lib\/useRadioRun\.js'/.test(qr6)
+      && /useRadioRun\(\{/.test(qr6) && /<RadioToggle/.test(qr6),
+    '教材の聞き流し … 回す仕掛けは1か所(作り直していない)')
+    ok(!/<WordRadio/.test(qr6),
+      '教材の聞き流し … 聞き流しの画面を重ねていない')
+    ok(/where: 'qr'/.test(qr6),
       '教材の聞き流し … Quick Response として渡している(語ではなく文)')
     /* **材料は、いま画面に出している対そのもの**(組み直さない) */
-    ok(/setRadio\(pairs\)/.test(qr6),
+    ok(/indexCursor\(\{\s*\n\s*list: \(\) => pairsRef\.current/.test(qr6),
       '教材の聞き流し … 流すのは、いま出している対そのもの(`pairs`)')
     /* ★ **2通りの返し方の、どちらにも置く。**
        片方だけだと、入口によって聞き流せたり聞き流せなかったりする */
@@ -14484,11 +14538,15 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
     ok(置き場 === 2,
       `教材の聞き流し … 紙の中と集中モードの両方に置いている(${置き場} か所)`)
     /* **題は、教材と取り組み方をそのまま**(第5.264節・書き写さない) */
-    ok(/label=\{\[material\?\.title, QR_MODES\.find/.test(qr6),
+    ok(/label: \[material\?\.title, QR_MODES\.find/.test(qr6),
       '教材の聞き流し … 題は、教材の名前と取り組み方をそのまま出す')
-    /* **曲は押したときに引く**(押さない人には1回も問い合わせが飛ばない) */
-    ok(/const listen = async \(\) => \{[\s\S]{0,160}?await listTracks\(\)/.test(qr6),
-      '教材の聞き流し … 曲は押したときに引く(開くだけで問い合わせない)')
+    /* ★ **曲は押したときに引く**(押さない人には1回も問い合わせが飛ばない)。
+         **引くのは `useRadioRun()` の `start()` 1か所**へ移した ——
+         3つの画面それぞれに書くと、どこかだけ引き忘れる */
+    const run6 = noC6(read6('src/lib/useRadioRun.js'))
+    ok(/const start = async \(\) => \{[\s\S]{0,200}?await listTracks\(\)/.test(run6)
+      && !/listTracks/.test(qr6),
+    '教材の聞き流し … 曲は押したときに引く(開くだけで問い合わせない)')
     /* **中身が無ければ押せない**(行き止まりを作らない) */
     ok(/disabled=\{pairs\.length === 0\}/.test(qr6),
       '教材の聞き流し … 対が1つも無ければ押せない')
@@ -14529,11 +14587,12 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
 
   /* ── ② **練習の画面と同じ1つを渡している**(書き写さない)── */
   for (const [名, src] of [['Quick Response', qr8], ['単語帳', wb8]]) {
-    /* `BookPick`(帯の `冊名 ▾`)と `WordRadio` の**両方**に、
-       同じ `bookSub` が渡っていること */
-    ok(/sub=\{bookSub\}/.test(src)
-      && (src.match(/sub=\{bookSub\}/g) ?? []).length === 2,
-    `区切り … ${名}は、帯と聞き流しに同じ bookSub を渡している`)
+    /* ★ **渡す先は、帯の `冊名 ▾` 1つになった**(第5.445節・②)——
+         聞き流しが別の画面だったころは、あちらにも写していた。
+         **写しが戻っていないか**も一緒に見る(戻ると片方だけ古くなる) */
+    ok((src.match(/sub=\{bookSub\}/g) ?? []).length === 1,
+      `区切り … ${名}は、帯の \`冊名 ▾\` に bookSub を渡している(写しは1つ)`,
+      `${(src.match(/sub=\{bookSub\}/g) ?? []).length} か所`)
   }
 
   /* ── ③ **選んでも、聞き流しは止まらない** ── */
@@ -14541,19 +14600,28 @@ console.log('\n▶ ビジネス必須チャンク集 — 冊 → 段 → 組(第
      新しい中身が届いたら一覧を組み直す */
   ok(!/const afterNarrow = \(\) => \{\s*setRadio\(null\)/.test(qr8),
     '区切り … Quick Response は、絞っても聞き流しを止めない')
-  ok(/radioKeyRef\.current = runKey\s*setRadio\(orderQrPairs\(shown\.map\(qrPairOf\)/.test(qr8),
-    '区切り … Quick Response は、絞ったら鳴らす一覧を組み直す')
-  /* **届いてから組む**(先に組むと、絞る前の文をもう一周鳴らす) */
-  ok(/if \(loaded !== poolKey\) return\s*radioKeyRef\.current = runKey/.test(qr8),
+  /* ★ **鳴らす一覧を、別に組み直す仕掛けは消えた**(第5.445節・②)——
+       鳴らすのは練習の `run` そのものなので、組み直すのは
+       `runKey` の仕掛け1本だけである。**戻っていないか**を見る
+       (戻ると、また道が2本になって片方だけ古くなる) */
+  ok(!/radioKeyRef/.test(qr8) && !/setRadio\(/.test(qr8),
+    '区切り … Quick Response は、鳴らす一覧を別に組み直さない')
+  /* **届いてから組む**(先に組むと、絞る前の文をもう一周鳴らす)。
+     **組み直しの仕掛けの側**で、その待ちが残っていること */
+  ok(/if \(loaded !== poolKey\) return\s*runKeyRef\.current = runKey/.test(qr8),
     '区切り … 新しい中身が届くまで、組み直さない')
   /* 単語帳 … 絞る道も冊を替える道も `dropRun()` を通る。
      **印は1か所**(呼ぶ側それぞれに書かない) */
   for (const [名, src] of [['Quick Response', qr8], ['単語帳', wb8]]) {
-    ok(/if \(radio\) keepRadioRef\.current = true/.test(src),
-      `区切り … ${名}は、聞き流しが開いているときだけ印を立てる(dropRun 1か所)`)
-    /* **呼ぶ側に書き写していない**(1か所に寄せた) */
-    ok((src.match(/keepRadioRef\.current = true/g) ?? []).length === 1,
-      `区切り … ${名}は、印を立てる場所を2つ持たない`)
+    /* ★ **印そのものが要らなくなった**(第5.445節・②)。聞き流しは
+         **カードの上の状態**なので、絞っても冊を替えても倒れない。
+         **持ち越す細工が戻っていないか**を見る —— 戻ったら、
+         また「どちらから替えたか」を2か所で覚えることになる */
+    ok(!/keepRadioRef/.test(src),
+      `区切り … ${名}は、聞き流しを持ち越す細工を持たない(道が1本)`)
+    /* **流す印は、画面の状態として1つだけ持つ** */
+    ok((src.match(/useRadioRun\(\{/g) ?? []).length === 1,
+      `区切り … ${名}は、流す印を1つしか持たない`)
   }
 
   /* ── ④ **骨組みも渡している**(骨組みは本物と1文字も違えない)── */
@@ -14900,7 +14968,10 @@ console.log('\n▶ 支度を、何本か同時に走らせる(第5.307節)')
     'src/components/AnswerEn.jsx', 'src/components/QrCard.jsx',
   ]) {
     const src5 = read5(f)
-    const 塊 = src5.match(/<SpeakButton[\s\S]*?\/>/g) ?? []
+    /* ★ **Quick Response の4つめは `ListenKnob` になった**(第5.445節・②)。
+         あれは中で `SpeakButton` を着せるだけなので、**どちらの形も数える**
+         —— 名前だけを探していると、包んだ日に素通りする(CLAUDE.md) */
+    const 塊 = src5.match(/<(SpeakButton|ListenKnob)[\s\S]*?\/>/g) ?? []
     ok(塊.length > 0 && !塊.some((b) => /typeId=\{sec\.exercise_type\}/.test(b)),
       `1文ずつの聞く … ${f.split('/').pop()} の Listen は種類を渡さない(控えない)`,
       `${塊.length} 個`)
@@ -16085,9 +16156,16 @@ console.log('\n▶ 画面が、操作の算段を書き写していない(第5.4
     const 書き写し = Object.values(KEY_MARK).filter((m) => w.includes(m))
     ok(書き写し.length === 0,
       `${名} … 矢印の印を画面に書き写していない`, 書き写し.join(' ') || 'なし')
-    /* ★ **聞き流しが開いているあいだは効かせない。**
-         キーを聞いているのは窓なので、**裏のカードが飛ぶ** */
-    ok(/on=\{!radio\}/.test(w), `${名} … 聞き流し中は、矢印キーを効かせない`)
+    /* ★ **聞き流しの最中も効く**(第5.445節・②)。
+         もとは「上に重ねた画面の裏でカードが飛ぶ」のを防ぐため
+         `on={!radio}` で切っていたが、**重ねる画面そのものが無くなった。**
+         **代わりに見るのは「送る道が1本か」**である ——
+         矢印キーと聞き流しが別の道を通ると、音と画面がずれる
+         (2026-09 に実機で踏んだ「メチャクチャにズレてしまってます」)。 */
+    ok(!/on=\{!radio\}/.test(w),
+      `${名} … 聞き流し中も、矢印キーが効く(重ねる画面が無くなった)`)
+    ok(/送り\.(go|back)\(\)/.test(w) && /cursor: 送り/.test(w),
+      `${名} … 矢印キーと聞き流しは、同じ1本の道で送る`)
     /* ★ **判定は、押すボタンとまったく同じ道を通る**(第5.417節)。
          別の道を作ると、**復習の記録の決まりが2通りになる**
          (CLAUDE.md「数え方を2通り持たない」)。
@@ -16442,12 +16520,26 @@ console.log('\n▶ 覚えた にする(第5.438節)')
 {
   console.log('\n── 聞き流しのボタンの絵(第5.444節) ──')
   const 読む2 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  /* ★ **ボタンは `RadioToggle` 1か所になった**(第5.445節・③)。
+       だから「どの画面でも同じ絵」は、**置いている数と、絵が1種類か**で
+       見る —— もとは画面ごとに `<◯◯Icon />聞き流し` と書いてあり、
+       **画面によって絵が違っていた**(第5.444節で直した)。
+
+       **「3つ以上ある」をそのまま残す**(無ければ素通りを塞ぐ)——
+       数えるのは**置いている場所**である(単語帳の帯・単語帳の一覧の下・
+       Quick Response の帯・一覧の下・教材の中の Quick Response)。 */
   const 画面 = ['Wordbook', 'QrReview', 'QuickResponse']
     .map((n) => 読む2(`src/components/${n}.jsx`)).join('\n')
-  /* `<◯◯Icon />` のすぐ後ろに「聞き流」が続く行を拾う */
-  const 絵 = [...画面.matchAll(/<([A-Za-z]+Icon) \/>[^<\n]*聞き流/g)].map((m) => m[1])
-  ok(絵.length >= 3, '聞き流し … ボタンが3つ以上ある(無ければ素通りを塞ぐ)',
-    `${絵.length} 個`)
+  const 置き場 = [...画面.matchAll(/<RadioToggle/g)].length
+  ok(置き場 >= 3, '聞き流し … ボタンが3つ以上ある(無ければ素通りを塞ぐ)',
+    `${置き場} 個`)
+  /* **絵を描いているのは1か所だけ** —— 画面の中で絵を名指ししていたら、
+     また画面ごとに違う絵になりうる */
+  const 札 = 読む2('src/components/RadioToggle.jsx')
+  const 絵 = [...札.matchAll(/<([A-Za-z]+Icon) \/>/g)].map((m) => m[1])
+    .filter((n) => n !== 'StopIcon')
+  ok(!/<([A-Za-z]+Icon) \/>[^<\n]*聞き流/.test(画面),
+    '聞き流し … 画面の中で、聞き流しの絵を名指ししていない')
   const 種類 = [...new Set(絵)]
   ok(種類.length === 1, '聞き流し … どの画面でも、同じ絵を使っている', 種類.join(' / '))
   /* **「音楽」の絵とは別もの。** 音楽のページの見出しから読み取る */
@@ -16555,6 +16647,132 @@ console.log('\n▶ 覚えた にする(第5.438節)')
     const r = await playRadioRow(語, { mode: 'en', gap: 900, next: null, ...f })
     ok(r === PLAYED && !f.跡.some((x) => x.startsWith('温')),
       '順番 … 次の行が無ければ、温めない(落ちもしない)', r)
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **ふだんは1枚で止まる / 流しているあいだだけ次へ行く**
+ *   (第5.445節・⑤・2026-10-10 利用者の指定)
+ *
+ *   > 純粋にその単語や文を聞きたい時は止めるタイミングなど気を使います。
+ *
+ *   **「聴く」は1枚だけ鳴って止まる。** 次へ送るのは**呼ぶ側**の役目で、
+ *   それをするのは聞き流しを流しているあいだだけである。
+ *   **ここで測るのは「1枚しか鳴らさない」こと** —— もし
+ *   `playRadioRow()` の中で回していたら、「聴く」を押すだけで
+ *   勝手に先へ進んでしまう。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── ふだんは1枚で止まる(第5.445節・⑤) ──')
+  const { PLAYED, playRadioRow } = await import('../src/lib/radioPlay.js')
+  const 跡 = []
+  const 語 = { display: 'take on', meaning_ja: '引き受ける' }
+  const 次 = { display: 'gist', meaning_ja: '要点' }
+  const r = await playRadioRow(語, {
+    mode: 'en', gap: 900, next: 次,
+    speak: async (t) => { 跡.push(`鳴 ${t}`) },
+    warm: () => {},
+    pause: async () => {},
+    onNext: () => { 跡.push('送') },
+  })
+  ok(r === PLAYED, '1枚で止まる … 鳴り終わって返る', r)
+  /* **次の行は、1度も鳴らさない。** 温めるだけである ——
+     ここが崩れていると、「聴く」だけで勝手に先へ進む */
+  ok(!跡.some((x) => x === `鳴 ${次.display}`),
+    '1枚で止まる … 次の行は1度も鳴らさない(温めるだけ)', 跡.join(' / '))
+  /* **送るのは1回だけ。** 2回呼ぶと、1枚で2つ飛ぶ */
+  ok(跡.filter((x) => x === '送').length === 1,
+    '1枚で止まる … 次へ送るのは1回だけ(呼ぶ側が回す)',
+    `送 ${跡.filter((x) => x === '送').length} 回`)
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **画面を消しても進む**(第5.445節・⑤・第5.285節のつづき)
+ *
+ *   **画面を消すと React は描き直さない。** だから「次へ送る」を
+ *   `setState` だけで書くと、次に鳴らす行を読んだときまだ前の値になり、
+ *   **同じ行を何度も鳴らす**(2026-09 に実機で踏んだ)。
+ *
+ *   **測り方。** 画面の側(`setState`)を**1つも動かさない**ようにして
+ *   (= 描き直しが1度も来ない状態)、`go()` を続けて呼ぶ ——
+ *   **それでも次の行が返ってくるか**を見る。
+ *   これが「控えのほうが本体である」の中身そのものである。
+ *
+ *   **いちばん危ない形を必ず置く**(CLAUDE.md)—— 1枚しか無い一覧。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 画面を消しても進む(第5.445節・⑤) ──')
+  const { indexCursor, rotateCursor } = await import('../src/lib/cardCursor.js')
+
+  /* ── ① 並びを回す形(単語帳)。**画面は1度も描き直さない** ── */
+  {
+    let 控え = ['a', 'b', 'c']
+    let 描いた = 0
+    const c = rotateCursor({
+      get: () => 控え,
+      /* **控えだけを動かす。** 画面(`setQueue`)は呼ばれても
+         描き直さない —— 画面を消しているあいだと同じ状態である */
+      set: (q) => { 控え = q; 描いた += 1 },
+    })
+    const 順 = [c.go(), c.go(), c.go()]
+    ok(順.join(',') === 'b,c,a',
+      '消しても進む … 並びを回す形は、描き直しを待たずに次の行を返す', 順.join(','))
+    ok(描いた === 3, '消しても進む … 控えは、送ったぶんだけ書き替わる', `${描いた} 回`)
+    ok(c.now() === 'a', '消しても進む … いま出ている行と、控えが食い違わない', c.now())
+  }
+
+  /* ── ② 番号を進める形(Quick Response)── */
+  {
+    const 一覧 = ['x', 'y', 'z']
+    let 番号 = 0
+    const c = indexCursor({ list: () => 一覧, at: () => 番号, set: (i) => { 番号 = i } })
+    const 順 = [c.go(), c.go(), c.go()]
+    ok(順.join(',') === 'y,z,x',
+      '消しても進む … 番号を進める形も、描き直しを待たずに次の行を返す', 順.join(','))
+    /* **1度しか呼ばない。** 見張りの中で2度呼ぶと、そのぶん戻ってしまう */
+    const 戻り = c.back()
+    ok(戻り === 'z', '消しても進む … 前へも、その場で戻った行を返す', String(戻り))
+  }
+
+  /* ── ③ **いちばん危ない形。** 1枚しか無い一覧 ──
+         「無ければ素通り」で緑にしない(CLAUDE.md)—— 1枚でも
+         **その1枚を返す**(聞き流しは同じものをもう一度鳴らす) */
+  {
+    let 控え = ['solo']
+    let 書いた = 0
+    const c = rotateCursor({ get: () => 控え, set: (q) => { 控え = q; 書いた += 1 } })
+    /* **1度しか呼ばない**(見張りの中で2度呼ぶと、そのぶん動く) */
+    const 送り先 = c.go()
+    ok(送り先 === 'solo' && c.now() === 'solo' && c.peek() === 'solo',
+      '消しても進む … 1枚しか無いときは、その1枚を返す',
+      `${送り先} / ${c.now()} / ${c.peek()}`)
+    /* ★ **書き替えに行かない**(効かない操作をしない・CLAUDE.md)。
+         **ここを見ないと赤チェックが通らない** —— 1枚の一覧は
+         回しても中身が同じなので、**返る行だけでは守りを外しても
+         同じ値になる**(実際にそれで空振りした) */
+    ok(書いた === 0,
+      '消しても進む … 1枚しか無いときは、控えを書き替えに行かない', `${書いた} 回`)
+    const 空 = rotateCursor({ get: () => [], set: () => {} })
+    ok(空.go() === null && 空.now() === null && 空.peek() === null,
+      '消しても進む … 空の一覧でも落ちない(null が返る)')
+    const 空2 = indexCursor({ list: () => [], at: () => 0, set: () => {} })
+    ok(空2.go() === null && 空2.now() === null && 空2.peek() === null,
+      '消しても進む … 番号の形も、空の一覧で落ちない')
+  }
+
+  /* ── ④ **番号が一覧の外にいても、回り込ませる** ──
+         語数を減らしたあとなど。**黙って落ちない**(CLAUDE.md) */
+  {
+    const 一覧 = ['p', 'q']
+    let 番号 = 7
+    const c = indexCursor({ list: () => 一覧, at: () => 番号, set: (i) => { 番号 = i } })
+    /* **一覧の中へ回り込ませてから数える**(7 は 2 枚の一覧の外)。
+       **1度しか呼ばない** —— 見張りの中で2度呼ぶと、そのぶん進む */
+    const いま = c.now()
+    const つぎ = c.go()
+    ok(いま === 一覧[7 % 一覧.length] && つぎ === 一覧[(7 + 1) % 一覧.length],
+      '消しても進む … 番号が外にいても、一覧の中へ回り込む',
+      `${いま} → ${つぎ}(番号 ${番号})`)
   }
 }
 

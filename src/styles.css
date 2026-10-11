@@ -8118,6 +8118,12 @@ button.wbfilter-ctl { text-align: left; }
 /* 問数。**小さく添える。** 選ぶときの手がかりであって、主役ではない */
 .qr-modecount { opacity: 0.7; font-weight: 400; }
 .qr-head .nav-icon-btn { width: 36px; height: 36px; margin-right: -6px; }
+/* ★ **聞き流しの設定(三本線と丸)**(第5.445節・④)。
+   すぐ上の負の余白は「帯のいちばん右の1つを端へ寄せる」ためのものなので、
+   **2つ並ぶときは、手前のぶんを打ち消す** —— 打ち消さないと
+   隙間が 10px → 4px になり、**別々の物が近づきすぎる**
+   (`.claude/rules/common.md`「別々の物を、すき間ゼロでくっつけない」)。 */
+.qr-head .qr-top-sets { margin-right: 0; }
 
 /* どこまで来たか。**終わりが見えないと続かない** */
 /* ── いま開いている帳面の名前(第5.176節・2026-09 実機・利用者の指定)────
@@ -11054,6 +11060,14 @@ button.wbfilter-ctl { text-align: left; }
    「詳しくしぼる」とまったく同じ切り分け方にそろえる ——
    **同じ役目のものを、2通りの形で見せない** */
 .rscope-tools {
+  display: flex; flex-direction: column; gap: var(--sp-8);
+  margin-top: var(--sp-12); padding-top: var(--sp-12);
+  border-top: 1px solid var(--border);
+}
+/* ★ **聞き流しの設定**(第5.445節・④)。**区切りは、上の2つと同じ形**
+   —— 線1本 + 見出し。**新しい見た目を作らない**(CLAUDE.md)。
+   隙間は `gap` で作る(子に `margin` を付けて回らない・共通ルール) */
+.rscope-radio {
   display: flex; flex-direction: column; gap: var(--sp-8);
   margin-top: var(--sp-12); padding-top: var(--sp-12);
   border-top: 1px solid var(--border);

@@ -33,7 +33,7 @@
  *   溜めるのは**文章だけ**で、単語・フレーズは単語帳に任せる。
  *   仕組みは `src/lib/qrReviews.js` 1か所。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   QR_MODES, qrSaves, qrSourceOf, quickResponseCounts, quickResponsePairs,
 } from '../lib/quickResponse.js'
@@ -42,7 +42,7 @@ import { resolveVoices } from '../data/clipVoices.js'
 import { stopReading } from '../lib/readAloud.js'
 import QrCard from './QrCard.jsx'
 import {
-  CloseIcon, HeadphoneIcon,
+  CloseIcon, SortIcon,
 } from './Icons.jsx'
 import FocusFrame from './FocusFrame.jsx'
 import { usePracticeLog } from '../lib/practice.js'
@@ -52,11 +52,17 @@ import { markQr } from '../lib/qrReviews.js'
 import { answerFeedback } from '../lib/haptics.js'
 /* ★ **教材の中の Quick Response でも聞き流す**(第5.287節・
    2026-09-27 利用者の指定「教材内のquick responseにも聞き流しの機能を」)。
-   **部品は `WordRadio` 1つ** —— 復習の Quick Response(`QrReview`)と
-   まったく同じものを使い、渡すのは対の一覧と題だけである
-   (読み方も、間も、並べ方も、覚える鍵も、あちら1か所が持っている) */
-import WordRadio from './WordRadio.jsx'
-import { listTracks } from '../lib/bgm.js'
+
+   ★ **別の画面へ飛ぶのをやめた**(第5.445節・②・2026-10-10 利用者の指摘)
+   —— 聞き流しは**このカードの上の状態**である。回し続ける算段は
+   `useRadioRun()` 1か所、1枚ぶんを鳴らすのは `playRadioRow()` 1か所で、
+   復習の Quick Response・単語帳と**まったく同じものを通る。**
+   送り方(番号を1つ進める)は `cardCursor.js` 1か所である */
+import useRadioRun from '../lib/useRadioRun.js'
+import { indexCursor } from '../lib/cardCursor.js'
+import RadioToggle from './RadioToggle.jsx'
+import RadioSettings from './RadioSettings.jsx'
+import SettingsSheet from './SettingsSheet.jsx'
 
 export default function QuickResponse({
   material, onClose, wordStatuses = null, onMarkWord = null, paper = false,
@@ -123,19 +129,49 @@ export default function QuickResponse({
    * 曲は**押したときに引く**(押さない人には1回も問い合わせが飛ばない)。
    * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
    */
-  const [radio, setRadio] = useState(null)
-  const [tracks, setTracks] = useState([])
-  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
-  const [tracksError, setTracksError] = useState(null)
-  const listen = async () => {
-    if (!pairs.length) return
-    setRadio(pairs)
-    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
-       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
-    const { data, error: 曲error } = await listTracks()
-    setTracks(data ?? [])
-    setTracksError(曲error ?? null)
-  }
+  /**
+   * ★ **どこまで来たかは、控えが本体である**(第5.445節・②)。
+   *
+   * **画面を消すと React は描き直さない**(第5.285節)。聞き流しは
+   * 間を無音の音で置いているので鳴り続けるが、**「次へ」を `setAt` だけで
+   * 書くと、次に鳴らす行を読んだときまだ前の値**になり、
+   * 同じ行を何度も鳴らす(2026-09 に実機で踏んだ)。
+   *
+   * **送るのは `putAt()` 1か所**で、控えと画面を必ず一緒に動かす。
+   */
+  const atRef = useRef(at)
+  const putAt = (i) => { atRef.current = i; setAt(i) }
+  /* **外から動いたぶんも、控えに写す**(取り組み方を替えた・読み直した) */
+  useEffect(() => { atRef.current = at }, [at])
+  const pairsRef = useRef(pairs)
+  pairsRef.current = pairs
+
+  /**
+   * ★ **聞き流しは、このカードの上の状態**(第5.445節・②)。
+   *
+   * **送り方は `cardCursor.js` 1か所**(番号を1つ進める形)。
+   * 端まで行ったら回り込む —— 聞き流しは終わりを決めずに回すものである。
+   */
+  const 送り = indexCursor({
+    list: () => pairsRef.current,
+    at: () => atRef.current,
+    set: putAt,
+  })
+  const radio = useRadioRun({
+    cursor: 送り,
+    where: 'qr',
+    /* **題は、画面に出ているものをそのまま**(第5.264節)——
+       ロック画面に出るので、書き写すと冊を替えた日だけ古くなる */
+    label: [material?.title, QR_MODES.find((m) => m.id === mode)?.label]
+      .filter(Boolean).join(' / '),
+  })
+  /** 聞き流しの設定(読み方・間・曲・音量)を開いているか */
+  const [setsOpen, setSetsOpen] = useState(false)
+  const setsRef = useRef(null)
+  const uid = useId()
+  /* **出し切ったら止める。** `finished` では問のカードが消えるので、
+     流し続けると**見えない1枚が鳴り続ける**(効かない操作を残さない) */
+  useEffect(() => { if (finished && radio.on) radio.stop() }, [finished])
 
   /* 出題の枠まわり(開く・入るかどうかを測る・送りを戻す・くり返し)は
      **`QrCard` が持つ**(0040)。復習の画面と同じ部品にするためである */
@@ -178,12 +214,13 @@ export default function QuickResponse({
     }
     doneRef.current = [...doneRef.current, { ...card, ok }]
     if (at + 1 >= pairs.length) { setFinished(true); return }
-    setAt(at + 1)
+    /* **送るのは `putAt()` 1か所**(第5.445節)—— 控えと画面を一緒に動かす */
+    putAt(at + 1)
   }
 
   const restart = () => {
     doneRef.current = []
-    setAt(0); setFinished(false)
+    putAt(0); setFinished(false)
   }
 
   /**
@@ -257,13 +294,24 @@ export default function QuickResponse({
         </span>
         {/* ★ **聞き流し**(第5.287節)。**見た目も言葉も、復習の
             Quick Response とまったく同じ**(`qr-top-listen`)——
-            同じことをするものを、別の見た目で出さない */}
-        <button type="button" className="btn btn--ghost btn--small qr-top-listen"
-                disabled={pairs.length === 0}
-                aria-label={`聞き流し(${pairs.length} 問)`}
-                title={`聞き流し(${pairs.length} 問)`}
-                onClick={listen}>
-          <HeadphoneIcon />聞き流し
+            同じことをするものを、別の見た目で出さない。
+
+            ★ **押すと、このカードのまま流れ始める**(第5.445節・③)。
+            もとは**別の画面へ飛んでいた。** 流しているあいだは「とめる」
+            になり、金が入る —— **中身は `RadioToggle` 1か所**である */}
+        <RadioToggle className="qr-top-listen" unit="問"
+                     on={radio.on} onToggle={radio.toggle}
+                     count={pairs.length} disabled={pairs.length === 0} />
+        {/* ★ **聞き流しの設定は、三本線と丸から**(第5.445節・④・
+            2026-10-10 利用者の指定「聞き流しの設定は右上にしましょう」)。
+            **絵は復習の「出しかた」と同じ `SortIcon`** ——
+            同じ働きのボタンに、同じ絵(歯車は使わない・共通ルール) */}
+        <button type="button" ref={setsRef}
+                className="nav-icon-btn qr-top-sets"
+                aria-label="聞き流しの設定" title="聞き流しの設定"
+                aria-expanded={setsOpen}
+                onClick={() => setSetsOpen((v) => !v)}>
+          <SortIcon />
         </button>
         {onClose && !focus && (
           <button type="button" className="nav-icon-btn" onClick={onClose}
@@ -310,6 +358,9 @@ export default function QuickResponse({
         <QrCard pair={card} no={at + 1} level={material?.level}
                 clipVoice={clipVoice} tier={tier}
                 wordStatuses={wordStatuses} onMarkWord={markWord}
+                /* ★ **流しているあいだ、4つめの絵は ■**(第5.445節・②)。
+                   **絵は4つのまま** —— 5つめを足さない(利用者の指摘) */
+                radioOn={radio.on} onRadioStop={radio.stop}
                 onAnswer={answer} yetLabel="まだ" okLabel="言えた" />
       )}
     </section>
@@ -324,17 +375,19 @@ export default function QuickResponse({
    * 題は**いま出している教材と取り組み方**をそのまま並べる ——
    * 聞きながら「何を聞いているのか」が分かる(第5.264節)。
    */
-  const overlays = radio ? (
-    <WordRadio
-      rows={radio}
-      where="qr"
-      label={[material?.title, QR_MODES.find((m) => m.id === mode)?.label]
-        .filter(Boolean).join(' / ')}
-      tracks={tracks}
-      tracksError={tracksError}
-      learnerId={learnerId}
-      onClose={() => setRadio(null)}
-    />
+  const overlays = setsOpen ? (
+    <SettingsSheet
+      anchorEl={setsRef.current}
+      onClose={() => setSetsOpen(false)}
+      title="聞き流しの設定"
+      /* 読み方を変えると間の札が入れ替わり、箱の高さが変わる。
+         **置き直す合図を渡す** */
+      placeKey={`${radio.settings.mode}/${radio.settings.gap}/${radio.settings.pick}`}
+    >
+      {/* **欄の形は `RadioSettings` 1か所**(復習の「出しかた」の中と
+          まったく同じもの)。ここは置き場所だけを決める */}
+      <RadioSettings uid={uid} {...radio.settings} />
+    </SettingsSheet>
   ) : null
 
   /* **骨組みは `FocusFrame` 1つ**(`FocusReader` / `StepFocus` と共通)。

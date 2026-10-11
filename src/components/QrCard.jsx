@@ -34,7 +34,10 @@
  */
 import { useContext, useEffect, useRef, useState } from 'react'
 import { CardPeekCtx, MoveArrow } from './CardMove.jsx'
-import SpeakButton from './SpeakButton.jsx'
+/* ★ **4つめの絵は `ListenKnob` 1か所**(第5.445節・②)。
+   ふだんは「聴く」(1枚だけ鳴って止まる)で、**聞き流しを流している
+   あいだだけ ■** になる —— 絵は4つのままである(利用者の指定) */
+import ListenKnob from './ListenKnob.jsx'
 import EnglishText from './EnglishText.jsx'
 import { stopReading } from '../lib/readAloud.js'
 import { frameFormOf } from '../lib/frameMatch.js'
@@ -118,6 +121,16 @@ export default function QrCard({
    * **渡されなければ出ない**(教材の中の Quick Response には無い)。
    */
   knobs = null,
+  /**
+   * ★ **聞き流しが流れているか**(第5.445節・②・2026-10-10 利用者の指定)。
+   *
+   * 流れているあいだ、**4つめの絵(聴く)が ■ になる** ——
+   * そこが「とめる」になるので、**絵は4つのまま**である
+   * (利用者の指摘「アイコン5個はうるさいと感じます」)。
+   *
+   * **渡されなければ、これまでどおりの「聴く」**(既定は、いままでと同じ側)。
+   */
+  radioOn = false, onRadioStop = null,
   /* ★ **`corner`(見出しの行の右端)は廃止した**(第5.441節・
        2026-10-10 利用者の指摘)。
 
@@ -386,8 +399,11 @@ export default function QrCard({
                  渡すのは `knob` だけである。**色は渡さない** ——
                  鳴っているあいだの金は `.knob.btn--primary` が
                  `.chip--on` と同じ1か所から引く(第5.439節) */}
-          <SpeakButton text={pair.en} className="knob" label={null}
-                       clipVoice={clipVoice} tier={tier} />
+          {/* ★ **流しているあいだは ■ になり、押すと止まる**
+                 (第5.445節・②)。**渡されなければ、これまでどおりの「聴く」** */}
+          <ListenKnob text={pair.en}
+                      radioOn={radioOn} onRadioStop={onRadioStop}
+                      clipVoice={clipVoice} tier={tier} />
           {/* **ヒント**(2026-09 利用者の指定)。
               **ヒントを持たない問には出さない** —— ふだんの Quick Response と
               Native Flow の行は `hint` が `null` なので、ボタンごと出ない

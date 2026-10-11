@@ -74,9 +74,18 @@ import QrCard from './QrCard.jsx'
 import SessionResult from './SessionResult.jsx'
 import GoalBar from './GoalBar.jsx'
 import FocusFrame from './FocusFrame.jsx'
-import WordRadio from './WordRadio.jsx'
+/* ★ **聞き流しは、練習のカードの上の状態**(第5.445節・②・
+   2026-10-10 利用者の指摘)。もとは `WordRadio`(別の画面)へ飛んでいた。
+   回し続ける算段は `useRadioRun()` 1か所、1枚ぶんを鳴らすのは
+   `playRadioRow()` 1か所、送り方は `cardCursor.js` 1か所である */
+import useRadioRun from '../lib/useRadioRun.js'
+import { indexCursor } from '../lib/cardCursor.js'
+import RadioToggle from './RadioToggle.jsx'
+import RadioSettings from './RadioSettings.jsx'
+/* **前置きの言葉は `radioLabel.js` 1か所**(書き写さない) */
+import { RADIO_SAY_LEAD } from '../lib/radioLabel.js'
 import {
-  GraduateIcon, HeadphoneIcon, PrintIcon, RepeatIcon,
+  GraduateIcon, PrintIcon, RepeatIcon,
 } from './Icons.jsx'
 /* ★ **出しかたの3つ**(第5.437節)。単語帳と同じ部品を使う(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
@@ -89,7 +98,6 @@ import {
 import ReviewSheet from './ReviewSheet.jsx'
 import { usePrintSheet } from '../lib/printSheet.js'
 import { qrSheetPairs, sheetNote, wordSheetSections } from '../lib/reviewSheet.js'
-import { listTracks } from '../lib/bgm.js'
 import { NO_GOAL, NO_WEEK, loadQrWeek, loadWeeklyGoal } from '../lib/goals.js'
 import { prepareRead, stopReading } from '../lib/readAloud.js'
 /* ★ **次に鳴らすものを、先に温める**(第5.443節・2026-10-10 利用者の指摘
@@ -230,14 +238,11 @@ export default function QrReview({
   /**
    * **冊を替えても、聞き流しを続ける**(第5.283節・2026-09-27 利用者の指定)。
    *
-   * `dropRun()` は `setRadio(null)` を含むので、冊を替えると
-   * **聞き流しから放り出される。** 替えたのは「次はあの冊を聴きたい」
-   * からであって、やめたいわけではない。
-   *
-   * **`dropRun()` は変えない** —— 帯の `冊名 ▾` から替えた人は、
-   * これまでどおり練習へ降りる。**どちらから替えたかを、この印で分ける。**
+   * ★ **印は、もう要らない**(第5.445節・②)。聞き流しは**カードの上の
+   * 状態**になったので、`dropRun()`(やりかけを捨てる)を通っても
+   * **流す印は倒れない。** 新しい冊の問が届いたところから、そのまま
+   * 鳴り続ける —— **道が1本になったので、持ち越す細工が消えた。**
    */
-  const keepRadioRef = useRef(false)
   const [bookWanted, setBookWanted] = useState('my')
   const book = books.some((b) => b.id === bookWanted) ? bookWanted : 'my'
   const nfBook = book === 'nf'
@@ -416,10 +421,6 @@ export default function QrReview({
      出すかどうかは `tipOnce.js` が覚えている(`localStorage`) */
   const [askTip, setAskTip] = useState(false)
   const retireRef = useRef(null)
-  const [radio, setRadio] = useState(null)   // 読む文。null なら出さない
-  const [tracks, setTracks] = useState([])   // 曲(無ければ音楽は流れない)
-  /** ★ 曲を読めなかった理由(第5.396節)。**空と取り違えない** */
-  const [tracksError, setTracksError] = useState(null)
   /* **紙に出しているあいだだけ真**(2026-09 利用者の指定)。
      中身は刷る一瞬だけ描く(単語帳とまったく同じ作法) */
   const [printing, setPrinting] = useState(false)
@@ -727,18 +728,7 @@ export default function QrReview({
       }
       /* **出す問が無い冊に替えたときは、一覧の画面へ戻す**(第5.173節)。
          帯のまま止めると、読み込み中に見えて終わらない */
-      /* **聞き流しへ戻れないなら、印も下ろす**(持ち越すと、
-         次に冊を替えたときに勝手に聞き流しが始まる) */
-      keepRadioRef.current = false
       setLive(false)
-      return
-    }
-    /* ★ **聞き流しの中で冊を替えた人は、聞き流しのまま**(第5.283節)。
-         新しい冊の問が届いたので、ここで開き直す。
-         **`listen()` を呼ぶ** —— 読む文の選び方を書き写さない */
-    if (keepRadioRef.current) {
-      keepRadioRef.current = false
-      listen()
       return
     }
     start()
@@ -758,19 +748,13 @@ export default function QrReview({
    * 曲は**押したときに引く。** 押さない人には1回も問い合わせが飛ばない。
    * **曲が0本でも聞き流しは始まる**(音楽が鳴らないだけ・行き止まりを作らない)。
    */
-  const listen = async () => {
-    /* ★ **並びは `orderToUse()` 1か所**(第5.436節)。
-       ここだけ生の `order` を渡していたので、**シャッフルのスイッチが
-       聞き流しに効いていなかった**(出題とは別の道を通っていた) */
-    const pool = orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order }))
-    if (!pool.length) return
-    setRadio(pool)
-    /* ★ **読めなかったことを、0 曲として出さない**(第5.396節)。
-       `error` を捨てると、**曲が1つも登録されていないのと同じ見た目**になる */
-    const { data, error: 曲error } = await listTracks()
-    setTracks(data ?? [])
-    setTracksError(曲error ?? null)
-  }
+  /* ★ **読む文を、別に組むのをやめた**(第5.445節・②)。
+       流すのは**いま練習している `run` そのもの**である ——
+       範囲の札・絞り込み・並べ方・シャッフル・問数は、すでにあれに
+       当たっている。**数え方を2通り持たない**(CLAUDE.md)——
+       もとは `orderQrPairs(shown.map(qrPairOf), …)` をここでもう一度
+       書いており、**シャッフルのスイッチが効いていない**のを
+       第5.436節で直したばかりだった(道が2本あると、必ずこうなる)。 */
 
   /**
    * **復習の最中に「出しかた」を変えたら、その場で組み直す**
@@ -861,7 +845,9 @@ export default function QrReview({
       await markQr(card, ok ? 'learning' : 'unknown', { learnerId })
     }
     setDone((d) => [...d, { ...card, ok }])
-    setAt((i) => i + 1)
+    /* **控えから1つ進める**(もとの `setAt((i) => i + 1)` と同じ意味)——
+       聞き流しが先へ送っていても、そこから1つである */
+    putAt(atRef.current + 1)
   }
 
   /* ★ **前へ / 次へ**(第5.417節・2026-10-07 利用者の指定・段階4)。
@@ -878,11 +864,39 @@ export default function QrReview({
   /* **指の端末か**(第5.236節)。**幅で見分けない。** 判断は
      `isCoarse()` 1か所で、ここはキーの印を出すかどうかにだけ使う */
   const coarse = isCoarse()
-  const 回す = (d) => setAt((i) => {
-    const n = run.length
-    if (n < 2) return i
-    return ((i + d) % n + n) % n
+  /**
+   * ★ **どこまで来たかは、控えが本体である**(第5.445節・②)。
+   *
+   * **画面を消すと React は描き直さない**(第5.285節)。聞き流しは
+   * 間を無音の音で置いているので鳴り続けるが、**「次へ」を `setAt` だけで
+   * 書くと、次に鳴らす行を読んだときまだ前の値**になり、
+   * 同じ行を何度も鳴らす(2026-09 に実機で踏んだ)。
+   *
+   * **送るのは `putAt()` 1か所**で、控えと画面を必ず一緒に動かす。
+   */
+  const atRef = useRef(at)
+  const putAt = (i) => { atRef.current = i; setAt(i) }
+  /* **外から動いたぶんも、控えに写す**(組み直した・次の区切りへ進んだ) */
+  useEffect(() => { atRef.current = at }, [at])
+  const runRef = useRef(run)
+  runRef.current = run
+
+  /**
+   * ★ **送り方は `cardCursor.js` 1か所**(第5.445節・②)。
+   *
+   * 矢印キー ← → ・紙の左右の余白クリック・◀▶ のボタン・
+   * ロック画面の送り・**聞き流しの「鳴り終わったら次へ」**が、
+   * ぜんぶここを通る —— **置く場所の数だけ食い違う**(CLAUDE.md)。
+   *
+   * **端まで行ったら回り込む**(1問目から前へ押すと末尾へ)。
+   * **記録は1ミリも動かさない** —— `answer()` は1度も通らない。
+   */
+  const 送り = indexCursor({
+    list: () => runRef.current,
+    at: () => atRef.current,
+    set: putAt,
   })
+  const 回す = (d) => (d < 0 ? 送り.back() : 送り.go())
 
   /**
    * ★ **「覚えた にする」を押したとき**(第5.438節)。
@@ -901,7 +915,7 @@ export default function QrReview({
     const card = run[at]
     await markQr(card, 'known', { learnerId })
     setDone((d) => [...d, { ...card, ok: true }])
-    setAt((i) => i + 1)
+    putAt(atRef.current + 1)
   }
 
   /**
@@ -911,13 +925,12 @@ export default function QrReview({
    * **前の冊の問が次の冊で出続ける**。
    */
   const dropRun = () => {
-    /* ★ **聞き流しの中から替えたときは、聞き流しのまま続ける**
-       (第5.288節)。**印はここ1か所で立てる** —— 呼ぶ側それぞれに
-       書くと、道を1つ足した日にそこだけ落ちる(単語帳と同じ作法)。
-       聞き流しが開いていないときは、これまでどおり(印は立たない) */
-    if (radio) keepRadioRef.current = true
+    /* ★ **聞き流しは倒さない**(第5.445節・②)。あれは**カードの上の
+       状態**なので、やりかけを捨てても流す印はそのまま残る ——
+       新しい冊の問が届いたところから、そのまま鳴り続ける
+       (第5.288節の「持ち越す印」は、道が1本になって要らなくなった) */
     setRun(null); setPending([]); setAt(0); setDone([])
-    setRadio(null); setGroup(null); setFilter(emptyFilter)
+    setGroup(null); setFilter(emptyFilter)
     /* **「開いた瞬間に1問目」をもう一度走らせる**(第5.167節)。
        冊を変えた人は、その冊の1問目をやりに来ている。
        冊が変われば問も変わるので、**判断からやり直す** */
@@ -955,25 +968,12 @@ export default function QrReview({
     gradedRef.current = new Set()
   }
 
-  /**
-   * ★ **聞き流しの一覧を、絞り込みに合わせて組み直す**(第5.288節)。
-   *
-   * 鳴らす一覧は**控え**である(`orderQrPairs` は呼ぶたびに混ぜ直すので、
-   * 描くたびに作ると順が毎回変わってしまう)。だから
-   * **変わったときだけ**組み直す —— 鍵は練習と同じ `runKey`
-   * (`poolKey` を含む)で、**数え方を2通り持たない。**
-   *
-   * **届いてから組む**(`loaded !== poolKey` のあいだは待つ)——
-   * 先に組むと、**絞る前の文をもう一周**鳴らすことになる。
-   */
-  const radioKeyRef = useRef(runKey)
-  useEffect(() => {
-    if (!radio) { radioKeyRef.current = runKey; return }
-    if (radioKeyRef.current === runKey) return
-    if (loaded !== poolKey) return
-    radioKeyRef.current = runKey
-    setRadio(orderQrPairs(shown.map(qrPairOf), orderToUse(QR_ORDERS, { shuffle, order })))
-  }, [runKey, radio, loaded, poolKey, shown, order, shuffle])
+  /* ★ **聞き流しの一覧を、別に組み直す仕掛けも要らなくなった**
+       (第5.445節・②)。第5.288節では、鳴らす一覧が**絞る前の控え**
+       だったので「変わったら組み直す」を書いていた。
+       いまは**練習の `run` そのもの**を鳴らすので、
+       組み直すのは `runKey` の仕掛け1本だけである
+       (**数え方を2通り持たない**・CLAUDE.md)。 */
 
   const who = learnerName ? `${learnerName} さんの` : ''
 
@@ -1018,6 +1018,14 @@ export default function QrReview({
     : frameBook
     ? [bookLabel, framePartOf(part)?.label ?? '', frameFormLabel(part, form)]
     : [bookLabel])])
+
+  /**
+   * ★ **聞き流しは、練習のカードの上の状態**(第5.445節・②)。
+   *
+   * **題は、画面に出ているものをそのまま**渡す(`drillLabel`)——
+   * ロック画面に出るので、書き写すと冊を替えた日だけ古くなる(第5.264節)。
+   */
+  const radio = useRadioRun({ cursor: 送り, where: 'qr', label: drillLabel })
 
   /**
    * **冊の中の区切り**(Unit・中身・型)。**その冊の行の中**に出す(第5.167節)。
@@ -1124,14 +1132,14 @@ export default function QrReview({
    * **`aria-label` は残す。** 見えている文字より詳しく、
    * **いま何問あるか**まで言う(見えている「聞き流し」も含んでいる)。
    */
+  /* ★ **押すと、このカードのまま流れ始める**(第5.445節・③)。
+       もとは**別の画面へ飛んでいた。** 流しているあいだは「とめる」に
+       なり、金が入る —— **中身は `RadioToggle` 1か所**である
+       (帯にも、一覧の下にも、これを置く) */
   const listenBtn = (
-    <button type="button" className="btn btn--ghost btn--small qr-top-listen"
-            disabled={shown.length === 0}
-            aria-label={`言う練習・聞き流し(${shown.length} 問)`}
-            title={`言う練習・聞き流し(${shown.length} 問)`}
-            onClick={listen}>
-      <HeadphoneIcon />聞き流し
-    </button>
+    <RadioToggle className="qr-top-listen" unit="問"
+                 on={radio.on} onToggle={radio.toggle}
+                 count={shown.length} disabled={shown.length === 0} />
   )
 
   /**
@@ -1167,15 +1175,13 @@ export default function QrReview({
 
   const toolsBox = (
     <div className="wb-tools">
-      <button type="button" className="btn btn--quiet wb-listen"
-              disabled={shown.length === 0}
-              onClick={listen}>
-        {/* **言葉と中身を食い違わせない**(2026-09)。
-            ここは**聞き流しだけの場所ではない** —— 中に2つあり、
-            もう1つが「日本語→英語」である(第5.251・5.253節)。
-            **「チャンクで積む」は無くなった**(第5.251節) */}
-        <HeadphoneIcon />言う練習・聞き流し({shown.length} 問)
-      </button>
+      {/* **数まで字に出すぶん**(ここは幅に余裕がある)。
+          **言葉も見た目も `RadioToggle` 1か所**から来る(第5.445節・③) */}
+      {/* **「聞き流しだけの場所ではない」** —— 読み方に「日本語 → 英語」
+          (言う練習)がある。**言葉は `radioLabel.js` 1か所**から来る */}
+      <RadioToggle className="wb-listen" unit="問" wide lead={RADIO_SAY_LEAD}
+                   on={radio.on} onToggle={radio.toggle}
+                   count={shown.length} disabled={shown.length === 0} />
       {paperBox}
     </div>
   )
@@ -1243,47 +1249,11 @@ export default function QrReview({
    */
   const overlays = (
     <>
-      {/* **部品は `WordRadio` 1つ。** 単語帳とまったく同じものを使い、
-          渡すのは「どの画面から来たか」だけ(`where`)。
-          読み方の一覧も、覚える鍵も `wordRadio.js` が持っている ——
-          **書き写すと、必ず片方だけ古くなる**(CLAUDE.md) */}
-      {radio && (
-        <WordRadio
-          rows={radio}
-          where="qr"
-          /* **練習の画面に出している題を、そのまま渡す**(第5.264節)。
-             ここで組み直さない —— 練習と聞き流しで題が食い違うと、
-             「いま何を聞いているのか」が分からなくなる */
-          label={drillLabel}
-          /* **聞き流しの中でも、教材(冊)をえらべる**(第5.283節)。
-             **一覧は `books` 1つ**(帯の `冊名 ▾` と同じもの・書き写さない) */
-          books={books}
-          book={book}
-          /* ★ **冊の中の区切りも、そのまま渡す**(第5.288節)。
-             帯の `冊名 ▾` の中で使っているものと**同じ1つ**である ——
-             UNIT・中身・型を、聞きながら選び直せる */
-          sub={bookSub}
-          onBook={(id) => {
-            /* **聞き流しのまま、次の冊へ** —— 印は `dropRun()` が立てる
-               (第5.288節・1か所に寄せた)。
-               ここから先は勝手に移らない(第5.200節・`pickedBookRef`) */
-            pickedBookRef.current = true
-            setBookWanted(id); dropRun()
-          }}
-          /* **「出しかた」で選んでいる数を、そのまま持ち込む**
-             (第5.262節・2026-09-26 利用者の指定)。
-             5問に絞って練習していた人には、そのまま5問が回る。
-             **聞き流しの中で変えられる**ので、ここは始めの値だけである */
-          size={size}
-          tracks={tracks}
-          tracksError={tracksError}
-          learnerId={learnerId}
-          /* **聞き流しの左上も ☰**(第5.172節・利用者の指定) */
-          onMenu={onMenu}
-          onClose={() => setRadio(null)}
-        />
-      )}
-
+      {/* ★ **聞き流しの画面は、もう無い**(第5.445節・②・
+          2026-10-10 利用者の指摘「そのままのデザインでできないのですか？」)。
+          流すのは**このままのカード**で、重ねるものは1つも無い ——
+          冊も、冊の中の区切りも、上の帯の `冊名 ▾` がそのまま見えている
+          (別画面だったから中へ写していた・第5.283節 / 第5.288節)。 */}
       {/* **中身は、紙に出す一瞬だけ描く**(単語帳とまったく同じ作法)。
           見た目は**教材の紙の Quick Response と同じ指定**に乗っている ——
           利用者の言う「教材を印刷、PDFにした時のクイックレスポンの部分と
@@ -1427,15 +1397,19 @@ export default function QrReview({
           /* ★ **送る / 判定する操作**(第5.417節・段階4)。
                単語帳とまったく同じ部品・同じ決まりである(書き写さない) */
           <CardMove
-            /* ★ **聞き流しが開いているあいだは、1つも効かせない** ——
-                 矢印キーを聞いているのは窓(`window`)なので、
-                 上に重ねた画面で ← → を押しても**裏のカードが飛ぶ。**
-                 **既定は「できない」側**にする(CLAUDE.md) */
-            on={!radio}
+            /* ★ **聞き流しの最中も効く**(第5.445節・②)。
+                 もとは「上に重ねた画面の裏でカードが飛ぶ」のを防ぐため
+                 `on={!radio}` にしていたが、**重ねる画面そのものが無くなった。**
+                 流している最中に ← → を押したら、そこへ飛んで鳴り直す ——
+                 **送る道は `送り` 1本**なので、音と画面が食い違わない */
             onPrev={() => 回す(-1)} onNext={() => 回す(1)}
             onOk={() => answer(true)} onYet={() => answer(false)}>
           <QrCard
             pair={run[at]} no={at + 1}
+            /* ★ **流しているあいだ、4つめの絵は ■**(第5.445節・②)。
+               **絵は4つのまま** —— 5つめを足さない(利用者の指摘
+               「アイコン5個はうるさいと感じます」) */
+            radioOn={radio.on} onRadioStop={radio.stop}
             onAnswer={answer}
             /* ★ **キーの印は、ボタンの中に出す**(第5.417節)。
                **印を足すのは `keyLabel()` 1か所**で、
@@ -1648,6 +1622,10 @@ export default function QrReview({
             onStart={start}
             /* ★ **紙に出すのは、ここ(右上)の中**(2026-10-09) */
             tools={paperBox}
+            /* ★ **聞き流しの設定は、ここの中**(第5.445節・④・
+               2026-10-10 利用者の指定「聞き流しの設定は右上にしましょう」)。
+               **欄の形は `RadioSettings` 1か所**(書き写さない) */
+            radio={<RadioSettings uid="qr-radio-run" {...radio.settings} />}
           >
             <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
           </ReviewScope>
@@ -1755,6 +1733,10 @@ export default function QrReview({
               絞り込みと並べ方も、**この中(「出しかた」)に入れる** ——
               設定が画面の3か所に散っていたのを1か所にまとめた */}
           <ReviewScope
+            /* ★ **始める前からでも、聞き流しの設定は開ける**(第5.445節・④)。
+               一覧の下の「聞き流し(◯ 問)」を押す前に、読み方や間を
+               決められる(**行き止まりを作らない**・CLAUDE.md) */
+            radio={<RadioSettings uid="qr-radio-pre" {...radio.settings} />}
             rows={forPick}
             unit="問"
             pick={pick}
