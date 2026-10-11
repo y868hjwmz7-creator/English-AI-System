@@ -36,7 +36,7 @@
  * (`radioTextOf()`)も**よそ1か所**から借りる —— 書き写すと、
  * 画面と温める場所で**別のものを指す**(CLAUDE.md「数え方を2通り持たない」)。
  */
-import { radioTextOf } from './wordRadio.js'
+import { radioTextOf, radioVoiceOf } from './wordRadio.js'
 
 /** いま出ているものを入れて、**何本**温めるか */
 export const WARM_AHEAD = 4
@@ -52,10 +52,18 @@ export const WARM_AHEAD = 4
  * - **数えるのは「位置」ではなく「本数」。** 空の行や同じ語が続いても、
  *   温める本数は減らない(**いちばん危ない形で測る**・CLAUDE.md)
  *
+ * ★ **声と段も、一緒に返す**(第5.446節・④)。
+ *   固定の冊は良い声で鳴るようになったので、**英文だけを返すと
+ *   温める側が標準の声で温めてしまう** —— 押したときには無く、
+ *   **要らない標準の音を1本作る**(待つうえ、二度課金)。
+ *   第5.289節で踏んだ「支度と本番が別の声を取りに行く」とまったく同じ形である。
+ *   **声の取り出し方も `radioVoiceOf()` 1か所から借りる**(書き写さない)。
+ *
  * @param {Array<object>} list いま回している一覧
  * @param {number} at いま出ているものの位置
  * @param {number} want 何本(既定 `WARM_AHEAD`)
- * @returns {Array<string>} 温める英文(重複なし・出す順)
+ * @returns {Array<{text: string, clipVoice?: string, clipTier?: string}>}
+ *   温めるもの(重複なし・出す順)。**`prepareRead(x.text, x)` にそのまま渡せる**
  */
 export function warmTargets(list, at = 0, want = WARM_AHEAD) {
   const 一覧 = Array.isArray(list) ? list : []
@@ -67,10 +75,11 @@ export function warmTargets(list, at = 0, want = WARM_AHEAD) {
   const 出 = []
   /* **一覧より多くは回らない**(止まる条件を持たせる・CLAUDE.md) */
   for (let i = 0; i < 丈 && 出.length < 本数; i++) {
-    const t = radioTextOf(一覧[(頭 + i) % 丈])
+    const row = 一覧[(頭 + i) % 丈]
+    const t = radioTextOf(row)
     if (!t || 見た.has(t)) continue
     見た.add(t)
-    出.push(t)
+    出.push({ text: t, ...radioVoiceOf(row) })
   }
   return 出
 }

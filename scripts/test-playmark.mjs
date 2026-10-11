@@ -229,6 +229,8 @@ import { runPool } from '../src/lib/runPool.js'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 /* ★ **一度きりの説明**(第5.438節)。鍵も言葉も `tipOnce.js` 1か所 */
 import { RETIRE_TIP, tipClose, tipOpen } from '../src/lib/tipOnce.js'
+/* ★ **固定の冊の声と段**(第5.446節・④)。欄の名前は、ここから読み取る */
+import { bookVoice } from '../src/lib/bookVoice.js'
 
 let ng = 0
 const ok = (cond, name, extra = '') => {
@@ -7573,12 +7575,19 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
     `${inSentence.length} / ${col.COLLOCATIONS.length}`)
 
   /* ── ③ 行の形が、表から来る行と1つ残らず同じか ──────────── */
+  /* ★ **声と段だけは、わざと足してある**(第5.446節・④)。
+     固定の冊を良い声で読むために、行が `clipVoice` / `tier` を持つ ——
+     **欄の名前を書き写さない**(`bookVoice()` に訊く)。
+     1つでも**ほかの欄**が増えたら、そのときは赤くなる */
+  const 声の欄 = Object.keys(bookVoice())
   const QR_FIELDS = ['en_norm', 'en', 'ja', 'speaker', 'status', 'box', 'learn_streak',
     'due_on', 'added_at', 'updated_at', 'material_id', 'material_title',
     'material_industry', 'material_kind', 'material_genre', 'material_scene', 'material_level']
   const nfRows = nf.nativeFlowRows([], { today: '2026-09-15' })
   ok(nfRows.length === 690, 'Native Flow … 行も 690 出る')
-  ok(QR_FIELDS.every((k) => k in nfRows[0]) && Object.keys(nfRows[0]).length === QR_FIELDS.length,
+  ok(QR_FIELDS.every((k) => k in nfRows[0])
+     && 声の欄.every((k) => k in nfRows[0])
+     && Object.keys(nfRows[0]).length === QR_FIELDS.length + 声の欄.length,
     'Native Flow … qr_items() と同じ欄がそろっている',
     QR_FIELDS.filter((k) => !(k in nfRows[0])).join(' ') || 'ぴったり')
 
@@ -7589,7 +7598,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const colRows = col.collocationRows([], { today: '2026-09-15' })
   ok(colRows.length === col.COLLOCATIONS.length,
     `コロケーション … 行も ${colRows.length} 出る`)
-  ok(WORD_FIELDS.every((k) => k in colRows[0]) && Object.keys(colRows[0]).length === WORD_FIELDS.length,
+  ok(WORD_FIELDS.every((k) => k in colRows[0])
+     && 声の欄.every((k) => k in colRows[0])
+     && Object.keys(colRows[0]).length === WORD_FIELDS.length + 声の欄.length,
     'コロケーション … review_words() と同じ欄がそろっている',
     WORD_FIELDS.filter((k) => !(k in colRows[0])).join(' ') || 'ぴったり')
 
@@ -7708,7 +7719,9 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
 
   const npRows = np.nounPhraseRows([], { today: '2026-09-15' })
   ok(npRows.length === np.NOUN_PHRASES.length, `名詞句 … 行も ${npRows.length} 出る`)
-  ok(WORD_FIELDS.every((k) => k in npRows[0]) && Object.keys(npRows[0]).length === WORD_FIELDS.length,
+  ok(WORD_FIELDS.every((k) => k in npRows[0])
+     && 声の欄.every((k) => k in npRows[0])
+     && Object.keys(npRows[0]).length === WORD_FIELDS.length + 声の欄.length,
     '名詞句 … review_words() と同じ欄がそろっている',
     WORD_FIELDS.filter((k) => !(k in npRows[0])).join(' ') || 'ぴったり')
   ok(npRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
@@ -7783,7 +7796,8 @@ console.log('\n▶ Native Flow と コロケーションと名詞句と副詞句
   const advRows = adv.adverbPhraseRows([], { today: '2026-09-15' })
   ok(advRows.length === adv.ADVERB_PHRASES.length, `副詞句 … 行も ${advRows.length} 出る`)
   ok(WORD_FIELDS.every((k) => k in advRows[0])
-     && Object.keys(advRows[0]).length === WORD_FIELDS.length,
+     && 声の欄.every((k) => k in advRows[0])
+     && Object.keys(advRows[0]).length === WORD_FIELDS.length + 声の欄.length,
     '副詞句 … review_words() と同じ欄がそろっている',
     WORD_FIELDS.filter((k) => !(k in advRows[0])).join(' ') || 'ぴったり')
   ok(advRows.every((r) => r.status === 'unknown' && r.box === 0 && r.due_on === '2026-09-15'),
@@ -16462,22 +16476,53 @@ console.log('\n▶ 覚えた にする(第5.438節)')
 
   /* ── 算段(素の node で動かして測る)──────────────────────── */
   const 束 = Array.from({ length: 8 }, (_, i) => ({ display: `w${i + 1}` }))
+  /* ★ **返るのは英文だけではない**(第5.446節・④)。
+       声と段も一緒に返るので、**英文で比べるときは `text` を取り出す** */
+  const 文だけ = (list) => list.map((x) => x.text)
   const 先 = warmTargets(束, 0)
   /* **いま出ているものも温める** —— 開いた直後、まだ誰も温めていない */
-  ok(先[0] === 'w1', '先読み … いま出ているものも温める', 先.join(','))
+  ok(先[0].text === 'w1', '先読み … いま出ているものも温める', 文だけ(先).join(','))
   ok(先.length === WARM_AHEAD,
     '先読み … 本数は `WARM_AHEAD` 1か所から決まる', `${先.length} / ${WARM_AHEAD}`)
   /* **末尾では回り込む** —— 回らないと、最後の数枚で温まらない */
-  ok(warmTargets(束, 7)[1] === 'w1', '先読み … 末尾では先頭へ回り込む',
-    warmTargets(束, 7).join(','))
+  ok(warmTargets(束, 7)[1].text === 'w1', '先読み … 末尾では先頭へ回り込む',
+    文だけ(warmTargets(束, 7)).join(','))
   /* ★ **いちばん危ない形を置く**(CLAUDE.md)。
        空の行・同じ語ばかりでも、**温める本数は減らない** ——
        「位置で数える」形に戻すと、ここが赤くなる */
   const 混ぜ = [{ display: 'a' }, { display: '   ' }, { display: 'a' },
     { display: 'b' }, { display: 'c' }, { display: 'd' }]
-  ok(warmTargets(混ぜ, 0).join(',') === 'a,b,c,d',
+  ok(文だけ(warmTargets(混ぜ, 0)).join(',') === 'a,b,c,d',
     '先読み … 空の行と同じ語を飛ばしても、本数は減らない',
-    warmTargets(混ぜ, 0).join(','))
+    文だけ(warmTargets(混ぜ, 0)).join(','))
+
+  /* ★ **声と段も、一緒に返る**(第5.446節・④)。
+       返らないと、温める側が標準の声で温めてしまい、
+       **押したときには無い**(待つうえ、要らない音を1本作る)。
+       **値を書き写さない** —— 鳴らす側と同じ `radioVoiceOf()` で突き合わせる */
+  {
+    const { radioVoiceOf } = await import('../src/lib/wordRadio.js')
+    const 冊 = [{ display: 'take care of', ...bookVoice() }]
+    const 先読み = warmTargets(冊, 0, 1)[0]
+    const 鳴らす = radioVoiceOf(冊[0])
+    ok(Object.keys(鳴らす).length > 0
+      && Object.entries(鳴らす).every(([k, v]) => 先読み[k] === v),
+    '先読み … 固定の冊は、鳴らす側とまったく同じ声と段で温める',
+    `${先読み.clipVoice} / ${先読み.clipTier}`)
+    /* **何も持たない行は、これまでどおり**(自分の単語帳・業種べつの棚) */
+    const 素 = warmTargets([{ display: 'apple' }], 0, 1)[0]
+    ok(!('clipVoice' in 素) && !('clipTier' in 素),
+      '先読み … 声を持たない行には、声を足さない(これまでどおり標準の声)')
+  }
+
+  /* ★ **呼ぶ側が、声を捨てていないか**(第5.446節・④)。
+       `prepareRead(t)` のままだと、**返した声がそこで落ちる** */
+  for (const [名, f] of [['単語帳', 'src/components/Wordbook.jsx'],
+    ['Quick Response', 'src/components/QrReview.jsx']]) {
+    const c = 落として(読む(f))
+    ok(/prepareRead\(\w+\.text, \w+\)/.test(c),
+      `${名} … 温める呼び出しに、声と段をそのまま渡している`)
+  }
   /* **一覧が無くても落ちない**(止まる条件を持たせる) */
   ok(warmTargets([], 0).length === 0 && warmTargets(null, 0).length === 0,
     '先読み … 一覧が空でも落ちない')
@@ -17044,6 +17089,114 @@ console.log('\n▶ 覚えた にする(第5.438節)')
         `復習の声 … ${f.split('/').at(-1)} は、古い形の mark_qr も落としている`,
         `落とす ${落ちている.join(' ')}`)
     }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **ファイルに持っている冊を、良い声で読む**(第5.446節・④)
+ *
+ *   > elevenlabs が最高すぎてあまりよく聞こえません
+ *
+ * 【この見張りが守るもの —— ほとんどが費用の話である】
+ *   ・**声と段が食い違わない** —— Google の声に良い段を当てると、
+ *     窓口が代役で鳴らすので `premium` の置き場所に標準の音が残る
+ *   ・**6つの冊ぜんぶに付いている** —— 1つ落ちると、その冊だけ
+ *     別の MP3 が作られる(= 二度課金)
+ *   ・**増え続ける冊には付けない** —— 自分の単語帳と業種べつの棚は
+ *     教材から拾った語なので、良い声を当てると
+ *     「1回だけ」が「毎月」になる(CLAUDE.md 第5.2.1節)
+ *   ・**声の id が1か所** —— 変えると 7,850 本が作り直しになる
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 固定の冊を良い声で読む(第5.446節・④) ──')
+  const { BOOK_VOICE, bookVoiceReady } = await import('../src/lib/bookVoice.js')
+  const { findVoice, isBaseVoice } = await import('../src/data/clipVoices.js')
+  const { PREMIUM } = await import('../src/lib/voiceTier.js')
+  const 読む2 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const 落として2 = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+
+  /* ── ① **段と、実際に鳴る声を食い違わせない** ── */
+  ok(bookVoiceReady() && !isBaseVoice(BOOK_VOICE)
+    && Boolean(String(findVoice(BOOK_VOICE)?.elevenId ?? '').trim()),
+  '固定の冊 … 読む声は、良い段を本当に作れる声である(Google ではない)',
+  `${BOOK_VOICE} / ${findVoice(BOOK_VOICE)?.label ?? '(名簿に無い)'}`)
+  const 声段 = bookVoice()
+  ok(声段.clipVoice === BOOK_VOICE && 声段.tier === PREMIUM,
+    '固定の冊 … 声と段が、1か所から返る', `${声段.clipVoice} / ${声段.tier}`)
+
+  /* ── ② **6つの冊ぜんぶに付いている** ──
+       **それぞれの冊を本当に組んで**、行から読み取る(素の node で動く)。
+       **値を書き写さない** —— `bookVoice()` の答えと突き合わせる */
+  {
+    const { basicRows } = await import('../src/lib/basicsCourse.js')
+    const { nativeFlowRows } = await import('../src/data/nativeFlow.js')
+    const { collocationRows } = await import('../src/data/collocations.js')
+    const { nounPhraseRows } = await import('../src/data/nounPhrases.js')
+    const { adverbPhraseRows } = await import('../src/data/adverbPhrases.js')
+    const { frameQrRows } = await import('../src/lib/frameQr.js')
+    const 冊 = [
+      ['基礎単語', basicRows('core', [], { today: '2026-10-11' })],
+      ['Native Flow', nativeFlowRows([], { today: '2026-10-11' })],
+      ['コロケーション', collocationRows([], { today: '2026-10-11' })],
+      ['名詞句', nounPhraseRows([], { today: '2026-10-11' })],
+      ['副詞句', adverbPhraseRows([], { today: '2026-10-11' })],
+      ['66 の型', frameQrRows([], { today: '2026-10-11' })],
+    ]
+    const 抜け = 冊.filter(([, rows]) => !rows.length
+      || !rows.every((r) => Object.entries(声段).every(([k, v]) => r[k] === v)))
+    ok(抜け.length === 0,
+      `固定の冊 … ${冊.length} 冊ぜんぶの行に、同じ声と段が付いている`,
+      抜け.map(([n]) => n).join(' / ') || 'ぜんぶ付いている')
+    /* **測る相手が本当にあるか**(1行も無ければ、上は素通りする) */
+    ok(冊.every(([, rows]) => rows.length >= 50),
+      '固定の冊 … どの冊も 50 行以上ある(測る相手がある)',
+      冊.map(([n, r]) => `${n}:${r.length}`).join(' '))
+  }
+
+  /* ── ③ **増え続ける冊には付けない**(「出る」と「出ない」の両方)── */
+  {
+    const 呼ぶ所 = ['src/data/nativeFlow.js', 'src/data/collocations.js',
+      'src/data/nounPhrases.js', 'src/data/adverbPhrases.js',
+      'src/lib/basicsCourse.js', 'src/lib/frameQr.js']
+    /* **`src/` ぜんぶを見て、呼んでいる場所を数える。**
+       足した日に見張られないのを避けるため、一覧を名指しで持たない形で数える */
+    const 全部 = []
+    const 歩く = (dir) => {
+      for (const e of readdirSync(new URL(`../${dir}/`, import.meta.url),
+        { withFileTypes: true })) {
+        if (e.isDirectory()) 歩く(`${dir}/${e.name}`)
+        else if (/\.(js|jsx)$/.test(e.name)) 全部.push(`${dir}/${e.name}`)
+      }
+    }
+    歩く('src')
+    const 呼んでいる = 全部.filter((f) => f !== 'src/lib/bookVoice.js'
+      && /\bbookVoice\(\)/.test(落として2(読む2(f))))
+    ok([...呼んでいる].sort().join(',') === [...呼ぶ所].sort().join(','),
+      '固定の冊 … 良い声を呼ぶのは、ファイルに持っている冊だけ',
+      呼んでいる.filter((f) => !呼ぶ所.includes(f)).join(' / ') || 'ほかに無い')
+    /* **自分の単語帳と業種べつの棚の行は、声を持たない。**
+       あちらは教材から拾った語なので、**増え続ける**。
+       **動かして測れない**(`shelfReviews.js` は Supabase を引き連れている)ので、
+       書いてある文で見る —— **コメントを落としてから、欄として置いている形**で */
+    const 棚src = 落として2(読む2('src/lib/shelfReviews.js'))
+    ok(!/clipVoice|tier:/.test(棚src),
+      '固定の冊 … 業種べつの棚の行には、声を付けていない(これまでどおり)')
+  }
+
+  /* ── ④ **画面が組み立てていない** ──
+       声の id を画面に書くと、置き場所が2通りになる */
+  {
+    for (const f of ['src/components/Wordbook.jsx', 'src/components/QrReview.jsx',
+      'src/components/QrCard.jsx']) {
+      const c = 落として2(読む2(f))
+      ok(!new RegExp(`['\"]${BOOK_VOICE}['\"]`).test(c) && !/bookVoice\(/.test(c),
+        `固定の冊 … ${f.split('/').at(-1)} は、声を自分で組み立てていない`)
+    }
+    /* **「聴く」が、行の持っている声で鳴る**(行から取る) */
+    const wb = 落として2(読む2('src/components/Wordbook.jsx'))
+    ok(/clipVoice=\{card\?\.clipVoice/.test(wb) && /tier=\{card\?\.tier/.test(wb),
+      '固定の冊 … 単語帳の「聴く」は、その行が持っている声と段で鳴る')
   }
 }
 

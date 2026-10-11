@@ -546,7 +546,9 @@ export default function QrReview({
    * **費用は増えない** —— どのみち押されたときに作るものである。
    */
   useEffect(() => {
-    for (const t of warmTargets(run, at)) prepareRead(t)
+    /* ★ **声と段も、温める側へ渡す**(第5.446節・③④)。
+       溜めたときの声・固定の冊の声で鳴るので、渡さないと**別の音を作る** */
+    for (const t of warmTargets(run, at)) prepareRead(t.text, t)
   }, [run, at])
 
   const today = todayKey()

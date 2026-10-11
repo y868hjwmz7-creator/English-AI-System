@@ -188,6 +188,7 @@ export const COLLOCATIONS = [
  * ========================================================================== */
 import { normWord } from '../lib/textNorm.js'
 import { posGroupOf, posLabel } from '../lib/posGroups.js'
+import { bookVoice } from '../lib/bookVoice.js'
 
 /** その動詞の組。**知らない id は null**(当てずっぽうで返さない) */
 export const collocationVerbOf = (id) =>
@@ -244,6 +245,13 @@ export function collocationRows(seen = [], { today = '' } = {}) {
       material_genre: null,
       material_scene: null,
       material_level: null,
+      /* ★ **固定の冊は、良い声で読む**(第5.446節・④・2026-10 利用者の指摘
+         「elevenlabs が最高すぎてあまりよく聞こえません」)。
+         **どの声・どの段かは `bookVoice.js` 1か所。** ここに書き写さない ——
+         置く場所の数だけ食い違い、**置き場所が変われば二度課金**になる。
+         行に付けておけば、「聴く」も聞き流しも先読みも**同じものを指す**
+         (第5.289節で踏んだ形を、ここでは踏まない) */
+      ...bookVoice(),
       learn_streak: s?.learn_streak ?? 0,
     }
   })

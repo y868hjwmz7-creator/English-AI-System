@@ -97,6 +97,9 @@ import ListenKnob from './ListenKnob.jsx'
    **どれを温めるかは `warmAhead.js` 1か所**(Quick Response と同じもの)。
    **温め方も `prepareRead()` 1か所** —— 話者も段も、鳴らす側が決める */
 import { prepareRead } from '../lib/readAloud.js'
+/* ★ **固定の冊の声と段**(第5.446節・④)。行が何も持たない冊
+   (自分の単語帳・業種べつの棚)は、これまでどおり標準の段である */
+import { STANDARD } from '../lib/voiceTier.js'
 import { warmTargets } from '../lib/warmAhead.js'
 /* ★ **出しかたの3つ**(第5.437節)。Quick Response と同じ部品(書き写さない) */
 import PracticeKnobs from './PracticeKnobs.jsx'
@@ -1378,7 +1381,9 @@ export default function Wordbook({
    * **費用は増えない** —— どのみち押されたときに作るものである。
    */
   useEffect(() => {
-    for (const t of warmTargets(queue)) prepareRead(t)
+    /* ★ **声と段も、温める側へ渡す**(第5.446節・④)。
+       固定の冊は良い声で鳴るので、渡さないと**標準の声を1本余計に作る** */
+    for (const t of warmTargets(queue)) prepareRead(t.text, t)
   }, [queue])
 
   /* ★ **前へ / 次へ**(第5.417節・2026-10-07 利用者の指定・段階4)。
@@ -2851,8 +2856,17 @@ export default function Wordbook({
                       (第5.445節・②)。**絵は4つのまま** —— 5つめを足さない
                       (利用者の指摘「アイコン5個はうるさいと感じます」)。
                       **中身は `ListenKnob` 1か所**(Quick Response と同じ) */}
+                  {/* ★ **固定の冊は、良い声で読む**(第5.446節・④)。
+                      **声も段も、行が持っている**(`bookVoice.js` 1か所で
+                      決めて、行に広げてある)—— ここで組み立てると、
+                      聞き流しと先読みとで**別の音を取りに行く**
+                      (第5.289節で踏んだ形)。
+                      自分の単語帳と業種べつの棚は、行が何も持たないので
+                      **これまでどおり標準の声**である */}
                   <ListenKnob text={word}
-                              radioOn={radio.on} onRadioStop={radio.stop} />
+                              radioOn={radio.on} onRadioStop={radio.stop}
+                              clipVoice={card?.clipVoice ?? null}
+                              tier={card?.tier ?? STANDARD} />
                 </div>
                 {/* **答えは2つ**(2026-09 利用者の指定「『覚えた』はなくしましょう」)。
                     まだ / 言える。

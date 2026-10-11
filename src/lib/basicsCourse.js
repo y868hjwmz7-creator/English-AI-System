@@ -8,6 +8,7 @@
  * `npm run test:play` が数字で見張る。
  */
 import { COURSE_DAYS, COURSE_LENGTH, dayOf, tierOf } from '../data/basicsCourse.js'
+import { bookVoice } from './bookVoice.js'
 import { BASIC_WORDS } from '../data/basicWords.js'
 import { posGroupOf, posLabel } from './posGroups.js'
 
@@ -224,6 +225,13 @@ export function basicRows(tier = 'core', seen = [], { today = '' } = {}) {
       material_genre: null,
       material_scene: null,
       material_level: null,
+      /* ★ **固定の冊は、良い声で読む**(第5.446節・④・2026-10 利用者の指摘
+         「elevenlabs が最高すぎてあまりよく聞こえません」)。
+         **どの声・どの段かは `bookVoice.js` 1か所。** ここに書き写さない ——
+         置く場所の数だけ食い違い、**置き場所が変われば二度課金**になる。
+         行に付けておけば、「聴く」も聞き流しも先読みも**同じものを指す**
+         (第5.289節で踏んだ形を、ここでは踏まない) */
+      ...bookVoice(),
       learn_streak: s?.learn_streak ?? 0,
     }
   })

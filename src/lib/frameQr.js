@@ -70,6 +70,7 @@ import { FRAME_GROUPS, frameGroupCount } from '../data/sentenceFrames.js'
 import { sayQuestions, shiftQuestions, swapQuestions } from './frameShift.js'
 import { FRAME_FORMS, FRAME_INDEX } from './frameMatch.js'
 import { normEn } from './textNorm.js'
+import { bookVoice } from './bookVoice.js'
 
 /**
  * **中身は2つ。並べ替えない。**
@@ -365,6 +366,16 @@ export function frameQrRows(
       material_kind: null,
       material_genre: null,
       material_scene: null,
+      /* ★ **固定の冊は、良い声で読む**(第5.446節・④・2026-10 利用者の指摘
+         「elevenlabs が最高すぎてあまりよく聞こえません」)。
+         **どの声・どの段かは `bookVoice.js` 1か所。** ここに書き写さない ——
+         置く場所の数だけ食い違い、**置き場所が変われば二度課金**になる。
+
+         **66 の型は、2つの中身で 5,677 問・253,943 文字ある**
+         (型と束を掛け合わせて作るので、ファイルの行数より桁が1つ多い)。
+         良い声をやめたくなったら、**この1行を外す**だけでよい ——
+         ほかの冊は1文字も変わらない */
+      ...bookVoice(),
       material_level: null,
     })
   }
