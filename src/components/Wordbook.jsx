@@ -1089,7 +1089,9 @@ export default function Wordbook({
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
   /* ★ **段階も「絞っている」に数える**(第5.414節)。数えないと、
        段階だけをえらんだときに「0件しぼり中」と出て**嘘になる** */
-  const narrowed = narrowedCount({ filter, stage })
+  /* ★ **段階は数えない**(第5.447節)。「何を出す」の札へ出たので、
+       隠れた絞り込みではなくなった(`reviewScope.js` の `narrowedCount`) */
+  const narrowed = narrowedCount({ filter })
 
   /**
    * **紙に出す対**(2026-09 利用者の指定「単語帳…の内容を印刷する機能」)。
@@ -2330,10 +2332,7 @@ export default function Wordbook({
               size={size}
               narrowed={narrowed}
               onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
-              /* ★ **段階は「詳しくしぼる」の中**(第5.414節)。
-                 押す先は、札とまったく同じ `pickGroup` である */
-              stage={stage}
-              onStage={pickGroup}
+              /* ★ **段階の段は廃止**(第5.447節)。札が段そのものになった */
               onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
               forms={QUIZ_FORMS}
               form={want}
@@ -2344,10 +2343,9 @@ export default function Wordbook({
               orders={WORD_ORDERS}
               order={order}
               onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+              /* ★ **切り替えるボタンは渡さない**(第5.447節) */
               shuffle={shuffle}
-              onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
               repeat={repeat}
-              onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
               /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
               scope={scope}
               onScope={pickDue}
@@ -2460,8 +2458,7 @@ export default function Wordbook({
                     size={size}
                     narrowed={narrowed}
                     onSize={(sz) => { setSize(sz); saveSize('word', sz) }}
-                    stage={stage}
-                    onStage={pickGroup}
+                    /* ★ **段階の段は廃止**(第5.447節)。札が段そのものになった */
                     onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
                     forms={QUIZ_FORMS}
                     form={want}
@@ -2472,10 +2469,9 @@ export default function Wordbook({
                     orders={WORD_ORDERS}
                     order={order}
                     onOrder={(id) => { setOrder(id); saveOrder('word', id) }}
+                    /* ★ **切り替えるボタンは渡さない**(第5.447節) */
                     shuffle={shuffle}
-                    onShuffle={(on) => { setShuffle(on); saveShuffle('word', on) }}
                     repeat={repeat}
-                    onRepeat={(on) => { setRepeat(on); saveRepeat('word', on) }}
                     /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
                     scope={scope}
                     onScope={pickDue}

@@ -50,7 +50,7 @@ import { DEFAULT_FORM, SESSION_SIZE, formOf } from './wordQuiz.js'
 import { FILTER_KEYS, countNarrowed } from './wordbookFilter.js'
 /* ★ **段(覚え具合)は `learnStage.js` 1か所**(第5.406節)。
      「何を出す」の「苦手」「未学習」は、あちらの段そのものである */
-import { stageLabel, stageOrDefaultPool } from './learnStage.js'
+import { LEARN_STAGES, stageOrDefaultPool } from './learnStage.js'
 
 export { addedDayOf, daysAgo, todayKey }
 
@@ -128,9 +128,18 @@ export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
    **スイッチ(`DUE_LABEL`)**へ出した —— 軸が混ざらず、
    間隔をあけた復習の入口も残る。
 
-   **「未学習」は札から外した**(利用者の指定の4つに無い)。
-   **消してはいない** —— 「詳しくしぼる」の中の「覚え具合」で選べる
-   (**勝手に狭めない**・CLAUDE.md)。
+   ★ **「未学習」を札に戻した**(第5.447節・2026-10-11 利用者の指摘)。
+
+     > 何を出すかと詳しく絞る内の段階が被ってます
+
+   **被っていたのではない。同じものが2か所に描かれていた。**
+   `pick` は `pickIdOf(stage)` で**段そのものから決まる**ので、
+   「何を出す」と「詳しくしぼる → 段階」は**同じ値を2通りに見せていた。**
+   しかも「未学習」は札に無いので、あちらで選ぶと
+   **上の札がどれも光らない**(`pickIdOf` が `''` を返す)。
+
+   **札を5つにして、「段階」の段を丸ごと無くした。**
+   できることは1つも減っていない(**勝手に狭めない**・CLAUDE.md)。
 
    **名前は `LEARN_STAGES` から読む**(`learnStage.js` 1か所)——
    ここに「覚えかけ」と書き写すと、段の名前を変えた日に片方だけ古くなる。
@@ -140,12 +149,16 @@ export const scopeOf = (id) => SCOPES.find((s) => s.id === id) ?? SCOPES[0]
  * **押したら何になるか**の表。**ここ1か所。**
  * 画面で `id === 'weak' ? …` と書かない(判断は1か所・CLAUDE.md)。
  *
- * `id` は段の id とそろえてある(`weak` / `learning` / `done`)。
+ * `id` は段の id とそろえてある(`new` / `weak` / `learning` / `done`)。
  * 「ぜんぶ」だけが段を持たない。
+ *
+ * ★ **並びは `LEARN_STAGES` から読む**(第5.447節)。ここに
+ * `['new', 'weak', …]` と書き写すと、段を1つ足した日に**札だけが古くなる**
+ * (呼び名と同じ理由・CLAUDE.md)。
  */
 export const PICKS = [
   { id: 'all', label: 'ぜんぶ', stage: null },
-  ...['weak', 'learning', 'done'].map((id) => ({ id, label: stageLabel(id), stage: id })),
+  ...LEARN_STAGES.map((g) => ({ id: g.id, label: g.label, stage: g.id })),
 ]
 
 export const pickOf = (id) => PICKS.find((p) => p.id === id) ?? PICKS[0]
@@ -433,15 +446,15 @@ export function shouldRecord(ok, {
  *   > 何か絞り込んでいるときは、見出しの横に「◯件しぼり中」と表示し、
  *   > 上部の絞り込みアイコンにも小さな印をつける。
  *
- * **絞り込みの欄(`FILTER_KEYS`)と、段階を一緒に数える。**
- * 段階は「詳しくしぼる」の中にあるので、**あれも絞り込みである** ——
- * 数えないと、段階だけを選んだときに「0件しぼり中」と出て**嘘になる。**
+ * ★ **段階は、もう数えない**(第5.447節)。あれは「詳しくしぼる」から
+ * **「何を出す」へ出た**ので、**隠れた絞り込みではなくなった** ——
+ * 畳んだ中にあるから数えていたのであって、表に出ているものを数えると
+ * 「ぜんぶ以外を選んだだけで 1件しぼり中」と出て**うるさい。**
  *
  * **数えるものを2か所に書かない** —— `countNarrowed()` は
  * `wordbookFilter.js` が持つ一覧から数えている。
  */
-export const narrowedCount = ({ filter = null, stage = null } = {}) =>
-  countNarrowed(filter) + (stage ? 1 : 0)
+export const narrowedCount = ({ filter = null } = {}) => countNarrowed(filter)
 
 export function runKeyOf({
   scope = '', size = '', filter = {}, group = null,

@@ -54,15 +54,12 @@ import {
   DUE_LABEL, PICKS, SIZES, isDueNow, pickCounts, pickLead, pickPool, plainOrders,
   sizeOfValue, sizePickLabel, takeCount, todayKey,
 } from '../lib/reviewScope.js'
-/* ★ **段階(4段階)は `learnStage.js` 1か所**(第5.406節)。
-     「何を出す」の「苦手」「未学習」も、ここの段そのものである */
-import { LEARN_STAGES, stageTally } from '../lib/learnStage.js'
 import SettingsSheet from './SettingsSheet.jsx'
 /* **見出しの言葉は `radioLabel.js` 1か所**(第5.445節)——
    上の帯のボタンと同じ言葉を、ここに書き写さない */
 import { RADIO_LISTEN } from '../lib/radioLabel.js'
 import {
-  ChevronIcon, CloseIcon, FocusIcon, RepeatIcon, ShuffleIcon, SortIcon,
+  ChevronIcon, CloseIcon, FocusIcon, SortIcon,
 } from './Icons.jsx'
 
 /**
@@ -84,15 +81,19 @@ export default function ReviewScope({
   onClearAll = null,
   /** **「出しかた」のボタンだけを出す**(復習の最中。上の帯から開く) */
   compact = false,
-  /** 覚え具合(4段階)。**「詳しくしぼる」の中** */
-  stage = null, onStage = null,
+  /* ★ **段階(`stage` / `onStage`)は、もう受け取らない**(第5.447節)。
+     「何を出す」の札が**段そのもの**になったので、同じ値を2通りに
+     受け取る必要がなくなった(`pick` / `onPick` 1組だけ) */
   /** 出題の形(単語帳だけ)。**渡さなければ、その段ごと出ない** */
   forms = null, form = null, onForm = null,
   /** 並べ方。**シャッフルが切のときの並び**(ランダムは一覧から外して出す) */
   orders = null, order = null, onOrder = null,
-  /** シャッフル / 繰り返す。**スイッチ2つ** */
-  shuffle = true, onShuffle = null,
-  repeat = false, onRepeat = null,
+  /** シャッフルが入っているか。**並べ方の段を灰にするためだけ**に使う。
+      ★ **切り替えるボタンは、ここには無い**(第5.447節)——
+      練習のカードの絵が持っている(同じことをするものを2つ見せない) */
+  shuffle = true,
+  /** くり返すが入っているか。**知らせるためだけ**に使う(切り替えはカードの絵) */
+  repeat = false,
   /**
    * ★ **期限で絞るか**(第5.437節・2026-10-09 利用者の指定)。
    * `'due'` なら「そろそろ忘れる頃」のものだけ。札とは**別の軸**である。
@@ -135,8 +136,6 @@ export default function ReviewScope({
   /* **先取りが何件あるか。** ここで「次に出す日を動かさない」ことを
      先に言っておく。黙って動かさないと、進めたつもりで進んでいない */
   const ahead = pool.filter((r) => !isDueNow(r, today)).length
-  /** 段階ごとの数。**読み込んだ行から数える**(第5.406節) */
-  const stageN = stageTally(rows)
   /* **選ぶものは、吹き出しの中へ。** 開いているかどうかは覚えない */
   const [open, setOpen] = useState(false)
   /* ★ **「詳しくしぼる」は、初期状態で畳む**(利用者の指定・段階3)。
@@ -192,11 +191,26 @@ export default function ReviewScope({
         }))}
       </div>
 
-      {/* ★ **何問ずつ・シャッフル・繰り返すは、下に貼り付く帯へ移した**
-             (第5.437節・2026-10-09 利用者の指定)。
-             > 変更した後も「何問ずつ」「シャッフル」「繰り返し」が
-             > 常にどこかに表示されているのがベストです
-             スクロールしても消えないので、**ここから出した** */}
+      {/* ★ **何問ずつは、「何を出す」のすぐ下**(第5.447節・2026-10-11
+             利用者の指摘「何問ずつ出すかのボタンは、何を出すの近くに
+             移せますよね」)。**どれを出すか → 何問ずつか**の順で、
+             1つの問いになる。
+
+             **シャッフルとくり返すは、ここから消した**(同じ指摘
+             「シャッフルと繰り返しは実際の演習画面にあるので削りましょう」)。
+             練習のカードに絵で並んでいるので、**同じことをするものを
+             2つ見せない**(`.claude/rules/common.md`) */}
+      <label className="rscope-size rscope-size--top">
+        <span className="rscope-size-name">{`何${unit}ずつ`}</span>
+        <select
+          value={String(size)}
+          onChange={(e) => onSize(sizeOfValue(e.target.value))}
+        >
+          {SIZES.map((n) => (
+            <option key={String(n)} value={String(n)}>{sizePickLabel(n, unit)}</option>
+          ))}
+        </select>
+      </label>
 
       {/* ③ **訊き方**(単語帳だけ)。**渡されなければ、この段ごと出ない** */}
       {forms && forms.length > 0 && (
@@ -250,25 +264,14 @@ export default function ReviewScope({
           書くと、畳んでいても中身が場所を取り続ける(共通ルール) */}
       {moreOpen && (
         <div className="rscope-more-body">
-          {/* **段階(4段階)。** 一覧も呼び名も `learnStage.js` 1か所 */}
-          {onStage && (
-            <>
-              {見出し('stage', '段階')}
-              <div className="chiprow" role="group" aria-labelledby="rscope-stage">
-                {LEARN_STAGES.map((g) => 札({
-                  key: g.id,
-                  on: g.id === stage,
-                  n: stageN[g.id] ?? 0,
-                  /* **0件の段は押せない**(効かない操作を見せない)。
-                     ただし**消さない** —— 「苦手は無い」ことも知らせである */
-                  disabled: (stageN[g.id] ?? 0) === 0,
-                  label: g.label,
-                  /* **もう一度押すと外れる**(`pickGroup` と同じ作法) */
-                  onClick: () => onStage(g.id === stage ? null : g.id),
-                }))}
-              </div>
-            </>
-          )}
+          {/* ★ **「段階」の段は、ここから消した**(第5.447節・2026-10-11
+              利用者の指摘「何を出すかと詳しく絞る内の段階が被ってます」)。
+
+              **被っていたのではない。同じ値を2通りに描いていた** ——
+              上の札は `pickIdOf(stage)` で**段そのものから決まる**ので、
+              どちらを押しても同じ `stage` が動いていた。
+              **札を5つ(ぜんぶ + 4段階)にして、こちらを無くした。**
+              できることは1つも減っていない(`reviewScope.js` の `PICKS`) */}
 
           {/* **並べ方** —— シャッフルが切のときの並び。
               **1つでも出す** —— あれは「入れる / 入れない」の切り替えでもある
@@ -344,42 +347,9 @@ export default function ReviewScope({
   const 帯 = (
     <div className="rscope-bar">
       <div className="rscope-bar-row">
-        {/* **何問ずつ。** 言い方は `sizePickLabel()` 1か所(「5 問」「ぜんぶ」) */}
-        <label className="rscope-size">
-          <span className="sr-only">{`何${unit}ずつ`}</span>
-          <select
-            value={String(size)}
-            onChange={(e) => onSize(sizeOfValue(e.target.value))}
-          >
-            {SIZES.map((n) => (
-              <option key={String(n)} value={String(n)}>{sizePickLabel(n, unit)}</option>
-            ))}
-          </select>
-        </label>
-        {onShuffle && (
-          <button
-            type="button"
-            aria-pressed={shuffle}
-            aria-label="ランダム"
-            title="ランダム"
-            className={`btn btn--quiet rscope-sw${shuffle ? ' chip--on' : ''}`}
-            onClick={() => onShuffle(!shuffle)}
-          >
-            <ShuffleIcon />
-          </button>
-        )}
-        {onRepeat && (
-          <button
-            type="button"
-            aria-pressed={repeat}
-            aria-label="くり返す"
-            title="くり返す"
-            className={`btn btn--quiet rscope-sw${repeat ? ' chip--on' : ''}`}
-            onClick={() => onRepeat(!repeat)}
-          >
-            <RepeatIcon />
-          </button>
-        )}
+        {/* ★ **何問ずつは「何を出す」の下へ、シャッフルとくり返すは廃止**
+             (第5.447節)。この帯に残るのは**期限のスイッチと、始めるボタン
+             だけ**である —— 押すものを減らすほど、始めるボタンが見つかる */}
         {/* ★ **期限のスイッチ。字で書く**(第5.437節)——
              絵にすると「出会った時期」(日付の絞り込み)と見分けが付かない */}
         {onScope && 札({

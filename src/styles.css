@@ -11036,6 +11036,12 @@ button.wbfilter-ctl { text-align: left; }
    `input, select, textarea { width: 100% }` を、ここで打ち消す
    (CLAUDE.md「その見た目が、どこで決まっているのかを先に読む」) */
 .rscope-size > select { width: auto; min-width: 0; }
+/* ★ **何問ずつは「何を出す」のすぐ下**(第5.447節)。
+   名前と欄を1行に並べ、**`gap` で離す**(余白で作らない・共通ルール) */
+.rscope-size--top { display: flex; align-items: center; gap: var(--sp-8); }
+/* **名前の見た目は、絞り込みの欄の名前とそろえる**(`.wbfilter-name`)——
+   新しい見た目を作らない(CLAUDE.md「見た目も、既にある形から選ぶ」) */
+.rscope-size-name { font-size: var(--fs-12); font-weight: 600; color: var(--text-primary); }
 /* **絵だけのスイッチ。** 中身が1つでも、押せる的は小さくしない */
 .rscope-sw { padding-left: 0; padding-right: 0; min-width: 44px; }
 .rscope-start { width: 100%; }

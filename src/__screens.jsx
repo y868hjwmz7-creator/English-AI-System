@@ -2073,8 +2073,10 @@ function RScopeDemo({ rows }) {
      渡さなければ、その行ごと出ない —— **渡した形で測る** */
   const [form, setForm] = useState('choice')
   const [order, setOrder] = useState('')
-  const [shuffle, setShuffle] = useState(true)
-  const [repeat, setRepeat] = useState(false)
+  /* ★ **切り替えるボタンは、もう「出しかた」に無い**(第5.447節)。
+     渡すのは「並べ方の段を灰にするか」と「知らせの1行」のためだけ */
+  const [shuffle] = useState(true)
+  const [repeat] = useState(false)
   const tally = stageTally(rows)
   /** ★ いま光っている札。**本物と同じ `pickIdOf()` から**(第5.414節) */
   const pick = pickIdOf(group)
@@ -2089,20 +2091,19 @@ function RScopeDemo({ rows }) {
     />
     <ReviewScope
       /* ★ **本物と1文字も違えない**(第5.414節・段階3)。
-         「何を出す」は `pick`、段階は `stage`、
-         シャッフルは `shuffle` である */
+         「何を出す」は `pick` 1つ(第5.447節で段階の段を無くした)。
+         シャッフルとくり返すは**渡すだけで、切り替えるボタンは無い** */
       rows={rows} unit="問" pick={pick} size={size}
-      narrowed={narrowedCount({ filter, stage: group })}
+      narrowed={narrowedCount({ filter })}
       onPick={(id) => { setGroup(pickOf(id).stage) }}
       scope={scope}
       onScope={setScope}
       onSize={setSize} onStart={() => {}}
-      stage={group} onStage={setGroup}
       onClearAll={() => { setFilter(emptyFilter()); setGroup(null) }}
       forms={QUIZ_FORMS} form={form} onForm={setForm}
       orders={WORD_ORDERS} order={order} onOrder={setOrder}
-      shuffle={shuffle} onShuffle={setShuffle}
-      repeat={repeat} onRepeat={setRepeat}
+      shuffle={shuffle}
+      repeat={repeat}
     >
       {/* **絞り込みも「出しかた」の中**(2026-09 利用者の指定)。
           名前を左・欄を右にそろえた行が、同じ幅で並ぶかを測る。

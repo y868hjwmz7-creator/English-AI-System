@@ -85,6 +85,22 @@ export default function WordbookFilter({
    * **同じ部品を、呼ぶ側の指定で変える。** 似たものを2つ持たない。
    */
   showMaterial = false,
+  /**
+   * ★ **型で絞る欄を出すか**(第5.447節・2026-10-11 利用者の指摘)。
+   *
+   *   > 型トレーニングを選んでいないのに型を選ぶオプションがあると
+   *   > 混乱します。型トレーニングの教材を選んだ時のみ出てくるように
+   *   > できないですか？
+   *
+   * **行から見分けるのをやめた。** `frameOf()` は**例文からも型を当てる**
+   * ので、例文を持つ冊(業種べつ・コロケーション・ビジネス単語…)なら
+   * **どこでも 2 種類以上見つかり、ひとりでに出てしまっていた。**
+   *
+   * **いま開いているのが型の冊かどうかは、呼ぶ側しか知らない。**
+   * `showMaterial` とまったく同じ作法で、呼ぶ側が決める。
+   * **既定は「出さない」**(効かない操作を見せない・CLAUDE.md)。
+   */
+  showFrame = false,
 }) {
   const [openCal, setOpenCal] = useState(false)
   const btnRef = useRef(null)
@@ -154,10 +170,10 @@ export default function WordbookFilter({
     /* **Quick Response の復習には出ない。** あちらは「文」が溜まるので
        `pos` を1つも持たない —— 条件を1つも足さずに、ひとりでにそうなる */
     pos: poss.length > 1,
-    /* **型が1つしか見つからなければ、絞る意味がない。**
-       Native Flow のような短い言い回しばかりの冊では、
-       そもそもこの欄が出ない —— 効かない操作を見せない(CLAUDE.md) */
-    frame: frames.length > 1,
+    /* ★ **型の冊のときだけ**(第5.447節)。そのうえで、
+       **型が1つしか見つからなければ出さない**(絞る意味がない)——
+       効かない操作を見せない(CLAUDE.md) */
+    frame: showFrame && frames.length > 1,
   }
   if (!Object.values(show).some(Boolean)) return null
 

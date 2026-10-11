@@ -580,7 +580,8 @@ export default function QrReview({
   const tally = useMemo(() => stageTally(rows), [rows])
   /** いくつ絞っているか。**畳んでいても分かるように**札の数として渡す */
   /* ★ **段階も「絞っている」に数える**(第5.414節) */
-  const narrowed = narrowedCount({ filter, stage: group })
+  /* ★ **段階は数えない**(第5.447節)。札へ出たので隠れていない */
+  const narrowed = narrowedCount({ filter })
 
   /**
    * **紙に出す対**(2026-09 利用者の指定「クイックレスポン帖の内容を印刷」)。
@@ -1605,19 +1606,16 @@ export default function QrReview({
             size={size}
             narrowed={narrowed}
             onSize={(sz) => { setSize(sz); saveSize('qr', sz) }}
-            /* ★ **段階は「詳しくしぼる」の中**(第5.414節)。
-               押す先は札とまったく同じ `pickGroup` である */
-            stage={group}
-            onStage={pickGroup}
+            /* ★ **段階の段は廃止**(第5.447節)。札が段そのものになった */
             onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
             /* **単語帳とまったく同じ札を出す**(第5.244節) */
             orders={QR_ORDERS}
             order={order}
             onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            /* ★ **切り替えるボタンは渡さない**(第5.447節)。
+               並べ方の段を灰にするためと、知らせの1行のためだけに渡す */
             shuffle={shuffle}
-            onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
-            onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
             scope={scope}
             onScope={pickDue}
@@ -1629,7 +1627,9 @@ export default function QrReview({
                **欄の形は `RadioSettings` 1か所**(書き写さない) */
             radio={<RadioSettings uid="qr-radio-run" {...radio.settings} />}
           >
-            <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
+            {/* ★ **型で絞れるのは、型の冊のときだけ**(第5.447節) */}
+            <WordbookFilter rows={rows} value={filter} onChange={setFilter}
+                            showMaterial showFrame={frameBook} />
           </ReviewScope>
         )}
       >
@@ -1746,8 +1746,7 @@ export default function QrReview({
             size={size}
             narrowed={narrowed}
             onSize={(s) => { setSize(s); saveSize('qr', s) }}
-            stage={group}
-            onStage={pickGroup}
+            /* ★ **段階の段は廃止**(第5.447節)。札が段そのものになった */
             onClearAll={() => { setFilter(emptyFilter()); pickGroup(null) }}
             /* **並べ方は札にする**(第5.244節・2026-09-23 利用者の指摘)。
                「しぼる」の中の小さなプルダウンだったので、
@@ -1755,10 +1754,10 @@ export default function QrReview({
             orders={QR_ORDERS}
             order={order}
             onOrder={(id) => { setOrder(id); saveOrder(id) }}
+            /* ★ **切り替えるボタンは渡さない**(第5.447節)。
+               並べ方の段を灰にするためと、知らせの1行のためだけに渡す */
             shuffle={shuffle}
-            onShuffle={(on) => { setShuffle(on); saveShuffle('qr', on) }}
             repeat={repeat}
-            onRepeat={(on) => { setRepeat(on); saveRepeat('qr', on) }}
             /* ★ **期限のスイッチ**(第5.437節)。札とは別の軸である */
             scope={scope}
             onScope={pickDue}
@@ -1767,7 +1766,9 @@ export default function QrReview({
             {/* **絞り込みは単語帳と同じ部品**(`WordbookFilter`)。
                 ちがうのは、**教材名のプルダウンを出す**という1点だけ
                 (2026-09 利用者の指定「『テキスト』= 教材の名前で絞る」) */}
-            <WordbookFilter rows={rows} value={filter} onChange={setFilter} showMaterial />
+            {/* ★ **型で絞れるのは、型の冊のときだけ**(第5.447節) */}
+            <WordbookFilter rows={rows} value={filter} onChange={setFilter}
+                            showMaterial showFrame={frameBook} />
           </ReviewScope>
 
           {/* **聞き流し**と**紙に出す**。中身は `toolsBox` 1か所 ——
