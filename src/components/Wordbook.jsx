@@ -121,6 +121,11 @@ import { nowName } from '../lib/bookNow.js'
 import { loadCollocationWordbook } from '../lib/collocationWords.js'
 import { loadNounPhraseWordbook } from '../lib/nounPhraseWords.js'
 import { loadAdverbPhraseWordbook } from '../lib/adverbPhraseWords.js'
+/* ★ **ビジネス単語 200 語の冊**(第5.446節・⑤・2026-10 利用者の指定
+   「また、ビジネス単語200語も」)。**副詞句と1文字も違わない形**である ——
+   ファイルに 200 語、覚え具合は `word_reviews`(表も SQL も増えない) */
+import { loadBusinessWordbook } from '../lib/businessWords.js'
+import { BIZ_BOOK_LABEL, BUSINESS_WORDS } from '../data/businessWords.js'
 import ChunkParts from './ChunkParts.jsx'
 import {
   CHUNK_BOOK_LABEL, CHUNK_PARTS, FIRST_CHUNK_PART, chunkGroupOk, chunkGroups,
@@ -347,6 +352,14 @@ export default function Wordbook({
   /* **副詞句の冊**(2026-09 利用者の指定「ビジネスで使用する副詞句50」)。
      `showNp` とまったく同じ扱い —— 出す場所は呼ぶ側が決める */
   showAdv = false,
+  /* ★ **ビジネス単語 200 語の冊**(第5.446節・⑤・2026-10 利用者の指定
+     「また、ビジネス単語200語も」)。
+     `showCol` / `showNp` / `showAdv` とまったく同じ扱い ——
+     **出す場所は呼ぶ側が決める**(トレーナーがゲストの単語帳を開く画面には、
+     冊の切り替えをもともと出していない)。
+     **冊は増やす。既にある冊へ混ぜない** —— あちらは句の冊で、
+     こちらは1語の冊である(**違うものに同じ名前を付けない**・CLAUDE.md) */
+  showBiz = false,
   /**
    * **業種べつの単語帳(棚)のうち、この人に出すもの**(0057・利用者の指定)。
    *
@@ -689,6 +702,13 @@ export default function Wordbook({
        **覚え具合は1語も動かない** —— 鍵は語句そのものだからである */
     ...(showCol || showNp || showAdv
       ? [{ id: 'chunk', label: CHUNK_BOOK_LABEL, hasSub: true }] : []),
+    /* ★ **ビジネス単語 200 語**(第5.446節・⑤)。
+       **後ろへ足す。並べ替えない**(docs/notes/22 の決まり)——
+       冊の置き場所が動くと、覚え直すことになる。
+       **名前は `businessWords.js` 1か所**(`BIZ_BOOK_LABEL`)。
+       組(会議・交渉…)は**絞り込みで選ぶ**ので `hasSub` は付けない ——
+       **同じことをするものを2つ見せない**(CLAUDE.md) */
+    ...(showBiz ? [{ id: 'biz', label: BIZ_BOOK_LABEL }] : []),
   ]
   const [bookWanted, setBookWanted] = useState('my')
   /* **出せなくなった冊は、黙って自分の単語帳へ落とす**(行き止まりを作らない)。
@@ -710,6 +730,8 @@ export default function Wordbook({
   /** いま絞っている組。空は「◯◯まとめ」(**どの段にも必ず在る**) */
   const [chunkGroup, setChunkGroup] = useState('')
   const chunkBook = book === 'chunk'
+  /** ★ ビジネス単語を開いているか(第5.446節・⑤) */
+  const bizBook = book === 'biz'
   const colBook = chunkBook && chunkPart === 'col'
   const npBook = chunkBook && chunkPart === 'np'
   const advBook = chunkBook && chunkPart === 'adv'
@@ -837,7 +859,7 @@ export default function Wordbook({
        **`review_words()` を通さない**のも同じ理由である。あちらは
        上限で切るので、1,200 語ある基礎単語では**段の後ろが丸ごと
        「まだ」に見える。** */
-    if (shelfBook || basicBook || colBook || npBook || advBook) {
+    if (shelfBook || basicBook || colBook || npBook || advBook || bizBook) {
       const [pack, tally, wk, aim] = await Promise.all([
         /* **コロケーションも同じ道。** 行の形はそろえてあるので
            (`collocationRows()`)、ここから下は1文字も書き分けていない */
@@ -846,7 +868,11 @@ export default function Wordbook({
             /* **名詞句も副詞句も同じ道。** 行の形はそろえてある */
             : npBook ? loadNounPhraseWordbook({ learnerId })
               : advBook ? loadAdverbPhraseWordbook({ learnerId })
-                : loadBasicWordbook({ learnerId, tier }),
+                /* ★ **ビジネス単語も同じ道**(第5.446節・⑤)。
+                   行の形はそろえてある(`businessWordRows()`)ので、
+                   ここから下は1文字も書き分けていない */
+                : bizBook ? loadBusinessWordbook({ learnerId })
+                  : loadBasicWordbook({ learnerId, tier }),
         /* 棚の語数は、**プルダウンの選択肢に出すためだけ**のもの。
            基礎単語には棚が無いので読みに行かない(問い合わせを増やさない)。
 
@@ -970,7 +996,7 @@ export default function Wordbook({
        別の配列になる。つないだ文字列(`shelfKey`)で見る
        (`onlyKey` とまったく同じ落とし穴) */
   }, [poolFor, learnerId, mine, onlySet,
-    book, shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook,
+    book, shelfBook, shelfKey, basicBook, tier, colBook, npBook, advBook, bizBook,
     sendGrown])
 
   useEffect(() => { reload() }, [reload])
@@ -1266,6 +1292,8 @@ export default function Wordbook({
   const bookSizeOf = (id) => {
     if (id === 'chunk') return chunkPartCount(chunkPart)
     if (id === 'basic') return wordsForTier(tier).length
+    /* ★ ビジネス単語も、ファイルを数えるだけ(**0円**・第5.446節・⑤) */
+    if (id === 'biz') return BUSINESS_WORDS.length
     if (id === 'shelf') {
       if (!shelfCounts) return null
       return shelfPick.reduce((n, s) => n + (shelfCounts.get(s) ?? 0), 0)

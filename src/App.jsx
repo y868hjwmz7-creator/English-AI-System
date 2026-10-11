@@ -1240,6 +1240,11 @@ export default function App() {
                         /* **副詞句の冊**(2026-09 利用者の指定)。
                            `showNp` とまったく同じ扱い */
                         showAdv
+                        /* ★ **ビジネス単語 200 語の冊**(第5.446節・⑤・
+                           2026-10 利用者の指定「また、ビジネス単語200語も」)。
+                           `showAdv` とまったく同じ扱い —— 出すのは
+                           ゲスト自身の単語帳だけである */
+                        showBiz
                         only={onlyWords?.words ?? null}
                         onlyWhat={onlyWords?.what ?? 'この教材の語'}
                         /* **基礎単語の段だけを練習する**(0053・2026-09)。

@@ -721,6 +721,10 @@ const only = (q.get('only') || '').split(',').map((w) => w.trim()).filter(Boolea
    既定で出すと、**「冊が1つしか無い画面には、えらぶ場所ごと出さない」**
    を見ている検証が、永久に赤くなる —— あの決まりはいまも生きている。
    3つとも同じ値で渡す(冊に出す決まりは `showCol || showNp || showAdv`)。
+
+   ★ **ビジネス単語も `?chunk=1` のときだけ**(第5.446節・⑤)。
+   まったく同じ理由である —— 既定で出すと、冊が2つになって
+   「えらぶ場所ごと出さない」の検証が永久に赤くなる。
    **本物と1文字も違えない**(骨組みが食い違うと、検証は何も守らない) */
 const WORDBOOK = (
   <WithMenuTools>
@@ -729,6 +733,7 @@ const WORDBOOK = (
                 showCol={q.get('chunk') === '1'}
                 showNp={q.get('chunk') === '1'}
                 showAdv={q.get('chunk') === '1'}
+                showBiz={q.get('chunk') === '1'}
                 only={only.length ? only : null}
                 onlyLabel={only.length ? '業界の語' : ''}
                 onClearOnly={only.length ? () => {} : null}

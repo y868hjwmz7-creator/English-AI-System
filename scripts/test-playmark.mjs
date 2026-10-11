@@ -17135,8 +17135,10 @@ console.log('\n▶ 覚えた にする(第5.438節)')
     const { nounPhraseRows } = await import('../src/data/nounPhrases.js')
     const { adverbPhraseRows } = await import('../src/data/adverbPhrases.js')
     const { frameQrRows } = await import('../src/lib/frameQr.js')
+    const { businessWordRows } = await import('../src/data/businessWords.js')
     const 冊 = [
       ['基礎単語', basicRows('core', [], { today: '2026-10-11' })],
+      ['ビジネス単語', businessWordRows([], { today: '2026-10-11' })],
       ['Native Flow', nativeFlowRows([], { today: '2026-10-11' })],
       ['コロケーション', collocationRows([], { today: '2026-10-11' })],
       ['名詞句', nounPhraseRows([], { today: '2026-10-11' })],
@@ -17158,6 +17160,9 @@ console.log('\n▶ 覚えた にする(第5.438節)')
   {
     const 呼ぶ所 = ['src/data/nativeFlow.js', 'src/data/collocations.js',
       'src/data/nounPhrases.js', 'src/data/adverbPhrases.js',
+      /* ★ **ビジネス単語 200 語**(第5.446節・⑤)。ファイルに持っている冊なので、
+         ほかの固定の冊とまったく同じ扱いである */
+      'src/data/businessWords.js',
       'src/lib/basicsCourse.js', 'src/lib/frameQr.js']
     /* **`src/` ぜんぶを見て、呼んでいる場所を数える。**
        足した日に見張られないのを避けるため、一覧を名指しで持たない形で数える */
@@ -17197,6 +17202,145 @@ console.log('\n▶ 覚えた にする(第5.438節)')
     const wb = 落として2(読む2('src/components/Wordbook.jsx'))
     ok(/clipVoice=\{card\?\.clipVoice/.test(wb) && /tier=\{card\?\.tier/.test(wb),
       '固定の冊 … 単語帳の「聴く」は、その行が持っている声と段で鳴る')
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **ビジネス単語 200 語の冊**(第5.446節・⑤・2026-10 利用者の指定)
+ *
+ *   > また、ビジネス単語200語も
+ *
+ * 【この見張りが守るもの】
+ *   ・**200 語そろっている**(10 の組 × 20 語)—— 一覧を勝手に減らさない
+ *   ・**訳・品詞・例文が、1語も欠けていない**(例文は必須・CLAUDE.md)
+ *   ・**例文の中に、その語がそのまま出てくる** —— 活用させると、
+ *     穴埋め(箱3)がその語を見つけられない
+ *   ・**ほかの冊と1語も重なっていない** —— 覚え具合の鍵はそろえた語なので、
+ *     重なると2つの冊で同じ語の覚え具合が動く
+ *   ・**行の形が、ほかの冊と1つ残らず同じ** —— ずれると画面が書き分けを持つ
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── ビジネス単語 200 語(第5.446節・⑤) ──')
+  const biz = await import('../src/data/businessWords.js')
+  const { BASIC_WORDS } = await import('../src/data/basicWords.js')
+  const col2 = await import('../src/data/collocations.js')
+  const np2 = await import('../src/data/nounPhrases.js')
+  const adv2 = await import('../src/data/adverbPhrases.js')
+  const { normWord } = await import('../src/lib/textNorm.js')
+  const { POS_GROUPS } = await import('../src/lib/posGroups.js')
+  const 読む3 = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const 落として3 = (src) => src
+    .replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+
+  /* ── ① **数**。組の数も語の数も、どちらも書き写さない ── */
+  ok(biz.BUSINESS_WORDS.length === biz.BIZ_GROUPS.length * 20,
+    `ビジネス単語 … ${biz.BIZ_GROUPS.length} の組 × 20 語で ${biz.BUSINESS_WORDS.length} 語`,
+    `${biz.BUSINESS_WORDS.length} / ${biz.BIZ_GROUPS.length * 20}`)
+  const 組ずれ = biz.BIZ_GROUPS
+    .filter((g) => biz.BUSINESS_WORDS.filter((x) => x.g === g.id).length !== 20)
+  ok(組ずれ.length === 0, 'ビジネス単語 … どの組も 20 語ちょうど',
+    組ずれ.map((g) => g.id).join(' / ') || 'ぴったり')
+  /* **一覧に無い組を使っていない**(逆も見る) */
+  ok(biz.BUSINESS_WORDS.every((x) => biz.bizGroupOf(x.g)),
+    'ビジネス単語 … 一覧に無い組を使っていない')
+
+  /* ── ② **欄が1つも欠けていない** ── */
+  const 欠け = biz.BUSINESS_WORDS.filter(
+    (x) => !String(x.w ?? '').trim() || !String(x.ja ?? '').trim()
+      || !String(x.pos ?? '').trim() || !String(x.en ?? '').trim()
+      || !String(x.ex ?? '').trim())
+  ok(欠け.length === 0, 'ビジネス単語 … 訳・品詞・例文・例文の訳が、1語も欠けていない',
+    欠け.map((x) => x.w).join(' / ') || 'ぜんぶそろっている')
+  /* **品詞は、画面が日本語に直せるものだけ**(`posGroups.js` に訊く)——
+     知らない印を書くと、札に `n` のような英字がそのまま出る */
+  const 品詞ずれ = biz.BUSINESS_WORDS
+    .filter((x) => !POS_GROUPS.some((g) => g.words.includes(x.pos)))
+  ok(品詞ずれ.length === 0, 'ビジネス単語 … 品詞の印は、画面が日本語に直せるものだけ',
+    品詞ずれ.map((x) => `${x.w}:${x.pos}`).join(' / ') || 'ぜんぶ直せる')
+
+  /* ── ③ **1語である**(`kind: 'word'` が嘘にならない)── */
+  ok(biz.BUSINESS_WORDS.every((x) => !x.w.includes(' ')),
+    'ビジネス単語 … どれも1語(句の冊は別にある)',
+    biz.BUSINESS_WORDS.filter((x) => x.w.includes(' ')).map((x) => x.w).join(' / ') || '1語だけ')
+
+  /* ── ④ **例文の中に、その語がそのまま出てくる** ──
+       **活用させない。** 活用すると、穴埋め(箱3)がその語を見つけられない。
+       **そろえ方は `normWord()` 1か所から借りる**(書き写さない) */
+  const 文に無い = biz.BUSINESS_WORDS
+    .filter((x) => !normWord(x.en).split(' ').includes(normWord(x.w)))
+  ok(文に無い.length === 0, 'ビジネス単語 … 例文の中に、その語がそのまま出てくる',
+    文に無い.map((x) => x.w).join(' / ') || '200 語ぜんぶ')
+
+  /* ── ⑤ **重なっていない**(自分の中でも、ほかの冊とも)── */
+  const 重複 = biz.BUSINESS_WORDS.map((x) => normWord(x.w))
+    .filter((w, i, a) => a.indexOf(w) !== i)
+  ok(重複.length === 0, 'ビジネス単語 … 同じ語が二度出ていない', 重複.join(' / ') || 'なし')
+  const よそ = new Set([
+    ...BASIC_WORDS.map((w) => normWord(w.w)),
+    ...col2.COLLOCATIONS.map((x) => normWord(x.p)),
+    ...np2.NOUN_PHRASES.map((x) => normWord(x.p)),
+    ...adv2.ADVERB_PHRASES.map((x) => normWord(x.p)),
+  ])
+  const 被り = biz.BUSINESS_WORDS.filter((x) => よそ.has(normWord(x.w)))
+  ok(被り.length === 0,
+    'ビジネス単語 … ほかの冊と1語も重なっていない(覚え具合が2か所で動かない)',
+    被り.map((x) => x.w).join(' / ') || 'なし')
+  /* **合字は直す**(ほかの冊と同じ見方) */
+  const LIG2 = /[ﬀ-ﬆ]/
+  ok(!biz.BUSINESS_WORDS.some((x) => LIG2.test(x.w) || LIG2.test(x.en)),
+    'ビジネス単語 … 合字(fi / fl)が1つも残っていない')
+
+  /* ── ⑥ **行の形が、ほかの冊と1つ残らず同じか** ── */
+  {
+    const bizRows = biz.businessWordRows([], { today: '2026-10-11' })
+    const colKeys = Object.keys(col2.collocationRows([], { today: '2026-10-11' })[0])
+    const bizKeys = Object.keys(bizRows[0])
+    ok(bizRows.length === biz.BUSINESS_WORDS.length,
+      `ビジネス単語 … 行も ${bizRows.length} 出る`)
+    ok([...colKeys].sort().join(',') === [...bizKeys].sort().join(','),
+      'ビジネス単語 … 行の欄が、コロケーションの冊と1つ残らず同じ',
+      colKeys.filter((k) => !bizKeys.includes(k)).join(' ')
+      || bizKeys.filter((k) => !colKeys.includes(k)).join(' ') || 'ぴったり')
+    /* **行の無い語は「まだ・箱0・今日出す」**(待たせる理由がない) */
+    ok(bizRows.every((r) => r.status === 'unknown' && r.box === 0
+      && r.due_on === '2026-10-11' && r.kind === 'word'),
+    'ビジネス単語 … まだ答えていない語は「まだ・箱0・今日出す」')
+    /* **覚え具合が付く**(1語だけ渡して、そこだけ変わるか) */
+    const ひと語 = normWord(biz.BUSINESS_WORDS[7].w)
+    const 付き = biz.businessWordRows(
+      [{ word_norm: ひと語, status: 'known', box: 4, due_on: '2026-12-31', learn_streak: 9 }],
+      { today: '2026-10-11' },
+    )
+    const その語 = 付き.find((r) => r.word_norm === ひと語)
+    ok(その語?.status === 'known' && その語?.box === 4 && その語?.learn_streak === 9
+      && 付き.filter((r) => r.status === 'known').length === 1,
+    'ビジネス単語 … 覚え具合は、その1語にだけ付く',
+    `${その語?.status} / 箱 ${その語?.box}`)
+    /* **例文が、出会った文として入っている** —— 無いと穴埋めが作れない */
+    ok(bizRows.every((r) => String(r.seen_in ?? '').trim()
+      && String(r.seen_in_ja ?? '').trim()),
+    'ビジネス単語 … どの行にも、出会った文とその訳が入っている')
+  }
+
+  /* ── ⑦ **画面に出ているか**(名前も読み込みも1か所から)── */
+  {
+    const wb2 = 落として3(読む3('src/components/Wordbook.jsx'))
+    ok(/id: 'biz', label: BIZ_BOOK_LABEL/.test(wb2),
+      'ビジネス単語 … 冊の名前は `businessWords.js` 1か所から引いている')
+    ok(/bizBook \? loadBusinessWordbook\(/.test(wb2),
+      'ビジネス単語 … 単語帳が、その冊を読む道を持っている')
+    /* **冊の名前を画面に書き写していない**(呼び名を2か所に書かない) */
+    ok(!new RegExp(`['"]${biz.BIZ_BOOK_LABEL}['"]`).test(wb2),
+      'ビジネス単語 … 冊の名前を、画面に書き写していない')
+    /* **出す場所は呼ぶ側が決める**(トレーナーがゲストの単語帳を開く画面には
+       冊の切り替えを出していない・`showCol` とまったく同じ作法) */
+    ok(/showBiz = false/.test(wb2),
+      'ビジネス単語 … 既定は「出さない」(出す場所は呼ぶ側が決める)')
+    ok(/showBiz\b/.test(落として3(読む3('src/App.jsx'))),
+      'ビジネス単語 … ゲスト自身の単語帳では出している')
+    /* **骨組みも、本物と同じ道具を受け取っている**(CLAUDE.md) */
+    ok(/showBiz=\{/.test(落として3(読む3('src/__screens.jsx'))),
+      'ビジネス単語 … 骨組みも、その冊を渡している')
   }
 }
 
