@@ -8,7 +8,7 @@
 --   Supabase → 左メニュー「SQL Editor」→「New query」に貼って、Run。
 --
 -- 【どうなれば成功か】
---   60行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
+--   61行の表が出ます。全部が「✅ もう入っています」なら、やることはありません。
 --
 --   「⬜ まだです」があったら、**その行に書いてあるファイルを貼るだけ**です。
 --   ファイルは GitHub のリポジトリの中にあります(Supabase の中ではありません)。
@@ -313,4 +313,20 @@ from (
     exists (select 1 from pg_proc where proname = 'material_visibility')
     and not exists (select 1 from public.materials
                     where visibility is distinct from 'school'), 59
+  -- **3つとも見る**(0078・第5.446節)。0069 / 0070 / 0077 と同じ立て付け。
+  --   ①`qr_reviews` に声の欄(`clip_voice`)が在るか
+  --   ②溜める関数(`mark_qr`)が、その欄に書くようになっているか
+  --   ③読む関数(`qr_items`)が、その欄を返すようになっているか
+  -- **①だけでは足りない** —— 列が在っても、関数が古いままなら
+  -- **1件も控えられず、1件も返らない**(貼っていないのに「もう入っています」と
+  -- 出る・CLAUDE.md が「いちばん悪い壊れ方」と呼ぶもの)。
+  -- **関数は呼ばない。** 貼る前の DB には新しい形がまだ無く、呼ぶと
+  -- `check.sql` そのものが止まる(0071 / 0075 / 0077 と同じ見方)
+  union all select '0078 Quick Response の復習に「そのときの声」(pending_matome.sql)',
+    exists (select 1 from information_schema.columns
+            where table_name = 'qr_reviews' and column_name = 'clip_voice')
+    and exists (select 1 from pg_proc where proname = 'mark_qr'
+                  and pg_get_functiondef(oid) like '%clip_voice%')
+    and exists (select 1 from pg_proc where proname = 'qr_items'
+                  and pg_get_functiondef(oid) like '%clip_voice%'), 60
 ) t order by 順;

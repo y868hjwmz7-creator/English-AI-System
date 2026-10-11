@@ -36,6 +36,10 @@
 import { supabase } from './supabase.js'
 import { normEn } from './materials.js'
 import { PROMOTE_KEY, pickPromotions } from './qrPromote.js'
+/* **声と段の判断は `qrVoice.js` 1か所**(0078・第5.446節)。
+   あちらは Supabase も `import.meta.env` も引き連れていないので、
+   `npm run test:play` が**素の node で本当に動かして**確かめられる */
+import { qrVoiceOf } from './qrVoice.js'
 
 const ok = (data) => ({ data, error: null })
 const ng = (error) => ({ data: null, error })
@@ -69,6 +73,20 @@ let sourceReady = true
 /** 0066 が入っているか。**画面が冊を出すかどうかの判断に使う** */
 export const qrSourceSupported = () => sourceReady
 
+/**
+ * **0078(そのときの声と段)が入っているか**(第5.446節・③)。
+ *
+ * `sourceReady`(0066)とまったく同じ作法である ——
+ * 入っていない Supabase に `p_clip_voice` を送ると**呼び出しごと断られ**、
+ * **「まだ」を押しても1問も溜まらない。**
+ * **はじめは送ってみて、断られたら二度と送らない。**
+ * そのあとも溜まり続ける(声が控えられないだけ)。
+ */
+let voiceReady = true
+
+/** 0078 が入っているか */
+export const qrVoiceSupported = () => voiceReady
+
 /** 0040 が入っているか。画面がボタンや札を出すかどうかの判断に使う */
 export const qrReviewSupported = () => !notReady
 
@@ -84,6 +102,16 @@ const missing = (error) => /qr_reviews|mark_qr|qr_items|drop_qr|schema cache|PGR
  * **同じ扱いにすると、0066 を貼る前に1問も溜まらなくなる。**
  */
 const noSourceArg = (error) => /p_source|PGRST202|does not exist|schema cache/i
+  .test(`${error?.message ?? ''} ${error?.code ?? ''}`)
+
+/**
+ * **「p_clip_voice という引数は無い」と断られたか**(0078 を貼る前)。
+ *
+ * `noSourceArg()` とまったく同じ見方である。**分けて持つ理由は1つ** ——
+ * 0066 は入っていて 0078 だけが無い、という並びが**ふつうに起こる。**
+ * まとめて1つの旗にすると、**冊まで一緒にあきらめる**ことになる。
+ */
+const noVoiceArg = (error) => /p_clip_voice|p_clip_tier|PGRST202|does not exist|schema cache/i
   .test(`${error?.message ?? ''} ${error?.code ?? ''}`)
 
 /**
@@ -106,6 +134,12 @@ const noSourceArg = (error) => /p_source|PGRST202|does not exist|schema cache/i
  *     外してある)—— 途中で移すと、ゲストが溜めた冊から黙って消える。
  *     **0066 を貼る前の Supabase では、渡しても静かに無視される**
  *     (関数に無い引数なので、そもそも送らない)
+ *
+ * **声と段は、`pair` から取る**(0078・第5.446節)。
+ * `quickResponsePairs()` が対ごとに付けている(`clipVoice` / `tier`)ので、
+ * **呼ぶ側は1行も書かない** —— 書くと、そこだけ古くなる。
+ * **入れるときだけ効き、あとから動かない**(SQL 側で `coalesce` にしてある)——
+ * 利用者の指定「復習はその時の声のキャラで構いません」そのものである。
  */
 export async function markQr(pair, status, {
   materialId = null, learnerId = null, onlyExisting = false, source = null,
@@ -130,8 +164,19 @@ export async function markQr(pair, status, {
        (`p_learner` とまったく同じ作法)。渡すと呼び出しごと断られ、
        **「まだ」を押しても1問も溜まらなくなる** */
     ...(sourceReady && source ? { p_source: source } : {}),
+    /* **そのときの声と段**(0078・第5.446節)。`p_source` とまったく同じ作法 ——
+       0078 より前の関数には無い引数なので、断られたら二度と送らない */
+    ...(voiceReady && pair?.clipVoice ? { p_clip_voice: pair.clipVoice } : {}),
+    ...(voiceReady && pair?.tier ? { p_clip_tier: pair.tier } : {}),
   })
   if (error) {
+    /* **0078 を貼る前は、声なしでやり直す**(第5.446節・③)。
+       **冊より先に見る** —— 0066 は入っていて 0078 だけが無い、という
+       並びがふつうに起こるので、ここで冊まであきらめてはいけない */
+    if (voiceReady && pair?.clipVoice && noVoiceArg(error)) {
+      voiceReady = false
+      return markQr(pair, status, { materialId, learnerId, onlyExisting, source })
+    }
     /* **0066 を貼る前は、冊なしでやり直す**(第5.237節)。
        ここで戻ると**「まだ」を押しても1問も溜まらない。**
        冊が分かれないだけで、溜まること自体はこれまでどおりにする */
@@ -231,6 +276,9 @@ export async function loadQrCounts(learnerId = null) {
  * **画面は「教材から来た問」と「復習から来た問」を区別しない。**
  * 同じ形にしておけば、出し方(`QuickResponse` の描き方)を書き写さずに済む。
  */
+/* **声と段の落ち先は `qrVoice.js` 1か所。** 呼ぶ側は1行も変わらない */
+export { qrVoiceOf }
+
 export const qrPairOf = (row) => ({
   en: row?.en ?? '',
   ja: row?.ja ?? '',
@@ -256,6 +304,10 @@ export const qrPairOf = (row) => ({
   box: row?.box ?? 0,
   learn_streak: row?.learn_streak ?? 0,
   due_on: row?.due_on ?? null,
+  /* **そのときの声と段**(0078・第5.446節)。
+     `quickResponsePairs()` が教材の中で付けているのと**同じ名前**にする ——
+     そうすれば `QrCard` は、どちらから来た問かを見分けずに鳴らせる */
+  ...qrVoiceOf(row),
 })
 
 /**

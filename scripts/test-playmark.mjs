@@ -16913,6 +16913,140 @@ console.log('\n▶ 覚えた にする(第5.438節)')
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+ * ★ **復習の帳も、溜めたときの声で鳴る**(0078・第5.446節・③)
+ *
+ *   溜めたあとは、声を控える欄が無かったので**いつも既定の声**だった。
+ *   しかも「聴く」は良い段・「聞き流し」は標準の段で鳴っていたので、
+ *   **同じ1文に2本の MP3**が作られていた(= 二度課金)。
+ *
+ * 【測り方】
+ *   落ち先の判断は `qrVoice.js` に出してある(Supabase を引き連れて
+ *   いない)ので、**素の node で本当に動かす。**
+ *   SQL と呼ぶ側は、**使っている形**で読む(コメントを落としてから)。
+ * ══════════════════════════════════════════════════════════════════ */
+{
+  console.log('\n── 復習の帳の声と段(0078・第5.446節) ──')
+  const { qrVoiceOf } = await import('../src/lib/qrVoice.js')
+  const { DEFAULT_BASE, isBaseVoice, resolveVoices } = await import('../src/data/clipVoices.js')
+  const { PREMIUM, STANDARD } = await import('../src/lib/voiceTier.js')
+
+  /* ── ① **控えてあるものは、そのとおりに鳴らす** ──
+       ここが効かないと、教材の中と置き場所が食い違って**また2本**になる。
+       **良い段ではないものを控えておく** —— 既定(良い段)と同じ値だと、
+       控えを無視する形に書き換えても緑のままになる */
+  {
+    const v = qrVoiceOf({ clip_voice: 'us-2', clip_tier: STANDARD, material_voice_ids: ['us-1'] })
+    ok(v.clipVoice === 'us-2' && v.tier === STANDARD,
+      '復習の声 … 控えてある声と段を、そのまま使う(教材の1人目に上書きしない)',
+      `${v.clipVoice} / ${v.tier}`)
+  }
+
+  /* ── ② **控えが無い行は、その教材の1人目の声へ** ──
+       **既定の声に落とさない。** 落とすと、教材の中の Quick Response が
+       すでに作った MP3 が1本も当たらない(待つうえ、もう一度課金)。
+       **1人目が既定と違う教材で測る** —— 同じ声だと、
+       既定へ落とす形に書き換えても緑のままになる */
+  {
+    const 先頭の声 = resolveVoices(['us-3'])[0]
+    const v = qrVoiceOf({ material_voice_ids: ['us-3'] })
+    ok(先頭の声 !== DEFAULT_BASE && v.clipVoice === 先頭の声,
+      '復習の声 … 声を控えていない行は、その教材の1人目へ落ちる(既定ではない)',
+      `${v.clipVoice}(既定は ${DEFAULT_BASE})`)
+    ok(v.tier === PREMIUM,
+      '復習の声 … ElevenLabs の声なら、いままでどおり良い段', String(v.tier))
+  }
+
+  /* ── ③ **いちばん危ない形。** 教材が消えている行 ──
+       「無ければ素通り」にしない(CLAUDE.md)。落ちずに声が入ること */
+  {
+    const v = qrVoiceOf({})
+    ok(Boolean(v.clipVoice) && Boolean(v.tier),
+      '復習の声 … 教材が消えている行でも、声と段が入る(落ちない)',
+      `${v.clipVoice} / ${v.tier}`)
+    /* **段と、実際に鳴る声を食い違わせない**(`voiceTier.js` と同じ考え方)。
+       Google の声に良い段を付けると、窓口が代役で鳴らすので
+       **`premium` の置き場所に標準の音が残る** */
+    ok(!isBaseVoice(v.clipVoice) || v.tier === STANDARD,
+      '復習の声 … Google の声に落ちたら、段も標準に落とす(食い違わせない)',
+      `${v.clipVoice} / ${v.tier}`)
+  }
+
+  /* ── ④ **呼ぶ側は、どこにも書き写していない** ── */
+  {
+    const 落とす = (t) => t.replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}|\/\/.*$/gm, ' ')
+    const rev = 落とす(readFileSync(
+      new URL('../src/lib/qrReviews.js', import.meta.url), 'utf8'))
+    ok(/\.\.\.qrVoiceOf\(row\)/.test(rev),
+      '復習の声 … 1問の形に直すところで、判断を1か所から広げている')
+    ok(!/clip_voice|clip_tier/.test(rev.replace(/p_clip_voice|p_clip_tier/g, ' ')),
+      '復習の声 … 欄の名前を、画面側でもう一度読んでいない(判断は1か所)')
+    /* **対から取る。** 呼ぶ側が声を組み立てていたら、そこだけ古くなる */
+    ok(/p_clip_voice: pair\.clipVoice/.test(rev) && /p_clip_tier: pair\.tier/.test(rev),
+      '復習の声 … 溜めるときは、対が持っている声と段をそのまま送る')
+    for (const f of ['src/components/QuickResponse.jsx', 'src/components/QrReview.jsx']) {
+      const t = 落とす(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'))
+      ok(!/p_clip_voice|p_clip_tier/.test(t),
+        `復習の声 … ${f.split('/').at(-1)} は、送る欄を自分で書いていない`)
+    }
+    /* ★ **0078 を貼る前に、冊まであきらめない**(第5.237節で踏んだ形)。
+         声を外してやり直すときに `source` を渡し直しているか ——
+         渡し忘れると、**冊が分かれなくなる**(「覚えておきたい表現集」が
+         自分の帳に混ざる)。**同じ行が2つ無いことを先に数えた** */
+    const やり直し = rev.match(/voiceReady = false\s*\n\s*return markQr\([^)]*\)/)?.[0] ?? ''
+    ok(/source/.test(やり直し),
+      '復習の声 … 0078 が無い Supabase では、声だけ外す(冊は捨てない)')
+  }
+
+  /* ── ⑤ **SQL の側** ──
+       **移行とまとめた1つの両方**を見る。片方だけだと、貼っても現れない */
+  {
+    const sql = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    for (const f of ['supabase/migrations/0078_qr_voice.sql',
+      'supabase/apply/pending_matome.sql']) {
+      const t = sql(f)
+      ok(/add column if not exists clip_voice/.test(t)
+        && /add column if not exists clip_tier/.test(t),
+      `復習の声 … ${f.split('/').at(-1)} が、声と段の欄を2つとも足している`)
+      /* **あとから上書きしない**(利用者の指定「その時の声のキャラで」)。
+         `excluded` だけにすると、別の教材で出会った日に声が動く */
+      ok(/clip_voice\s*=\s*coalesce\(q\.clip_voice, excluded\.clip_voice\)/.test(t)
+        && /clip_tier\s*=\s*coalesce\(q\.clip_tier, excluded\.clip_tier\)/.test(t),
+      `復習の声 … ${f.split('/').at(-1)} は、溜めたときの声を上書きしない`)
+      /* **読む側が返していないと、画面には1つも届かない** */
+      ok(/q\.clip_voice, q\.clip_tier, m\.voice_ids/.test(t),
+        `復習の声 … ${f.split('/').at(-1)} は、声と段と教材の声を返している`)
+      /* **引数が増えたら、古い形を落とす** ——
+         残すと PostgREST が「どちらか分からない」と断り、
+         **「まだ」を押しても1問も溜まらない**(CLAUDE.md)。
+         **数を書き写さない** —— 作っている形そのものを落としているか */
+      /* **いちばん後ろの定義を見る。** まとめた1つには 0040 の古い形も
+         入っているので、**手前に当たると必ず「7引数」になる**
+         (CLAUDE.md「目じるしは、先に数える」で踏んだのと同じ形) */
+      const 作る = [...t.matchAll(
+        /create or replace function public\.mark_qr\(([\s\S]*?)\)\s*\nreturns/g,
+      )].at(-1)?.[1] ?? ''
+      const 引数の数 = 作る.split('\n').filter((l) => /^\s*p_[a-z_]+\s+(text|uuid|boolean)/.test(l)).length
+      /* ★ **いちばん後ろの定義の、すぐ手前だけを数える。**
+         まとめた1つには 0066 の段の drop も入っているので、
+         **ファイル全体で数えると、この段の drop をぜんぶ消しても
+         「2つ以上落ちている」ことになり、緑のままになる**
+         (赤チェックで実際にそうなった。CLAUDE.md「見張りが、自分と
+         同じ出どころを見ていないか」)。
+         定義で切って、**最後の定義の直前の塊**だけを見る */
+      const 手前 = t.split('create or replace function public.mark_qr(').at(-2) ?? ''
+      const 落ちている = (手前.match(/drop function if exists public\.mark_qr\(([^)]*)\)/g) ?? [])
+        .map((d) => d.split(',').length)
+      ok(引数の数 >= 9 && 落ちている.includes(引数の数),
+        `復習の声 … ${f.split('/').at(-1)} は、いま作る形の mark_qr も落としている`,
+        `作る ${引数の数} / 落とす ${落ちている.join(' ')}`)
+      ok(落ちている.filter((n) => n < 引数の数).length >= 2,
+        `復習の声 … ${f.split('/').at(-1)} は、古い形の mark_qr も落としている`,
+        `落とす ${落ちている.join(' ')}`)
+    }
+  }
+}
+
 console.log(ng
   ? `\n❌ ${ng} 件が意図どおりではありません`
   : '\n✅ 止めた場所からの再生の検証は、すべて意図どおりです')
